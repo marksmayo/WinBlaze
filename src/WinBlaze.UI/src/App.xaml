@@ -3,24 +3,122 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
-        <SolidColorBrush x:Key="WinBlazeAppBackgroundBrush" Color="#FFF5F5F5" />
-        <SolidColorBrush x:Key="WinBlazeCardBackgroundBrush" Color="#FFFFFFFF" />
-        <SolidColorBrush x:Key="WinBlazeCardBorderBrush" Color="#FF708090" />
-        <SolidColorBrush x:Key="WinBlazeTextPrimaryBrush" Color="#FF000000" />
+        <!-- Modern Dark Theme with Purple/Blue Gradient Accents -->
+        
+        <!-- Primary Background Colors -->
+        <SolidColorBrush x:Key="WinBlazeAppBackgroundBrush" Color="#FF0A0E27" />
+        <SolidColorBrush x:Key="WinBlazeCardBackgroundBrush" Color="#FF151A3C" />
+        <SolidColorBrush x:Key="WinBlazeCardHoverBrush" Color="#FF1A2047" />
+        <SolidColorBrush x:Key="WinBlazeCardBorderBrush" Color="#33FFFFFF" />
+        
+        <!-- Text Colors -->
+        <SolidColorBrush x:Key="WinBlazeTextPrimaryBrush" Color="#FFFFFFFF" />
+        <SolidColorBrush x:Key="WinBlazeTextSecondaryBrush" Color="#B3FFFFFF" />
+        <SolidColorBrush x:Key="WinBlazeTextTertiaryBrush" Color="#80FFFFFF" />
         <SolidColorBrush x:Key="WinBlazeTextOnAccentBrush" Color="#FFFFFFFF" />
-        <SolidColorBrush x:Key="WinBlazeSubtleBackgroundBrush" Color="#FFF5F5F5" />
-        <SolidColorBrush x:Key="WinBlazeSubtleBorderBrush" Color="#FFB0C4DE" />
-        <SolidColorBrush x:Key="WinBlazeErrorBackgroundBrush" Color="#FFFFE4E1" />
-        <SolidColorBrush x:Key="WinBlazeErrorBorderBrush" Color="#FFCD5C5C" />
-        <SolidColorBrush x:Key="WinBlazeChipBackgroundBrush" Color="#FFB0C4DE" />
-        <SolidColorBrush x:Key="WinBlazeChipActiveBackgroundBrush" Color="#FF87CEFA" />
-        <SolidColorBrush x:Key="WinBlazeChipInactiveBackgroundBrush" Color="#FFDCDCDC" />
-        <SolidColorBrush x:Key="WinBlazeChipActiveBorderBrush" Color="#FF4682B4" />
-        <SolidColorBrush x:Key="WinBlazeProgressTrackBrush" Color="#FFDCDCDC" />
-        <SolidColorBrush x:Key="WinBlazeProgressFillBrush" Color="#FF4169E1" />
-        <SolidColorBrush x:Key="WinBlazeVolumeAccentBrush" Color="#FF6495ED" />
-        <SolidColorBrush x:Key="WinBlazeFolderAccentBrush" Color="#FF2E8B57" />
-        <SolidColorBrush x:Key="WinBlazeFileAccentBrush" Color="#FF9370DB" />
-        <SolidColorBrush x:Key="WinBlazeArchiveAccentBrush" Color="#FFD2691E" />
+        
+        <!-- Accent Colors - Modern Gradient Feel -->
+        <LinearGradientBrush x:Key="WinBlazeAccentGradientBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FF6B5FFF" Offset="0"/>
+            <GradientStop Color="#FF4B7FFF" Offset="1"/>
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="WinBlazeAccentBrush" Color="#FF6B5FFF" />
+        <SolidColorBrush x:Key="WinBlazeAccentHoverBrush" Color="#FF7D72FF" />
+        <SolidColorBrush x:Key="WinBlazeAccentPressedBrush" Color="#FF5A4FEE" />
+        
+        <!-- Subtle Background Colors -->
+        <SolidColorBrush x:Key="WinBlazeSubtleBackgroundBrush" Color="#FF0F1329" />
+        <SolidColorBrush x:Key="WinBlazeSubtleBorderBrush" Color="#1AFFFFFF" />
+        <SolidColorBrush x:Key="WinBlazeElevatedBackgroundBrush" Color="#FF1A2047" />
+        
+        <!-- Status Colors -->
+        <SolidColorBrush x:Key="WinBlazeErrorBackgroundBrush" Color="#33FF3B3B" />
+        <SolidColorBrush x:Key="WinBlazeErrorBorderBrush" Color="#FFFF3B3B" />
+        <SolidColorBrush x:Key="WinBlazeSuccessBackgroundBrush" Color="#3300D68F" />
+        <SolidColorBrush x:Key="WinBlazeSuccessBorderBrush" Color="#FF00D68F" />
+        <SolidColorBrush x:Key="WinBlazeWarningBackgroundBrush" Color="#33FFB800" />
+        <SolidColorBrush x:Key="WinBlazeWarningBorderBrush" Color="#FFFFB800" />
+        
+        <!-- Interactive Elements -->
+        <SolidColorBrush x:Key="WinBlazeChipBackgroundBrush" Color="#FF2A3155" />
+        <SolidColorBrush x:Key="WinBlazeChipActiveBackgroundBrush" Color="#FF6B5FFF" />
+        <SolidColorBrush x:Key="WinBlazeChipInactiveBackgroundBrush" Color="#FF1A2047" />
+        <SolidColorBrush x:Key="WinBlazeChipActiveBorderBrush" Color="#FF8B7FFF" />
+        <SolidColorBrush x:Key="WinBlazeChipHoverBrush" Color="#FF3A4165" />
+        
+        <!-- Progress Bar Colors -->
+        <SolidColorBrush x:Key="WinBlazeProgressTrackBrush" Color="#FF1A2047" />
+        <LinearGradientBrush x:Key="WinBlazeProgressFillBrush" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#FF6B5FFF" Offset="0"/>
+            <GradientStop Color="#FF4B7FFF" Offset="0.5"/>
+            <GradientStop Color="#FF00D68F" Offset="1"/>
+        </LinearGradientBrush>
+        
+        <!-- File Type Accent Colors - Modern Palette -->
+        <SolidColorBrush x:Key="WinBlazeVolumeAccentBrush" Color="#FF6B5FFF" />
+        <SolidColorBrush x:Key="WinBlazeFolderAccentBrush" Color="#FF4B7FFF" />
+        <SolidColorBrush x:Key="WinBlazeFileAccentBrush" Color="#FF00D68F" />
+        <SolidColorBrush x:Key="WinBlazeArchiveAccentBrush" Color="#FFFFB800" />
+        <SolidColorBrush x:Key="WinBlazeMediaAccentBrush" Color="#FFFF3B7F" />
+        <SolidColorBrush x:Key="WinBlazeDocumentAccentBrush" Color="#FF00B4D8" />
+        
+        <!-- Glassmorphism Effects -->
+        <AcrylicBrush x:Key="WinBlazeAcrylicBackgroundBrush" 
+                      TintColor="#0A0E27" 
+                      TintOpacity="0.8" 
+                      FallbackColor="#FF0A0E27" />
+        
+        <!-- Shadows and Elevations -->
+        <DropShadowEffect x:Key="WinBlazeCardShadow" 
+                          BlurRadius="20" 
+                          ShadowDepth="0" 
+                          Color="#000000" 
+                          Opacity="0.3"/>
+        
+        <!-- Corner Radius -->
+        <CornerRadius x:Key="WinBlazeCornerRadius">12</CornerRadius>
+        <CornerRadius x:Key="WinBlazeSmallCornerRadius">8</CornerRadius>
+        <CornerRadius x:Key="WinBlazeLargeCornerRadius">16</CornerRadius>
+        
+        <!-- Typography -->
+        <FontFamily x:Key="WinBlazeHeaderFont">Segoe UI Variable Display</FontFamily>
+        <FontFamily x:Key="WinBlazeBodyFont">Segoe UI Variable Text</FontFamily>
+        
+        <!-- Animations -->
+        <Duration x:Key="WinBlazeAnimationDuration">0:0:0.3</Duration>
+        <Duration x:Key="WinBlazeFastAnimationDuration">0:0:0.15</Duration>
+        
+        <!-- Modern Button Style -->
+        <Style x:Key="WinBlazeModernButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource WinBlazeAccentBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource WinBlazeTextOnAccentBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="20,12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        
+        <!-- Modern Card Style -->
+        <Style x:Key="WinBlazeCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource WinBlazeCardBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource WinBlazeCardBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="20"/>
+        </Style>
+        
+        <!-- Modern TextBox Style -->
+        <Style x:Key="WinBlazeModernTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource WinBlazeSubtleBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource WinBlazeTextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource WinBlazeSubtleBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="PlaceholderForeground" Value="{StaticResource WinBlazeTextTertiaryBrush}"/>
+        </Style>
     </Application.Resources>
 </Application>
