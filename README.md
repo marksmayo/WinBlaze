@@ -179,7 +179,7 @@ WinBlaze is open source software released under the MIT License. See [LICENSE](L
 
 ## Acknowledgments
 
-WinBlaze stands on the shoulders of giants. Special thanks to the developers of WizTree for pioneering NTFS MFT-based scanning, and to the Rust and Windows development communities for their excellent tools and libraries.
+Special thanks to the Rust and Windows development communities for their excellent tools and libraries that made this project possible.
 
 ---
 
