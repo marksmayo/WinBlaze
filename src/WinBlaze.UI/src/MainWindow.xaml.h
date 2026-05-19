@@ -180,6 +180,7 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::CheckBox CurrentStateToggle() const { return m_current_state_toggle; }
         Microsoft::UI::Xaml::Controls::CheckBox FolderViewToggle() const { return m_folder_view_toggle; }
         Microsoft::UI::Xaml::Controls::CheckBox FolderTreeToggle() const { return m_folder_tree_toggle; }
+        Microsoft::UI::Xaml::Controls::CheckBox RuntimeMetricsToggle() const { return m_runtime_metrics_toggle; }
         Microsoft::UI::Xaml::Controls::CheckBox DeveloperDiagnosticsToggle() const { return m_developer_diagnostics_toggle; }
         Microsoft::UI::Xaml::Controls::StackPanel DeveloperDiagnosticsPanel() const { return m_developer_diagnostics_panel; }
         Microsoft::UI::Xaml::Controls::TextBlock CorrectnessText() const { return m_correctness_text; }
@@ -246,6 +247,7 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::CheckBox m_current_state_toggle{ nullptr };
         Microsoft::UI::Xaml::Controls::CheckBox m_folder_view_toggle{ nullptr };
         Microsoft::UI::Xaml::Controls::CheckBox m_folder_tree_toggle{ nullptr };
+        Microsoft::UI::Xaml::Controls::CheckBox m_runtime_metrics_toggle{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_correctness_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_recent_issues_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_issue_drilldown_text{ nullptr };
@@ -307,6 +309,7 @@ namespace winrt::WinBlaze::UI::implementation
         bool m_show_current_state{ false };
         bool m_show_folder_view{ false };
         bool m_show_folder_tree{ false };
+        bool m_show_runtime_metrics{ false };
         bool m_section_menu_updates_suppressed{ false };
         ShellSection m_active_section{ ShellSection::Overview };
         std::chrono::steady_clock::time_point m_scan_started_at{};
