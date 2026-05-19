@@ -153,7 +153,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for
 
 ## License
 
-WinBlaze is proprietary software. See [LICENSE](LICENSE) for details.
+WinBlaze is open source software released under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Support
 
