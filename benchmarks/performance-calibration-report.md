@@ -1,6 +1,6 @@
 ﻿# WinBlaze Performance Calibration Report
 
-Generated: 2026-05-19T00:57:05.1602508Z
+Generated: 2026-05-19T01:46:33.4084127Z
 
 ## Environment
 
@@ -14,11 +14,11 @@ Generated: 2026-05-19T00:57:05.1602508Z
 
 | Profile | First ms | Warmed median ms | Median ms | Working set MB | Last latency ms | Input ms | Peak frame ms | Peak flush ms | Scan duration ms | Treemap renders | Budget result |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| tiny | 567 | 512 | 567 | 173.4 | 19 | 0 | 16 | 14 | 6 | 2/3 | pass |
-| small | 572 | 547 | 571 | 181.5 | 3 | 0 | 12 | 33 | 20 | 2/3 | not budgeted |
-| fanout | 577 | 575 | 577 | 184.5 | 13 | 0 | 14 | 32 | 11 | 2/3 | pass |
-| fanout-large | 493 | 505 | 505 | 202 | 50 | 0 | 14 | 69 | 31 | 2/4 | pass |
-| scale | 433 | 456 | 456 | 204.7 | 26 | 0 | 12 | 69 | 135 | 3/5 | pass |
+| tiny | 516 | 576 | 576 | 173.2 | 23 | 0 | 12 | 13 | 7 | 2/3 | pass |
+| small | 542 | 505 | 542 | 180.9 | 9 | 0 | 14 | 30 | 19 | 2/3 | not budgeted |
+| fanout | 561 | 638 | 638 | 185.2 | 12 | 0 | 11 | 33 | 11 | 2/3 | pass |
+| fanout-large | 593 | 541 | 593 | 204.3 | 52 | 0 | 15 | 79 | 39 | 2/4 | pass |
+| scale | 569 | 492 | 493 | 208.8 | 68 | 0 | 14 | 91 | 97 | 3/5 | pass |
 
 ## Calibration Notes
 

@@ -70,7 +70,8 @@ where
         .ok()
         .map(|metadata| (metadata.len() / NTFS_RECORD_SIZE as u64).max(1))
         .unwrap_or(1);
-    let mut buffer = vec![0u8; NTFS_RECORD_SIZE * worker_count.max(1).min(64)];
+    let records_per_read = worker_count.max(1).saturating_mul(1024).clamp(1024, 65_536);
+    let mut buffer = vec![0u8; NTFS_RECORD_SIZE * records_per_read];
     let mut carry = Vec::new();
     let mut entries: HashMap<u64, ParsedNtfsEntry> = HashMap::new();
     let mut resolved_paths: HashMap<u64, String> = HashMap::new();
