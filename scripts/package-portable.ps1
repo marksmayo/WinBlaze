@@ -32,8 +32,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $stageDir "docs") | Out-Nul
 $requiredFiles = @(
     "WinBlaze.UI.exe",
     "winblaze_native.dll",
-    "WinBlaze.UI.pri",
-    "WinBlaze.winmd"
+    "WinBlaze.UI.pri"
 )
 
 foreach ($file in $requiredFiles) {
@@ -45,7 +44,8 @@ foreach ($file in $requiredFiles) {
 }
 
 $optionalFiles = @(
-    "resources.pri"
+    "resources.pri",
+    "WinBlaze.winmd"
 )
 foreach ($file in $optionalFiles) {
     $source = Join-Path $buildDir $file
