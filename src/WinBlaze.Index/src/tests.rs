@@ -421,7 +421,7 @@ fn repository_rejects_oversized_snapshot_string_without_allocating() {
     bytes.extend_from_slice(&1_u64.to_le_bytes()); // volume count
     bytes.extend_from_slice(&1_u64.to_le_bytes()); // volume id
     bytes.extend_from_slice(&(1024_u64 * 1024 + 1).to_le_bytes()); // oversized mount path
-    bytes.extend(std::iter::repeat(0).take(64)); // enough bytes to pass collection preflight
+    bytes.extend(std::iter::repeat_n(0, 64)); // enough bytes to pass collection preflight
     fs::write(storage_dir.join("winblaze.index.bin"), bytes).expect("write corrupt snapshot");
 
     let reopened = SqliteIndexRepository::open(&storage_dir, IndexBackend::BinaryCache);

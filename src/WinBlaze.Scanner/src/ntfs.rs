@@ -171,7 +171,7 @@ fn open_file_with_backup_privilege(path: &Path) -> io::Result<File> {
 }
 
 fn enable_backup_privilege() -> io::Result<()> {
-    let mut token: HANDLE = null_mut();
+    let mut token: Handle = null_mut();
     let opened = unsafe {
         OpenProcessToken(
             GetCurrentProcess(),
@@ -184,7 +184,7 @@ fn enable_backup_privilege() -> io::Result<()> {
     }
 
     let privilege_name: Vec<u16> = "SeBackupPrivilege".encode_utf16().chain(Some(0)).collect();
-    let mut luid = LUID::default();
+    let mut luid = Luid::default();
     let looked_up = unsafe { LookupPrivilegeValueW(null(), privilege_name.as_ptr(), &mut luid) };
     if looked_up == 0 {
         unsafe {
@@ -193,9 +193,9 @@ fn enable_backup_privilege() -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
 
-    let mut privileges = TOKEN_PRIVILEGES {
+    let mut privileges = TokenPrivileges {
         PrivilegeCount: 1,
-        Privileges: [LUID_AND_ATTRIBUTES {
+        Privileges: [LuidAndAttributes {
             Luid: luid,
             Attributes: SE_PRIVILEGE_ENABLED,
         }],
@@ -206,7 +206,7 @@ fn enable_backup_privilege() -> io::Result<()> {
             token,
             0,
             &mut privileges,
-            std::mem::size_of::<TOKEN_PRIVILEGES>() as u32,
+            std::mem::size_of::<TokenPrivileges>() as u32,
             null_mut(),
             null_mut(),
         )
@@ -770,11 +770,7 @@ pub fn measure_metadata_extraction_overhead(
     Ok(MetadataExtractionSample {
         records_scanned: record_count,
         bytes_scanned,
-        average_bytes_per_record: if record_count == 0 {
-            0
-        } else {
-            bytes_scanned / record_count
-        },
+        average_bytes_per_record: bytes_scanned.checked_div(record_count).unwrap_or(0),
     })
 }
 
@@ -856,9 +852,9 @@ fn read_i64(bytes: &[u8], offset: usize) -> Result<i64, NtfsEnumerationError> {
     ]))
 }
 
-type HANDLE = *mut c_void;
+type Handle = *mut c_void;
 
-const INVALID_HANDLE_VALUE: HANDLE = -1isize as HANDLE;
+const INVALID_HANDLE_VALUE: Handle = -1isize as Handle;
 const GENERIC_READ: u32 = 0x8000_0000;
 const FILE_SHARE_READ: u32 = 0x0000_0001;
 const FILE_SHARE_WRITE: u32 = 0x0000_0002;
@@ -873,7 +869,7 @@ const SE_PRIVILEGE_ENABLED: u32 = 0x0000_0002;
 #[repr(C)]
 #[allow(non_snake_case)]
 #[derive(Clone, Copy, Default)]
-struct LUID {
+struct Luid {
     LowPart: u32,
     HighPart: i32,
 }
@@ -881,16 +877,16 @@ struct LUID {
 #[repr(C)]
 #[allow(non_snake_case)]
 #[derive(Clone, Copy)]
-struct LUID_AND_ATTRIBUTES {
-    Luid: LUID,
+struct LuidAndAttributes {
+    Luid: Luid,
     Attributes: u32,
 }
 
 #[repr(C)]
 #[allow(non_snake_case)]
-struct TOKEN_PRIVILEGES {
+struct TokenPrivileges {
     PrivilegeCount: u32,
-    Privileges: [LUID_AND_ATTRIBUTES; 1],
+    Privileges: [LuidAndAttributes; 1],
 }
 
 #[link(name = "kernel32")]
@@ -903,30 +899,30 @@ extern "system" {
         dwCreationDisposition: u32,
         dwFlagsAndAttributes: u32,
         hTemplateFile: *mut c_void,
-    ) -> HANDLE;
+    ) -> Handle;
 
-    fn CloseHandle(hObject: HANDLE) -> i32;
+    fn CloseHandle(hObject: Handle) -> i32;
 
-    fn GetCurrentProcess() -> HANDLE;
+    fn GetCurrentProcess() -> Handle;
 }
 
 #[link(name = "advapi32")]
 extern "system" {
-    fn OpenProcessToken(ProcessHandle: HANDLE, DesiredAccess: u32, TokenHandle: *mut HANDLE)
+    fn OpenProcessToken(ProcessHandle: Handle, DesiredAccess: u32, TokenHandle: *mut Handle)
         -> i32;
 
     fn LookupPrivilegeValueW(
         lpSystemName: *const u16,
         lpName: *const u16,
-        lpLuid: *mut LUID,
+        lpLuid: *mut Luid,
     ) -> i32;
 
     fn AdjustTokenPrivileges(
-        TokenHandle: HANDLE,
+        TokenHandle: Handle,
         DisableAllPrivileges: i32,
-        NewState: *mut TOKEN_PRIVILEGES,
+        NewState: *mut TokenPrivileges,
         BufferLength: u32,
-        PreviousState: *mut TOKEN_PRIVILEGES,
+        PreviousState: *mut TokenPrivileges,
         ReturnLength: *mut u32,
     ) -> i32;
 }
