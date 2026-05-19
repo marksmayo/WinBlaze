@@ -156,9 +156,14 @@ fn matches_query(
     normalized_extensions: &[String],
     file_params: &FileMatchParams,
 ) -> bool {
-    if !pattern_lower
-        .is_none_or(|pattern| matches_text(pattern, &query.match_mode, file_params.name, file_params.full_path))
-    {
+    if !pattern_lower.is_none_or(|pattern| {
+        matches_text(
+            pattern,
+            &query.match_mode,
+            file_params.name,
+            file_params.full_path,
+        )
+    }) {
         return false;
     }
 
