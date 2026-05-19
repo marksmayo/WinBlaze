@@ -153,7 +153,7 @@ jobs:
         run: powershell.exe -ExecutionPolicy Bypass -File scripts\write-update-manifest.ps1
 
       - name: Upload portable package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: WinBlaze-${{ matrix.configuration }}-x64-portable
           path: artifacts/portable/WinBlaze-${{ matrix.configuration }}-x64-portable.zip
@@ -161,7 +161,7 @@ jobs:
 
       - name: Upload installer package
         if: matrix.configuration == 'Release'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: WinBlaze-Release-x64-installer
           path: artifacts/installer/*.msi
@@ -169,7 +169,7 @@ jobs:
 
       - name: Upload update manifest
         if: matrix.configuration == 'Release'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: WinBlaze-Release-update-manifest
           path: artifacts/release/winblaze-update-manifest.json
