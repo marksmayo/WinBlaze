@@ -89,6 +89,7 @@ where
         let full_records = carry.len() / NTFS_RECORD_SIZE;
         let full_bytes = full_records * NTFS_RECORD_SIZE;
 
+        let mut parsed_ids = Vec::new();
         for record in carry[..full_bytes].chunks(NTFS_RECORD_SIZE) {
             if record.len() < NTFS_RECORD_SIZE || &record[0..4] != FILE_RECORD_SIGNATURE {
                 continue;
@@ -96,7 +97,9 @@ where
 
             processed_records = processed_records.saturating_add(1);
             if let Some(entry) = parse_record(record)? {
-                entries.insert(entry.file_id.0, entry);
+                let file_id = entry.file_id.0;
+                entries.insert(file_id, entry);
+                parsed_ids.push(file_id);
             }
         }
 
@@ -111,6 +114,7 @@ where
         emit_streaming_entries(
             root,
             &entries,
+            &parsed_ids,
             &mut resolved_paths,
             &mut emitted,
             &mut on_event,
@@ -120,6 +124,7 @@ where
     emit_streaming_entries(
         root,
         &entries,
+        &[],
         &mut resolved_paths,
         &mut emitted,
         &mut on_event,
@@ -479,6 +484,7 @@ fn parse_entries(
 fn emit_streaming_entries<F>(
     root: &Path,
     entries: &HashMap<u64, ParsedNtfsEntry>,
+    candidate_ids: &[u64],
     resolved_paths: &mut HashMap<u64, String>,
     emitted: &mut HashSet<u64>,
     on_event: &mut F,
@@ -486,7 +492,11 @@ fn emit_streaming_entries<F>(
     F: FnMut(ScanEvent),
 {
     let root_text = root.display().to_string();
-    let mut ids: Vec<_> = entries.keys().copied().collect();
+    let mut ids: Vec<_> = if candidate_ids.is_empty() {
+        entries.keys().copied().collect()
+    } else {
+        candidate_ids.to_vec()
+    };
     ids.sort_unstable();
 
     for file_id in ids {
