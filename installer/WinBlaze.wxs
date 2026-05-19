@@ -35,9 +35,6 @@
     <Component Id="AppPri" Directory="INSTALLFOLDER" Guid="*">
       <File Source="$(var.SourceDir)\WinBlaze.UI.pri" KeyPath="yes" />
     </Component>
-    <Component Id="AppWinmd" Directory="INSTALLFOLDER" Guid="*">
-      <File Source="$(var.SourceDir)\WinBlaze.winmd" KeyPath="yes" />
-    </Component>
     <Component Id="WebView2Loader" Directory="INSTALLFOLDER" Guid="*">
       <File Source="$(var.SourceDir)\WebView2Loader.dll" KeyPath="yes" />
     </Component>
