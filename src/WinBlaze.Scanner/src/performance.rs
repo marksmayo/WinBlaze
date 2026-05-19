@@ -30,11 +30,17 @@ pub struct ScanThroughputSample {
 
 impl ScanThroughputSample {
     pub fn files_per_second(self) -> u64 {
-        self.files_seen.saturating_mul(1000).checked_div(self.elapsed_millis).unwrap_or(0)
+        self.files_seen
+            .saturating_mul(1000)
+            .checked_div(self.elapsed_millis)
+            .unwrap_or(0)
     }
 
     pub fn bytes_per_second(self) -> u64 {
-        self.bytes_seen.saturating_mul(1000).checked_div(self.elapsed_millis).unwrap_or(0)
+        self.bytes_seen
+            .saturating_mul(1000)
+            .checked_div(self.elapsed_millis)
+            .unwrap_or(0)
     }
 }
 
@@ -47,7 +53,9 @@ pub struct ScanMemorySample {
 
 impl ScanMemorySample {
     pub fn resident_bytes_per_file(self) -> u64 {
-        self.resident_bytes.checked_div(self.files_seen).unwrap_or(0)
+        self.resident_bytes
+            .checked_div(self.files_seen)
+            .unwrap_or(0)
     }
 
     pub fn peak_bytes_per_file(self) -> u64 {
