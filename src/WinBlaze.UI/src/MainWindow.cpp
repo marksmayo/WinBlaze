@@ -414,27 +414,27 @@ namespace winrt::WinBlaze::UI::implementation
 
         auto const& theme = ActiveShellTheme();
         auto root = Grid{};
-        root.RequestedTheme(ElementTheme::Light);
+        root.RequestedTheme(ElementTheme::Dark);
         root.Background(make_brush(theme.app_background));
         root.KeyDown({ this, &MainWindow::OnWindowKeyDown });
         root.Loaded({ this, &MainWindow::OnWindowLoaded });
         TraceStartup(L"BuildShell after root grid");
 
         auto shell = StackPanel{};
-        shell.Margin(Thickness{ 32.0, 32.0, 32.0, 32.0 });
-        shell.Spacing(12);
+        shell.Margin(Thickness{ 20.0, 18.0, 20.0, 20.0 });
+        shell.Spacing(10);
         TraceStartup(L"BuildShell after shell stack");
 
-        auto title = TextBlock{}; 
+        auto title = TextBlock{};
         title.Text(L"WinBlaze");
-        title.FontSize(30);
+        title.FontSize(26);
         title.Foreground(make_brush(theme.text_primary));
         shell.Children().Append(title);
         TraceStartup(L"BuildShell after title");
 
         auto subtitle = TextBlock{};
-        subtitle.Text(L"Live scan controls, indexed search, tree preview, details, and treemap are active.");
-        subtitle.FontSize(18);
+        subtitle.Text(L"Live scan controls, indexed search, optional folder panels, and treemap are active.");
+        subtitle.FontSize(15);
         subtitle.Foreground(make_brush(theme.text_primary));
         subtitle.TextWrapping(TextWrapping::WrapWholeWords);
         shell.Children().Append(subtitle);
@@ -693,47 +693,61 @@ namespace winrt::WinBlaze::UI::implementation
         apply_compact_card_style(nav_strip);
         Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
             nav_strip,
-            L"Shell navigation");
+            L"Shell menus");
         Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
             nav_strip,
-            L"Stable section navigation. Use the chips or Ctrl/Alt plus 1 through 5 to change sections.");
-        auto nav_row = StackPanel{};
-        nav_row.Orientation(Orientation::Horizontal);
-        nav_row.Spacing(8);
-        nav_strip.Child(nav_row);
+            L"Compact shell menus. Use Navigate for sections and View for optional panels.");
+
+        auto menu_bar = MenuBar{};
+        nav_strip.Child(menu_bar);
 
         m_nav_chips.clear();
-        auto make_nav_chip = [&](std::wstring_view text, ShellSection section, std::wstring_view access_key, int tab_index) {
-            auto chip = Button{};
-            ApplyNavigationChipStyle(chip, false);
-            chip.Tag(box_value(winrt::hstring(SectionName(section))));
-            chip.AccessKey(winrt::hstring(access_key));
-            chip.TabIndex(tab_index);
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(chip, winrt::hstring(text));
+        auto navigate_menu = MenuBarItem{};
+        navigate_menu.Title(L"Navigate");
+
+        auto make_nav_item = [&](std::wstring_view text, ShellSection section, std::wstring_view access_key) {
+            auto item = MenuFlyoutItem{};
+            item.Text(winrt::hstring(text));
+            item.AccessKey(winrt::hstring(access_key));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item, winrt::hstring(text));
             Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
-                chip,
+                item,
                 winrt::hstring(L"Navigate to " + SectionName(section) + L". Shortcut: Ctrl+" + std::wstring(access_key) + L" or Alt+" + std::wstring(access_key) + L"."));
             ToolTipService::SetToolTip(
-                chip,
+                item,
                 box_value(winrt::hstring(L"Ctrl+" + std::wstring(access_key) + L" or Alt+" + std::wstring(access_key))));
-            chip.Click([this, section](auto const&, auto const&) {
+            item.Click([this, section](auto const&, auto const&) {
                 SetSection(section);
             });
-            auto label = TextBlock{};
-            label.Text(winrt::hstring(text));
-            label.Foreground(make_brush(theme.text_primary));
-            chip.Content(label);
-            m_nav_chips.push_back(chip);
-            return chip;
+            return item;
         };
 
-        nav_row.Children().Append(make_nav_chip(L"Overview", ShellSection::Overview, L"1", 10));
-        nav_row.Children().Append(make_nav_chip(L"Tree", ShellSection::Tree, L"2", 11));
-        nav_row.Children().Append(make_nav_chip(L"Treemap", ShellSection::Treemap, L"3", 12));
-        nav_row.Children().Append(make_nav_chip(L"Search", ShellSection::Search, L"4", 13));
-        nav_row.Children().Append(make_nav_chip(L"Diagnostics", ShellSection::Diagnostics, L"5", 14));
+        navigate_menu.Items().Append(make_nav_item(L"Overview", ShellSection::Overview, L"1"));
+        navigate_menu.Items().Append(make_nav_item(L"Folder tree", ShellSection::Tree, L"2"));
+        navigate_menu.Items().Append(make_nav_item(L"Treemap", ShellSection::Treemap, L"3"));
+        navigate_menu.Items().Append(make_nav_item(L"Search", ShellSection::Search, L"4"));
+        navigate_menu.Items().Append(make_nav_item(L"Diagnostics", ShellSection::Diagnostics, L"5"));
+        menu_bar.Items().Append(navigate_menu);
+
+        auto view_menu = MenuBarItem{};
+        view_menu.Title(L"View");
+        auto make_view_toggle = [&](ToggleMenuFlyoutItem& storage, std::wstring_view text, std::wstring_view help_text) {
+            auto item = ToggleMenuFlyoutItem{};
+            storage = item;
+            item.Text(winrt::hstring(text));
+            item.IsChecked(false);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item, winrt::hstring(text));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(item, winrt::hstring(help_text));
+            item.Click({ this, &MainWindow::OnOptionalPanelToggleClicked });
+            view_menu.Items().Append(item);
+        };
+        make_view_toggle(m_current_state_toggle, L"Current state", L"Show or hide the current state panel.");
+        make_view_toggle(m_folder_view_toggle, L"Folder view", L"Show or hide the folder and file detail panel.");
+        make_view_toggle(m_folder_tree_toggle, L"Folder tree", L"Show or hide the virtualized folder tree panel.");
+        menu_bar.Items().Append(view_menu);
+
         shell.Children().Append(nav_strip);
-        TraceStartup(L"BuildShell after nav strip");
+        TraceStartup(L"BuildShell after menu strip");
 
         auto summary_card = Border{};
         m_overview_card = summary_card;
@@ -758,86 +772,6 @@ namespace winrt::WinBlaze::UI::implementation
 
         shell.Children().Append(summary_card);
         TraceStartup(L"BuildShell after summary card");
-
-        auto make_snapshot_card = [&](hstring const& title, std::vector<std::wstring> const& lines) {
-            auto card = Border{};
-            apply_card_style(card);
-
-            auto stack = StackPanel{};
-            stack.Spacing(6);
-            card.Child(stack);
-
-            stack.Children().Append(make_card_title(title.c_str()));
-
-            for (std::wstring const& line : lines) {
-                auto text = TextBlock{};
-                text.Text(winrt::hstring(line));
-                text.TextWrapping(TextWrapping::WrapWholeWords);
-                stack.Children().Append(text);
-            }
-
-            return card;
-        };
-
-        {
-            auto session_card = Border{};
-            apply_card_style(session_card);
-
-            auto session_stack = StackPanel{};
-            session_stack.Spacing(6);
-            session_card.Child(session_stack);
-
-            session_stack.Children().Append(make_card_title(L"Session snapshot"));
-
-            m_session_root_snapshot_text = TextBlock{};
-            m_session_root_snapshot_text.Text(L"Root path: " + m_current_root_path);
-            session_stack.Children().Append(m_session_root_snapshot_text);
-
-            m_session_section_snapshot_text = TextBlock{};
-            m_session_section_snapshot_text.Text(L"Active section: " + SectionName(m_active_section));
-            session_stack.Children().Append(m_session_section_snapshot_text);
-
-            m_session_status_snapshot_text = TextBlock{};
-            m_session_status_snapshot_text.Text(L"Status: Idle");
-            session_stack.Children().Append(m_session_status_snapshot_text);
-
-            m_session_results_snapshot_text = TextBlock{};
-            m_session_results_snapshot_text.Text(L"Results loaded: no scan data yet");
-            session_stack.Children().Append(m_session_results_snapshot_text);
-
-            shell.Children().Append(session_card);
-        }
-        TraceStartup(L"BuildShell after session snapshot");
-
-        {
-            auto selection_card = Border{};
-            apply_card_style(selection_card);
-
-            auto selection_stack = StackPanel{};
-            selection_stack.Spacing(6);
-            selection_card.Child(selection_stack);
-
-            selection_stack.Children().Append(make_card_title(L"Selection snapshot"));
-
-            m_selection_name_snapshot_text = TextBlock{};
-            m_selection_name_snapshot_text.Text(L"Name: " + m_current_selection_name);
-            selection_stack.Children().Append(m_selection_name_snapshot_text);
-
-            m_selection_path_snapshot_text = TextBlock{};
-            m_selection_path_snapshot_text.Text(L"Path: " + m_current_selection_path);
-            selection_stack.Children().Append(m_selection_path_snapshot_text);
-
-            m_selection_kind_snapshot_text = TextBlock{};
-            m_selection_kind_snapshot_text.Text(L"Kind: " + m_current_selection_kind);
-            selection_stack.Children().Append(m_selection_kind_snapshot_text);
-
-            m_selection_size_snapshot_text = TextBlock{};
-            m_selection_size_snapshot_text.Text(L"Size: " + m_current_selection_size);
-            selection_stack.Children().Append(m_selection_size_snapshot_text);
-
-            shell.Children().Append(selection_card);
-        }
-        TraceStartup(L"BuildShell after selection snapshot");
 
         {
             auto search_card = Border{};
@@ -1592,6 +1526,22 @@ namespace winrt::WinBlaze::UI::implementation
         UpdateStatus(visible ? L"Developer diagnostics shown." : L"Developer diagnostics hidden.");
     }
 
+    void MainWindow::OnOptionalPanelToggleClicked(
+        winrt::Windows::Foundation::IInspectable const&,
+        Microsoft::UI::Xaml::RoutedEventArgs const&)
+    {
+        auto is_checked = [](Microsoft::UI::Xaml::Controls::ToggleMenuFlyoutItem const& item) {
+            return item && item.IsChecked();
+        };
+
+        m_show_current_state = is_checked(CurrentStateToggle());
+        m_show_folder_view = is_checked(FolderViewToggle());
+        m_show_folder_tree = is_checked(FolderTreeToggle());
+
+        SetSection(m_active_section);
+        UpdateStatus(L"View options updated.");
+    }
+
     void MainWindow::OnBreadcrumbClicked(winrt::Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
         if (auto button = sender.try_as<Microsoft::UI::Xaml::Controls::Button>()) {
@@ -2202,12 +2152,12 @@ namespace winrt::WinBlaze::UI::implementation
             return;
         }
 
-        SetControlVisibility(OverviewCard(), section == ShellSection::Overview || section == ShellSection::Diagnostics);
-        SetControlVisibility(TreeCard(), section == ShellSection::Overview || section == ShellSection::Tree);
+        SetControlVisibility(OverviewCard(), m_show_current_state && (section == ShellSection::Overview || section == ShellSection::Diagnostics));
+        SetControlVisibility(TreeCard(), m_show_folder_tree && (section == ShellSection::Overview || section == ShellSection::Tree));
         SetControlVisibility(SearchCard(), section == ShellSection::Overview || section == ShellSection::Search);
         SetControlVisibility(DiagnosticsCard(), section == ShellSection::Overview || section == ShellSection::Diagnostics);
-        SetControlVisibility(TreemapCard(), section == ShellSection::Overview || section == ShellSection::Treemap);
-        SetControlVisibility(DetailCard(), section == ShellSection::Overview || section == ShellSection::Treemap || section == ShellSection::Diagnostics);
+        SetControlVisibility(TreemapCard(), true);
+        SetControlVisibility(DetailCard(), m_show_folder_view && (section == ShellSection::Overview || section == ShellSection::Treemap || section == ShellSection::Diagnostics));
         TraceStartup(L"SetSection end");
     }
 
@@ -2584,33 +2534,6 @@ namespace winrt::WinBlaze::UI::implementation
             L" | Error: " + std::wstring(m_has_error ? L"yes" : L"no");
 
         SummaryText().Text(winrt::hstring(text));
-
-        if (m_session_root_snapshot_text) {
-            m_session_root_snapshot_text.Text(winrt::hstring(L"Root path: " + m_current_root_path));
-        }
-        if (m_session_section_snapshot_text) {
-            m_session_section_snapshot_text.Text(winrt::hstring(L"Active section: " + SectionName(m_active_section)));
-        }
-        if (m_session_status_snapshot_text) {
-            m_session_status_snapshot_text.Text(winrt::hstring(
-                L"Status: " + std::wstring(m_session_active ? L"Scanning" : L"Idle")));
-        }
-        if (m_session_results_snapshot_text) {
-            m_session_results_snapshot_text.Text(winrt::hstring(
-                L"Results loaded: " + std::wstring(m_has_results ? L"yes" : L"no scan data yet")));
-        }
-        if (m_selection_name_snapshot_text) {
-            m_selection_name_snapshot_text.Text(winrt::hstring(L"Name: " + m_current_selection_name));
-        }
-        if (m_selection_path_snapshot_text) {
-            m_selection_path_snapshot_text.Text(winrt::hstring(L"Path: " + m_current_selection_path));
-        }
-        if (m_selection_kind_snapshot_text) {
-            m_selection_kind_snapshot_text.Text(winrt::hstring(L"Kind: " + m_current_selection_kind));
-        }
-        if (m_selection_size_snapshot_text) {
-            m_selection_size_snapshot_text.Text(winrt::hstring(L"Size: " + m_current_selection_size));
-        }
     }
 
     void MainWindow::UpdateRuntimeSnapshot()

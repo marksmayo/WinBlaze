@@ -73,15 +73,18 @@ impl IndexCatalog {
 
         if query.include_files {
             hits.extend(self.files.iter().filter_map(|file| {
+                let file_params = FileMatchParams {
+                    name: &file.name,
+                    full_path: &file.full_path,
+                    size_bytes: file.size_bytes,
+                    allocation_bytes: file.allocation_bytes,
+                    modified_utc: file.modified_utc,
+                };
                 if matches_query(
                     query,
                     pattern_lower.as_deref(),
                     &normalized_extensions,
-                    &file.name,
-                    &file.full_path,
-                    file.size_bytes,
-                    file.allocation_bytes,
-                    file.modified_utc,
+                    &file_params,
                 ) {
                     Some(IndexSearchHit {
                         kind: IndexRecordKind::File,
@@ -99,15 +102,18 @@ impl IndexCatalog {
 
         if query.include_directories {
             hits.extend(self.aggregated_directories.iter().filter_map(|directory| {
+                let file_params = FileMatchParams {
+                    name: &directory.name,
+                    full_path: &directory.full_path,
+                    size_bytes: directory.total_bytes,
+                    allocation_bytes: directory.total_bytes,
+                    modified_utc: None,
+                };
                 if matches_query(
                     query,
                     pattern_lower.as_deref(),
                     &normalized_extensions,
-                    &directory.name,
-                    &directory.full_path,
-                    directory.total_bytes,
-                    directory.total_bytes,
-                    None,
+                    &file_params,
                 ) {
                     Some(IndexSearchHit {
                         kind: IndexRecordKind::Directory,
@@ -133,6 +139,14 @@ impl IndexCatalog {
     }
 }
 
+struct FileMatchParams<'a> {
+    name: &'a str,
+    full_path: &'a str,
+    size_bytes: u64,
+    allocation_bytes: u64,
+    modified_utc: Option<i64>,
+}
+
 // `pattern_lower` is the already-lowercased search pattern (None when no pattern).
 // `normalized_extensions` are pre-normalized extension strings (empty when no filter).
 // Both are computed once per query in `IndexCatalog::search` rather than per entry.
@@ -140,14 +154,10 @@ fn matches_query(
     query: &SearchQuery,
     pattern_lower: Option<&str>,
     normalized_extensions: &[String],
-    name: &str,
-    full_path: &str,
-    size_bytes: u64,
-    allocation_bytes: u64,
-    modified_utc: Option<i64>,
+    file_params: &FileMatchParams,
 ) -> bool {
     if !pattern_lower
-        .is_none_or(|pattern| matches_text(pattern, &query.match_mode, name, full_path))
+        .is_none_or(|pattern| matches_text(pattern, &query.match_mode, file_params.name, file_params.full_path))
     {
         return false;
     }
@@ -155,7 +165,7 @@ fn matches_query(
     if !normalized_extensions.is_empty() {
         // Extract and lowercase the file extension once; compare against pre-normalized
         // query extensions (no per-entry normalize_extension() calls needed).
-        let extension = std::path::Path::new(full_path)
+        let extension = std::path::Path::new(file_params.full_path)
             .extension()
             .and_then(|value| value.to_str())
             .map(|value| value.to_ascii_lowercase());
@@ -167,30 +177,30 @@ fn matches_query(
     }
 
     if let Some(min_bytes) = query.size.min_bytes {
-        if size_bytes < min_bytes {
+        if file_params.size_bytes < min_bytes {
             return false;
         }
     }
 
     if let Some(max_bytes) = query.size.max_bytes {
-        if size_bytes > max_bytes {
+        if file_params.size_bytes > max_bytes {
             return false;
         }
     }
 
     if let Some(after) = query.modified.modified_after_utc {
-        if modified_utc.is_none_or(|value| value <= after) {
+        if file_params.modified_utc.is_none_or(|value| value <= after) {
             return false;
         }
     }
 
     if let Some(before) = query.modified.modified_before_utc {
-        if modified_utc.is_none_or(|value| value >= before) {
+        if file_params.modified_utc.is_none_or(|value| value >= before) {
             return false;
         }
     }
 
-    let _ = allocation_bytes;
+    let _ = file_params.allocation_bytes;
     true
 }
 
