@@ -72,7 +72,6 @@ $requiredFiles = @(
     "WinBlaze.UI.exe",
     "winblaze_native.dll",
     "WinBlaze.UI.pri",
-    "WinBlaze.winmd",
     "WebView2Loader.dll",
     "Microsoft.Web.WebView2.Core.dll",
     "Microsoft.Web.WebView2.Core.Projection.dll",
