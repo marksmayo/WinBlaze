@@ -68,7 +68,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v4
+        uses: microsoft/setup-msbuild@v3
 
       - name: Build native bridge Debug
         if: matrix.configuration == 'Debug'
