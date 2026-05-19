@@ -1,0 +1,31 @@
+﻿{
+    "captured_utc":  "2026-05-18T07:08:22.9057316Z",
+    "machine":  {
+                    "name":  "MM-TEREM",
+                    "manufacturer":  null,
+                    "model":  null
+                },
+    "os":  {
+               "caption":  "Win32NT",
+               "version":  "10.0.26200.0",
+               "build_number":  26200
+           },
+    "cpu":  {
+                "name":  "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+                "cores":  null,
+                "logical_processors":  20
+            },
+    "memory":  {
+                   "total_physical_bytes":  null
+               },
+    "dataset_storage":  {
+                            "requested_root":  "C:\\tmp\\WinBlazeBench",
+                            "drive_root":  "C:\\",
+                            "filesystem":  null,
+                            "size_bytes":  null,
+                            "free_bytes":  null
+                        },
+    "power":  {
+                  "active_scheme":  "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)"
+              }
+}

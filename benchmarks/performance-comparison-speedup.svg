@@ -1,0 +1,14 @@
+﻿<svg xmlns='http://www.w3.org/2000/svg' width='760' height='330' viewBox='0 0 760 330'>
+<rect width='100%' height='100%' fill='#ffffff'/><text x='380' y='24' text-anchor='middle' font-family='Segoe UI, Arial' font-size='18' font-weight='600'>WizTree / WinBlaze Median Elapsed Ratio</text>
+<text x='20' y='73' font-family='Segoe UI, Arial' font-size='12'>tiny</text>
+<rect x='140' y='58' width='271' height='20' fill='#16a34a'/><text x='419' y='73' font-family='Segoe UI, Arial' font-size='12'>1.06x</text>
+<text x='20' y='115' font-family='Segoe UI, Arial' font-size='12'>small</text>
+<rect x='140' y='100' width='337' height='20' fill='#16a34a'/><text x='485' y='115' font-family='Segoe UI, Arial' font-size='12'>1.32x</text>
+<text x='20' y='157' font-family='Segoe UI, Arial' font-size='12'>fanout</text>
+<rect x='140' y='142' width='240' height='20' fill='#16a34a'/><text x='388' y='157' font-family='Segoe UI, Arial' font-size='12'>0.94x</text>
+<text x='20' y='199' font-family='Segoe UI, Arial' font-size='12'>fanout-large</text>
+<rect x='140' y='184' width='276' height='20' fill='#16a34a'/><text x='424' y='199' font-family='Segoe UI, Arial' font-size='12'>1.08x</text>
+<text x='20' y='241' font-family='Segoe UI, Arial' font-size='12'>scale</text>
+<rect x='140' y='226' width='460' height='20' fill='#16a34a'/><text x='608' y='241' font-family='Segoe UI, Arial' font-size='12'>1.8x</text>
+<line x1='396' y1='48' x2='396' y2='270' stroke='#991b1b' stroke-dasharray='4 4'/><text x='402' y='268' font-family='Segoe UI, Arial' font-size='11'>parity</text>
+<text x='140' y='302' font-family='Segoe UI, Arial' font-size='12'>Higher means WinBlaze completed sooner.</text></svg>

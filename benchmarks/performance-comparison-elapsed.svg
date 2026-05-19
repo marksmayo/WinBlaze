@@ -1,0 +1,18 @@
+﻿<svg xmlns='http://www.w3.org/2000/svg' width='920' height='380' viewBox='0 0 920 380'>
+<rect width='100%' height='100%' fill='#ffffff'/><text x='460' y='24' text-anchor='middle' font-family='Segoe UI, Arial' font-size='18' font-weight='600'>Elapsed Time: Current WinBlaze vs WizTree</text>
+<text x='20' y='77' font-family='Segoe UI, Arial' font-size='12'>tiny</text>
+<rect x='140' y='55' width='470' height='16' fill='#2563eb'/><text x='616' y='68' font-family='Segoe UI, Arial' font-size='12'>567 ms</text>
+<rect x='140' y='75' width='499' height='16' fill='#f97316'/><text x='645' y='88' font-family='Segoe UI, Arial' font-size='12'>602 ms</text>
+<text x='20' y='129' font-family='Segoe UI, Arial' font-size='12'>small</text>
+<rect x='140' y='107' width='474' height='16' fill='#2563eb'/><text x='620' y='120' font-family='Segoe UI, Arial' font-size='12'>571 ms</text>
+<rect x='140' y='127' width='625' height='16' fill='#f97316'/><text x='771' y='140' font-family='Segoe UI, Arial' font-size='12'>754 ms</text>
+<text x='20' y='181' font-family='Segoe UI, Arial' font-size='12'>fanout</text>
+<rect x='140' y='159' width='478' height='16' fill='#2563eb'/><text x='624' y='172' font-family='Segoe UI, Arial' font-size='12'>577 ms</text>
+<rect x='140' y='179' width='450' height='16' fill='#f97316'/><text x='596' y='192' font-family='Segoe UI, Arial' font-size='12'>543 ms</text>
+<text x='20' y='233' font-family='Segoe UI, Arial' font-size='12'>fanout-large</text>
+<rect x='140' y='211' width='419' height='16' fill='#2563eb'/><text x='565' y='224' font-family='Segoe UI, Arial' font-size='12'>505 ms</text>
+<rect x='140' y='231' width='452' height='16' fill='#f97316'/><text x='598' y='244' font-family='Segoe UI, Arial' font-size='12'>545 ms</text>
+<text x='20' y='285' font-family='Segoe UI, Arial' font-size='12'>scale</text>
+<rect x='140' y='263' width='378' height='16' fill='#2563eb'/><text x='524' y='276' font-family='Segoe UI, Arial' font-size='12'>456 ms</text>
+<rect x='140' y='283' width='680' height='16' fill='#f97316'/><text x='826' y='296' font-family='Segoe UI, Arial' font-size='12'>820 ms</text>
+<rect x='140' y='332' width='12' height='12' fill='#2563eb'/><text x='158' y='342' font-family='Segoe UI, Arial' font-size='12'>WinBlaze current Release median</text><rect x='370' y='332' width='12' height='12' fill='#f97316'/><text x='388' y='342' font-family='Segoe UI, Arial' font-size='12'>WizTree export median</text></svg>

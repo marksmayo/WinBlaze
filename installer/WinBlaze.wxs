@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="WinBlaze"
+    Manufacturer="WinBlaze"
+    Version="$(var.Version)"
+    UpgradeCode="6F8D8B1E-28B4-4F93-BB59-8F5D2D0533D8"
+    Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of WinBlaze is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="MainFeature" Title="WinBlaze" Level="1">
+      <ComponentGroupRef Id="WinBlazeFiles" />
+      <ComponentRef Id="ApplicationShortcuts" />
+    </Feature>
+  </Package>
+
+  <StandardDirectory Id="ProgramFiles64Folder">
+    <Directory Id="INSTALLFOLDER" Name="WinBlaze">
+      <Directory Id="DOCSFOLDER" Name="docs" />
+    </Directory>
+  </StandardDirectory>
+
+  <StandardDirectory Id="ProgramMenuFolder">
+    <Directory Id="ApplicationProgramsFolder" Name="WinBlaze" />
+  </StandardDirectory>
+
+  <ComponentGroup Id="WinBlazeFiles">
+    <Component Id="AppExecutable" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="WinBlazeExe" Source="$(var.SourceDir)\WinBlaze.UI.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="NativeDll" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\winblaze_native.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="AppPri" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\WinBlaze.UI.pri" KeyPath="yes" />
+    </Component>
+    <Component Id="AppWinmd" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\WinBlaze.winmd" KeyPath="yes" />
+    </Component>
+    <Component Id="WebView2Loader" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\WebView2Loader.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="WebView2Core" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\Microsoft.Web.WebView2.Core.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="WebView2Projection" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\Microsoft.Web.WebView2.Core.Projection.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="WebView2Winmd" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\Microsoft.Web.WebView2.Core.winmd" KeyPath="yes" />
+    </Component>
+    <Component Id="WindowsAppRuntimeBootstrap" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\Microsoft.WindowsAppRuntime.Bootstrap.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="WindowsBackgroundTasks" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="DocsPackaging" Directory="DOCSFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\docs\PACKAGING.md" KeyPath="yes" />
+    </Component>
+    <Component Id="DocsReadme" Directory="DOCSFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\docs\README.md" KeyPath="yes" />
+    </Component>
+    <Component Id="DocsReleaseChecklist" Directory="DOCSFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\docs\RELEASE_CHECKLIST.md" KeyPath="yes" />
+    </Component>
+    <Component Id="DocsTroubleshooting" Directory="DOCSFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\docs\TROUBLESHOOTING.md" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <Component Id="ApplicationShortcuts" Directory="ApplicationProgramsFolder" Guid="*">
+    <Shortcut
+      Id="ApplicationStartMenuShortcut"
+      Name="WinBlaze"
+      Description="Analyze disk usage with WinBlaze"
+      Target="[INSTALLFOLDER]WinBlaze.UI.exe"
+      WorkingDirectory="INSTALLFOLDER" />
+    <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+    <RegistryValue Root="HKCU" Key="Software\WinBlaze" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+  </Component>
+</Wix>

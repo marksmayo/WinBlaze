@@ -1,0 +1,14 @@
+[workspace]
+members = [
+    "src/WinBlaze.Core",
+    "src/WinBlaze.Scanner",
+    "src/WinBlaze.Index",
+    "src/WinBlaze.Native",
+    "tests/WinBlaze.Tests",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "Proprietary"
+authors = ["WinBlaze Contributors"]

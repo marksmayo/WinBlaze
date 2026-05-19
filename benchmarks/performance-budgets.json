@@ -1,0 +1,29 @@
+{
+  "description": "Conservative local Debug UI budgets for generated benchmark profiles. These are stability gates, not release parity targets.",
+  "profiles": {
+    "tiny": {
+      "max_elapsed_ms": 3000,
+      "max_working_set_mb": 300,
+      "max_peak_frame_ms": 250,
+      "max_peak_flush_ms": 100
+    },
+    "fanout": {
+      "max_elapsed_ms": 5000,
+      "max_working_set_mb": 350,
+      "max_peak_frame_ms": 250,
+      "max_peak_flush_ms": 150
+    },
+    "fanout-large": {
+      "max_elapsed_ms": 9000,
+      "max_working_set_mb": 420,
+      "max_peak_frame_ms": 300,
+      "max_peak_flush_ms": 220
+    },
+    "scale": {
+      "max_elapsed_ms": 7000,
+      "max_working_set_mb": 400,
+      "max_peak_frame_ms": 300,
+      "max_peak_flush_ms": 200
+    }
+  }
+}

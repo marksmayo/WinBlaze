@@ -1,0 +1,59 @@
+﻿{
+    "generated_utc":  "2026-05-17T01:09:35.6781816Z",
+    "app_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+    "dataset_root":  "C:\\tmp\\WinBlazeBench",
+    "profiles":  [
+                     "tiny",
+                     "fanout",
+                     "scale"
+                 ],
+    "budgets_enforced":  true,
+    "budget_path":  "C:\\Users\\markm\\Github\\WinBlaze\\benchmarks\\performance-budgets.release.json",
+    "results":  [
+                    {
+                        "dataset":  "tiny",
+                        "root":  "C:\\tmp\\WinBlazeBench\\tiny",
+                        "expected_files":  72,
+                        "expected_directories":  13,
+                        "expected_bytes":  73728,
+                        "elapsed_ms":  481,
+                        "working_set_mb":  168.7,
+                        "working_set_bytes_per_file":  2456405,
+                        "peak_frame_ms":  85,
+                        "peak_flush_ms":  13,
+                        "correctness":  "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+                        "frame_status":  "UI batching: ready, flushes=1, queued events=89, last latency=24 ms, last input=0 ms, flush cost=13 ms, peak flush=13 ms, frames=201, last frame=15 ms, peak frame=85 ms, session=idle, results=loaded, working set=155.0 MB, peak=155.0 MB, Scan duration: 6 ms",
+                        "treemap_status":  "SwapChainPanel host active: 1286x120 px. GPU treemap catalog frame rendered: 10 tiles, D3D feature level 11.1; layout=balanced, labels=1, first tile=\"C:\\tmp\\WinBlazeBench\\tiny\"."
+                    },
+                    {
+                        "dataset":  "fanout",
+                        "root":  "C:\\tmp\\WinBlazeBench\\fanout",
+                        "expected_files":  2048,
+                        "expected_directories":  3,
+                        "expected_bytes":  1048576,
+                        "elapsed_ms":  466,
+                        "working_set_mb":  175.3,
+                        "working_set_bytes_per_file":  89754,
+                        "peak_frame_ms":  51,
+                        "peak_flush_ms":  27,
+                        "correctness":  "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=2048, directories=3, sized catalog entries=512, totals summary=1.0 MB, catalog sample=254.0 KB, delta=770.0 KB",
+                        "frame_status":  "UI batching: ready, flushes=1, queued events=2063, last latency=15 ms, last input=0 ms, flush cost=27 ms, peak flush=27 ms, frames=198, last frame=13 ms, peak frame=51 ms, session=idle, results=loaded, working set=160.5 MB, peak=160.5 MB, Scan duration: 12 ms",
+                        "treemap_status":  "SwapChainPanel host active: 1286x120 px. GPU treemap catalog frame rendered: 10 tiles, D3D feature level 11.1; layout=balanced, labels=6, first tile=\"file-000-000-0000.bin\"."
+                    },
+                    {
+                        "dataset":  "scale",
+                        "root":  "C:\\tmp\\WinBlazeBench\\scale",
+                        "expected_files":  16384,
+                        "expected_directories":  545,
+                        "expected_bytes":  0,
+                        "elapsed_ms":  441,
+                        "working_set_mb":  189.9,
+                        "working_set_bytes_per_file":  12152,
+                        "peak_frame_ms":  82,
+                        "peak_flush_ms":  59,
+                        "correctness":  "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=16384, directories=545, sized catalog entries=512, totals summary=0 B, catalog sample=0 B, delta=0 B",
+                        "frame_status":  "UI batching: ready, flushes=3, queued events=16999, last latency=50 ms, last input=0 ms, flush cost=39 ms, peak flush=59 ms, frames=200, last frame=12 ms, peak frame=82 ms, session=idle, results=loaded, working set=191.4 MB, peak=191.4 MB, Scan duration: 147 ms",
+                        "treemap_status":  "SwapChainPanel host active: 1286x120 px. GPU treemap catalog frame rendered: 10 tiles, D3D feature level 11.1; layout=balanced, labels=1, first tile=\"C:\\tmp\\WinBlazeBench\\scale\"."
+                    }
+                ]
+}

@@ -1,0 +1,126 @@
+﻿{
+    "generated_utc":  "2026-05-19T00:55:49.7657950Z",
+    "method":  "WizTree64.exe \u003cdataset-root\u003e /export=\u003ccsv\u003e, wall-clock process lifetime",
+    "results":  [
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "tiny",
+                        "run":  1,
+                        "elapsed_ms":  780,
+                        "export_bytes":  8799,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "tiny",
+                        "run":  2,
+                        "elapsed_ms":  574,
+                        "export_bytes":  8799,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "tiny",
+                        "run":  3,
+                        "elapsed_ms":  602,
+                        "export_bytes":  8799,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "small",
+                        "run":  1,
+                        "elapsed_ms":  754,
+                        "export_bytes":  167831,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "small",
+                        "run":  2,
+                        "elapsed_ms":  754,
+                        "export_bytes":  167831,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "small",
+                        "run":  3,
+                        "elapsed_ms":  755,
+                        "export_bytes":  167831,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "fanout",
+                        "run":  1,
+                        "elapsed_ms":  549,
+                        "export_bytes":  209385,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "fanout",
+                        "run":  2,
+                        "elapsed_ms":  543,
+                        "export_bytes":  209385,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "fanout",
+                        "run":  3,
+                        "elapsed_ms":  535,
+                        "export_bytes":  209385,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "fanout-large",
+                        "run":  1,
+                        "elapsed_ms":  528,
+                        "export_bytes":  885243,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "fanout-large",
+                        "run":  2,
+                        "elapsed_ms":  545,
+                        "export_bytes":  885243,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "fanout-large",
+                        "run":  3,
+                        "elapsed_ms":  560,
+                        "export_bytes":  885243,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "scale",
+                        "run":  1,
+                        "elapsed_ms":  820,
+                        "export_bytes":  1665117,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "scale",
+                        "run":  2,
+                        "elapsed_ms":  801,
+                        "export_bytes":  1665117,
+                        "exit_code":  0
+                    },
+                    {
+                        "tool":  "WizTree",
+                        "dataset":  "scale",
+                        "run":  3,
+                        "elapsed_ms":  913,
+                        "export_bytes":  1665117,
+                        "exit_code":  0
+                    }
+                ]
+}

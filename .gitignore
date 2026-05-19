@@ -1,0 +1,46 @@
+target/
+**/*.rs.bk
+
+# Rust/build artifacts
+*.pdb
+*.obj
+*.exe
+*.dll
+*.lib
+*.exp
+*.iobj
+*.ipdb
+*.recipe
+
+# Visual Studio / MSBuild outputs
+.vs/
+artifacts/
+**/bin/
+**/obj/
+**/x64/
+**/Debug/
+**/Release/
+**/*.tlog/
+*.log
+*.cache
+*.rsp
+*.lastbuildstate
+*.FileListAbsolute.txt
+
+# Generated Windows resources/intermediates
+**/Generated Files/
+**/Merged/
+**/Unmerged/
+*.resfiles
+*.intermediate
+priconfig.xml
+qualifiers.txt
+MultipleQualifiersPerDimensionFound.txt
+
+# Local diagnostics and crash output
+*.jsonl
+*.tmp
+*.dmp
+*.etl
+*.trace
+logs/

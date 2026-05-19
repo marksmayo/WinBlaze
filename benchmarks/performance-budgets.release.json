@@ -1,0 +1,29 @@
+{
+  "description": "Conservative local Release UI budgets for generated benchmark profiles. Calibrated from the first local Release median capture on the primary development workstation.",
+  "profiles": {
+    "tiny": {
+      "max_elapsed_ms": 2000,
+      "max_working_set_mb": 260,
+      "max_peak_frame_ms": 180,
+      "max_peak_flush_ms": 80
+    },
+    "fanout": {
+      "max_elapsed_ms": 2500,
+      "max_working_set_mb": 280,
+      "max_peak_frame_ms": 180,
+      "max_peak_flush_ms": 100
+    },
+    "fanout-large": {
+      "max_elapsed_ms": 4000,
+      "max_working_set_mb": 340,
+      "max_peak_frame_ms": 220,
+      "max_peak_flush_ms": 150
+    },
+    "scale": {
+      "max_elapsed_ms": 3000,
+      "max_working_set_mb": 320,
+      "max_peak_frame_ms": 220,
+      "max_peak_flush_ms": 120
+    }
+  }
+}

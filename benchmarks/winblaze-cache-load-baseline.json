@@ -1,0 +1,13 @@
+﻿{
+    "elapsed_ms":  982,
+    "working_set_mb":  151.9,
+    "cache_read_kb":  11.5,
+    "cache_read_ms":  12,
+    "cache_decode_ms":  0,
+    "cache_entries":  86,
+    "cache_load_cap":  8192,
+    "runtime_status":  "UI batching: ready, flushes=0, queued events=0, last latency=0 ms, last input=0 ms, flush cost=0 ms, peak flush=0 ms, frames=4, last frame=16 ms, peak frame=40 ms, treemap renders=1/2 requests, coalesced=1, session=idle, results=loaded, working set=0 B, peak=0 B, Cache load: read 11.5 KB in 12 ms, decoded in 0 ms, entries=86, load cap=8192 (volumes=1, directories=13, files=72), source=primary, Scan duration: n/a",
+    "cache_load_status":  "UI batching: ready, flushes=0, queued events=0, last latency=0 ms, last input=0 ms, flush cost=0 ms, peak flush=0 ms, frames=4, last frame=16 ms, peak frame=40 ms, treemap renders=1/2 requests, coalesced=1, session=idle, results=loaded, working set=0 B, peak=0 B, Cache load: read 11.5 KB in 12 ms, decoded in 0 ms, entries=86, load cap=8192 (volumes=1, directories=13, files=72), source=primary, Scan duration: n/a",
+    "catalog_status":  "Catalog entries: 86, visible: 86, top: tiny (Directory, 0 B) | sub-002 (Directory, 0 B) | sub-002 (Directory, 0 B) | Scan duration: n/a",
+    "treemap_status":  "SwapChainPanel host active: 1286x120 px. GPU treemap catalog frame rendered: 10 tiles, D3D feature level 11.1; layout=balanced, labels=1, first tile=\"C:\\tmp\\WinBlazeBench\\tiny\"."
+}

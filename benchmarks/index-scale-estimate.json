@@ -1,0 +1,32 @@
+﻿{
+    "generated_utc":  "2026-05-18T04:47:40.1281184Z",
+    "sample":  {
+                   "files":  100000,
+                   "elapsed_ms":  407,
+                   "working_set_bytes":  58822656,
+                   "working_set_bytes_per_file":  588,
+                   "snapshot_bytes":  10200056,
+                   "snapshot_bytes_per_file":  102
+               },
+    "assumptions":  "Linear projection from synthetic FileRecord index-memory sample; validates budget planning only, not UI or filesystem traversal.",
+    "projections":  [
+                        {
+                            "files":  1000000,
+                            "projected_working_set_bytes":  588000000,
+                            "projected_snapshot_bytes":  102000000,
+                            "projected_elapsed_ms":  4070
+                        },
+                        {
+                            "files":  10000000,
+                            "projected_working_set_bytes":  5880000000,
+                            "projected_snapshot_bytes":  1020000000,
+                            "projected_elapsed_ms":  40700
+                        },
+                        {
+                            "files":  50000000,
+                            "projected_working_set_bytes":  29400000000,
+                            "projected_snapshot_bytes":  5100000000,
+                            "projected_elapsed_ms":  203500
+                        }
+                    ]
+}

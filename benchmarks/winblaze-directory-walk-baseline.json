@@ -1,0 +1,21 @@
+﻿{
+    "profile":  "tiny",
+    "root":  "C:\\tmp\\WinBlazeBenchDirWalk\\tiny",
+    "elapsed_ms":  2,
+    "files":  72,
+    "directories":  13,
+    "bytes":  73728,
+    "issues":  0,
+    "issues_by_kind":  {
+                           "permission_denied":  0,
+                           "not_found":  0,
+                           "sharing_violation":  0,
+                           "transient_io":  0,
+                           "unsupported_filesystem":  0,
+                           "unknown":  0
+                       },
+    "recent_issues":  [
+
+                      ],
+    "files_per_second":  36000
+}

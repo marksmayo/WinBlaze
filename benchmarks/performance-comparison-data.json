@@ -1,0 +1,183 @@
+﻿{
+    "generated_utc":  "2026-05-19T00:56:56.5586363Z",
+    "previous_comparison_generated_utc":  "2026-05-18T12:27:51.1551721Z",
+    "optimization":  "Current Release UI build from the working tree; report regenerated after latest local changes.",
+    "environment":  {
+                        "captured_utc":  "2026-05-18T07:08:22.9057316Z",
+                        "machine":  {
+                                        "name":  "MM-TEREM",
+                                        "manufacturer":  null,
+                                        "model":  null
+                                    },
+                        "os":  {
+                                   "caption":  "Win32NT",
+                                   "version":  "10.0.26200.0",
+                                   "build_number":  26200
+                               },
+                        "cpu":  {
+                                    "name":  "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+                                    "cores":  null,
+                                    "logical_processors":  20
+                                },
+                        "memory":  {
+                                       "total_physical_bytes":  null
+                                   },
+                        "dataset_storage":  {
+                                                "requested_root":  "C:\\tmp\\WinBlazeBench",
+                                                "drive_root":  "C:\\",
+                                                "filesystem":  null,
+                                                "size_bytes":  null,
+                                                "free_bytes":  null
+                                            },
+                        "power":  {
+                                      "active_scheme":  "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)"
+                                  }
+                    },
+    "methodology":  {
+                        "winblaze":  "Release UI benchmark suite; elapsed time is launch/scan/wait-for-expected-summary/results-loaded wall-clock as captured by benchmarks/run-ui-benchmark.ps1.",
+                        "wiztree":  "WizTree64.exe \u003cdataset-root\u003e /export=\u003ccsv\u003e; elapsed time is process lifetime until CSV export completes.",
+                        "windirstat":  "Installed and probed, but not timed because no reliable command-line export/exit or UI Automation completion signal was available in this environment."
+                    },
+    "tool_inventory":  [
+                           {
+                               "name":  "WizTree",
+                               "installed":  true,
+                               "path":  "C:\\Program Files\\WizTree\\WizTree64.exe",
+                               "version":  "4.31"
+                           },
+                           {
+                               "name":  "WinDirStat",
+                               "installed":  true,
+                               "path":  "C:\\Program Files\\WinDirStat\\WinDirStat.exe",
+                               "version":  "2.6.0"
+                           },
+                           {
+                               "name":  "Everything",
+                               "installed":  false,
+                               "path":  null,
+                               "version":  null
+                           }
+                       ],
+    "results":  [
+                    {
+                        "profile":  "tiny",
+                        "files":  72,
+                        "directories":  13,
+                        "bytes":  73728,
+                        "previous_winblaze_median_elapsed_ms":  505,
+                        "winblaze_median_elapsed_ms":  567,
+                        "winblaze_delta_ms":  62,
+                        "winblaze_delta_percent":  12.3,
+                        "winblaze_first_elapsed_ms":  567,
+                        "winblaze_warmed_median_elapsed_ms":  512,
+                        "winblaze_median_working_set_mb":  173.4,
+                        "winblaze_median_scan_duration_ms":  6,
+                        "winblaze_peak_frame_ms":  16,
+                        "winblaze_peak_flush_ms":  14,
+                        "wiztree_median_elapsed_ms":  602,
+                        "wiztree_runs_ms":  [
+                                                780,
+                                                574,
+                                                602
+                                            ],
+                        "wiztree_export_bytes":  8799,
+                        "winblaze_vs_wiztree_ratio":  1.06
+                    },
+                    {
+                        "profile":  "small",
+                        "files":  1536,
+                        "directories":  73,
+                        "bytes":  6291456,
+                        "previous_winblaze_median_elapsed_ms":  499,
+                        "winblaze_median_elapsed_ms":  571,
+                        "winblaze_delta_ms":  72,
+                        "winblaze_delta_percent":  14.4,
+                        "winblaze_first_elapsed_ms":  572,
+                        "winblaze_warmed_median_elapsed_ms":  547,
+                        "winblaze_median_working_set_mb":  181.5,
+                        "winblaze_median_scan_duration_ms":  20,
+                        "winblaze_peak_frame_ms":  12,
+                        "winblaze_peak_flush_ms":  33,
+                        "wiztree_median_elapsed_ms":  754,
+                        "wiztree_runs_ms":  [
+                                                754,
+                                                754,
+                                                755
+                                            ],
+                        "wiztree_export_bytes":  167831,
+                        "winblaze_vs_wiztree_ratio":  1.32
+                    },
+                    {
+                        "profile":  "fanout",
+                        "files":  2048,
+                        "directories":  3,
+                        "bytes":  1048576,
+                        "previous_winblaze_median_elapsed_ms":  529,
+                        "winblaze_median_elapsed_ms":  577,
+                        "winblaze_delta_ms":  48,
+                        "winblaze_delta_percent":  9.1,
+                        "winblaze_first_elapsed_ms":  577,
+                        "winblaze_warmed_median_elapsed_ms":  575,
+                        "winblaze_median_working_set_mb":  184.5,
+                        "winblaze_median_scan_duration_ms":  11,
+                        "winblaze_peak_frame_ms":  14,
+                        "winblaze_peak_flush_ms":  32,
+                        "wiztree_median_elapsed_ms":  543,
+                        "wiztree_runs_ms":  [
+                                                549,
+                                                543,
+                                                535
+                                            ],
+                        "wiztree_export_bytes":  209385,
+                        "winblaze_vs_wiztree_ratio":  0.94
+                    },
+                    {
+                        "profile":  "fanout-large",
+                        "files":  8192,
+                        "directories":  3,
+                        "bytes":  2097152,
+                        "previous_winblaze_median_elapsed_ms":  487,
+                        "winblaze_median_elapsed_ms":  505,
+                        "winblaze_delta_ms":  18,
+                        "winblaze_delta_percent":  3.7,
+                        "winblaze_first_elapsed_ms":  493,
+                        "winblaze_warmed_median_elapsed_ms":  505,
+                        "winblaze_median_working_set_mb":  202,
+                        "winblaze_median_scan_duration_ms":  31,
+                        "winblaze_peak_frame_ms":  14,
+                        "winblaze_peak_flush_ms":  69,
+                        "wiztree_median_elapsed_ms":  545,
+                        "wiztree_runs_ms":  [
+                                                528,
+                                                545,
+                                                560
+                                            ],
+                        "wiztree_export_bytes":  885243,
+                        "winblaze_vs_wiztree_ratio":  1.08
+                    },
+                    {
+                        "profile":  "scale",
+                        "files":  16384,
+                        "directories":  545,
+                        "bytes":  0,
+                        "previous_winblaze_median_elapsed_ms":  459,
+                        "winblaze_median_elapsed_ms":  456,
+                        "winblaze_delta_ms":  -3,
+                        "winblaze_delta_percent":  -0.7,
+                        "winblaze_first_elapsed_ms":  433,
+                        "winblaze_warmed_median_elapsed_ms":  456,
+                        "winblaze_median_working_set_mb":  204.7,
+                        "winblaze_median_scan_duration_ms":  135,
+                        "winblaze_peak_frame_ms":  12,
+                        "winblaze_peak_flush_ms":  69,
+                        "wiztree_median_elapsed_ms":  820,
+                        "wiztree_runs_ms":  [
+                                                820,
+                                                801,
+                                                913
+                                            ],
+                        "wiztree_export_bytes":  1665117,
+                        "winblaze_vs_wiztree_ratio":  1.8
+                    }
+                ]
+}

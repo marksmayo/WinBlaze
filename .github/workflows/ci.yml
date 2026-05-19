@@ -1,0 +1,173 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust checks
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Lint
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Examples
+        run: cargo test --workspace --examples
+
+      - name: Build
+        run: cargo build --workspace --all-targets
+
+      - name: Release build
+        run: cargo build --workspace --release
+
+      - name: Bench compile
+        run: cargo bench --workspace --no-run
+
+  winui:
+    name: WinUI build and portable package
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build native bridge Debug
+        if: matrix.configuration == 'Debug'
+        run: cargo build --package winblaze-native
+
+      - name: Build native bridge Release
+        if: matrix.configuration == 'Release'
+        run: cargo build --package winblaze-native --release
+
+      - name: Restore WinUI packages
+        run: msbuild src\WinBlaze.UI\WinBlaze.UI.vcxproj /restore /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /nologo /v:minimal
+
+      - name: Build WinUI
+        run: msbuild src\WinBlaze.UI\WinBlaze.UI.vcxproj /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /m /nologo /v:minimal
+
+      - name: UI Automation prerequisite report
+        shell: pwsh
+        run: powershell.exe -ExecutionPolicy Bypass -File tests\ui\check-prereqs.ps1 -AppPath src\WinBlaze.UI\bin\x64\${{ matrix.configuration }}\WinBlaze.UI.exe
+
+      - name: Sign Release binaries when certificate is configured
+        if: matrix.configuration == 'Release'
+        shell: pwsh
+        env:
+          WINBLAZE_SIGNING_CERT_BASE64: ${{ secrets.WINBLAZE_SIGNING_CERT_BASE64 }}
+          WINBLAZE_SIGNING_CERT_PASSWORD: ${{ secrets.WINBLAZE_SIGNING_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINBLAZE_SIGNING_CERT_BASE64)) {
+            Write-Host "No signing certificate secret configured; skipping Release signing."
+            exit 0
+          }
+          $certPath = Join-Path $env:RUNNER_TEMP "winblaze-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINBLAZE_SIGNING_CERT_BASE64))
+          $env:WINBLAZE_SIGNING_CERT_PATH = $certPath
+          powershell.exe -ExecutionPolicy Bypass -File scripts\sign-artifacts.ps1 -Configuration Release -Platform x64
+
+      - name: Package portable build
+        shell: pwsh
+        run: powershell.exe -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Configuration ${{ matrix.configuration }} -Platform x64 -Clean
+
+      - name: Installer preflight
+        if: matrix.configuration == 'Release'
+        shell: pwsh
+        run: |
+          powershell.exe -ExecutionPolicy Bypass -File scripts\check-installer-prereqs.ps1
+          powershell.exe -ExecutionPolicy Bypass -File scripts\package-installer.ps1 -Configuration Release -Platform x64 -ValidateOnly
+
+      - name: Package installer when WiX is available
+        if: matrix.configuration == 'Release'
+        shell: pwsh
+        run: |
+          $preflight = powershell.exe -ExecutionPolicy Bypass -File scripts\check-installer-prereqs.ps1 | ConvertFrom-Json
+          if (-not $preflight.wix_v4_or_newer_found) {
+            Write-Host "WiX v4+ is not available on this runner; skipping MSI package."
+            exit 0
+          }
+          powershell.exe -ExecutionPolicy Bypass -File scripts\package-installer.ps1 -Configuration Release -Platform x64
+
+      - name: Sign Release installer when certificate and MSI are available
+        if: matrix.configuration == 'Release'
+        shell: pwsh
+        env:
+          WINBLAZE_SIGNING_CERT_BASE64: ${{ secrets.WINBLAZE_SIGNING_CERT_BASE64 }}
+          WINBLAZE_SIGNING_CERT_PASSWORD: ${{ secrets.WINBLAZE_SIGNING_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINBLAZE_SIGNING_CERT_BASE64)) {
+            Write-Host "No signing certificate secret configured; skipping installer signing."
+            exit 0
+          }
+          $installer = Get-ChildItem -Path artifacts\installer -Filter *.msi -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $installer) {
+            Write-Host "No MSI artifact was produced; skipping installer signing."
+            exit 0
+          }
+          $certPath = Join-Path $env:RUNNER_TEMP "winblaze-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINBLAZE_SIGNING_CERT_BASE64))
+          $env:WINBLAZE_SIGNING_CERT_PATH = $certPath
+          powershell.exe -ExecutionPolicy Bypass -File scripts\sign-artifacts.ps1 -Configuration Release -Platform x64 -Files $installer.FullName
+
+      - name: Write update manifest
+        if: matrix.configuration == 'Release'
+        shell: pwsh
+        run: powershell.exe -ExecutionPolicy Bypass -File scripts\write-update-manifest.ps1
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinBlaze-${{ matrix.configuration }}-x64-portable
+          path: artifacts/portable/WinBlaze-${{ matrix.configuration }}-x64-portable.zip
+          if-no-files-found: error
+
+      - name: Upload installer package
+        if: matrix.configuration == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinBlaze-Release-x64-installer
+          path: artifacts/installer/*.msi
+          if-no-files-found: ignore
+
+      - name: Upload update manifest
+        if: matrix.configuration == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinBlaze-Release-update-manifest
+          path: artifacts/release/winblaze-update-manifest.json
+          if-no-files-found: error

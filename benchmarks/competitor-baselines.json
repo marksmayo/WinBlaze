@@ -1,0 +1,36 @@
+﻿{
+    "generated_utc":  "2026-05-18T07:07:51.1706470Z",
+    "dataset":  {
+                    "size":  "scale",
+                    "root":  "C:\\tmp\\WinBlazeBench\\scale",
+                    "files":  16384,
+                    "directories":  545,
+                    "bytes":  0
+                },
+    "tools":  [
+                  {
+                      "name":  "WizTree",
+                      "installed":  true,
+                      "path":  "C:\\Program Files\\WizTree\\WizTree64.exe",
+                      "version":  "4.31"
+                  },
+                  {
+                      "name":  "WinDirStat",
+                      "installed":  true,
+                      "path":  "C:\\Program Files\\WinDirStat\\WinDirStat.exe",
+                      "version":  "2.6.0"
+                  },
+                  {
+                      "name":  "Everything",
+                      "installed":  false,
+                      "path":  null,
+                      "version":  null
+                  }
+              ],
+    "manual_timings_ms":  {
+                              "wiztree":  null,
+                              "windirstat":  null,
+                              "everything":  null
+                          },
+    "notes":  "Manual competitor timings are optional; blank values mean not recorded."
+}

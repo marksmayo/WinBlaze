@@ -1,0 +1,8 @@
+﻿{
+    "files":  100000,
+    "elapsed_ms":  383,
+    "working_set_bytes":  59744256,
+    "working_set_bytes_per_file":  597,
+    "snapshot_bytes":  10200056,
+    "snapshot_bytes_per_file":  102
+}
