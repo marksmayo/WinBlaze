@@ -53,19 +53,18 @@ namespace winrt::WinBlaze::UI::implementation
                 presenter.IsResizable(true);
                 presenter.IsMaximizable(true);
                 presenter.IsMinimizable(true);
+                presenter.Maximize();
                 TraceStartup(L"App::OnLaunched configured overlapped presenter");
             }
-            app_window.MoveAndResize(Windows::Graphics::RectInt32{ 80, 80, 1400, 900 });
             app_window.Show();
             TraceStartup(L"App::OnLaunched after AppWindow.Show");
             if (auto window_native = m_window.as<IWindowNative>()) {
                 HWND hwnd{};
                 if (SUCCEEDED(window_native->get_WindowHandle(&hwnd)) && hwnd) {
                     ::SetWindowTextW(hwnd, L"WinBlaze");
-                    ::ShowWindow(hwnd, SW_SHOWNORMAL);
-                    ::SetWindowPos(hwnd, HWND_TOP, 80, 80, 1400, 900, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+                    ::ShowWindow(hwnd, SW_MAXIMIZE);
                     ::SetForegroundWindow(hwnd);
-                    TraceStartup(L"App::OnLaunched forced HWND visible");
+                    TraceStartup(L"App::OnLaunched forced HWND maximized");
                 } else {
                     TraceStartup(L"App::OnLaunched no HWND from IWindowNative");
                 }

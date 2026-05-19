@@ -35,6 +35,8 @@ namespace winrt::WinBlaze::UI::implementation
         void OnSearchOptionsChanged(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
         void OnSearchResultClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnDeveloperDiagnosticsToggled(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
+        void OnOptionalPanelToggleClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
+        void OnSectionMenuSelectionChanged(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
         void OnBreadcrumbClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnTreeItemClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnTreeSnapshotExpandClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -100,6 +102,8 @@ namespace winrt::WinBlaze::UI::implementation
         void FocusRootPathBox();
         void NavigateToSection(ShellSection section);
         void UpdateNavigationChips();
+        int SectionMenuIndex(ShellSection section) const;
+        ShellSection SectionFromMenuIndex(int index) const;
         Microsoft::UI::Xaml::Media::SolidColorBrush MakeBrush(Windows::UI::Color const& color) const;
         void ApplyCardStyle(Microsoft::UI::Xaml::Controls::Border const& card) const;
         void ApplyCompactCardStyle(Microsoft::UI::Xaml::Controls::Border const& card) const;
@@ -172,6 +176,10 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::TextBlock EventText() const { return m_event_text; }
         Microsoft::UI::Xaml::Controls::TextBlock SummaryText() const { return m_summary_text; }
         Microsoft::UI::Xaml::Controls::TextBlock RuntimeSnapshotText() const { return m_runtime_snapshot_text; }
+        Microsoft::UI::Xaml::Controls::ComboBox SectionMenu() const { return m_section_menu; }
+        Microsoft::UI::Xaml::Controls::CheckBox CurrentStateToggle() const { return m_current_state_toggle; }
+        Microsoft::UI::Xaml::Controls::CheckBox FolderViewToggle() const { return m_folder_view_toggle; }
+        Microsoft::UI::Xaml::Controls::CheckBox FolderTreeToggle() const { return m_folder_tree_toggle; }
         Microsoft::UI::Xaml::Controls::CheckBox DeveloperDiagnosticsToggle() const { return m_developer_diagnostics_toggle; }
         Microsoft::UI::Xaml::Controls::StackPanel DeveloperDiagnosticsPanel() const { return m_developer_diagnostics_panel; }
         Microsoft::UI::Xaml::Controls::TextBlock CorrectnessText() const { return m_correctness_text; }
@@ -233,15 +241,11 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::TextBlock m_error_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_event_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_summary_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_session_root_snapshot_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_session_section_snapshot_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_session_status_snapshot_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_session_results_snapshot_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_selection_name_snapshot_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_selection_path_snapshot_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_selection_kind_snapshot_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_selection_size_snapshot_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_runtime_snapshot_text{ nullptr };
+        Microsoft::UI::Xaml::Controls::ComboBox m_section_menu{ nullptr };
+        Microsoft::UI::Xaml::Controls::CheckBox m_current_state_toggle{ nullptr };
+        Microsoft::UI::Xaml::Controls::CheckBox m_folder_view_toggle{ nullptr };
+        Microsoft::UI::Xaml::Controls::CheckBox m_folder_tree_toggle{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_correctness_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_recent_issues_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_issue_drilldown_text{ nullptr };
@@ -300,6 +304,10 @@ namespace winrt::WinBlaze::UI::implementation
         bool m_session_active{ false };
         bool m_has_results{ false };
         bool m_has_error{ false };
+        bool m_show_current_state{ false };
+        bool m_show_folder_view{ false };
+        bool m_show_folder_tree{ false };
+        bool m_section_menu_updates_suppressed{ false };
         ShellSection m_active_section{ ShellSection::Overview };
         std::chrono::steady_clock::time_point m_scan_started_at{};
         std::chrono::duration<double, std::milli> m_last_scan_duration{ 0.0 };

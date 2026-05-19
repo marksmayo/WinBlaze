@@ -50,8 +50,8 @@ fn main() {
 
     println!(
         "{{\"files\":{files},\"elapsed_ms\":{elapsed_ms},\"working_set_bytes\":{working_set_bytes},\"working_set_bytes_per_file\":{},\"snapshot_bytes\":{snapshot_bytes},\"snapshot_bytes_per_file\":{}}}",
-        if files == 0 { 0 } else { working_set_bytes / files },
-        if files == 0 { 0 } else { snapshot_bytes / files }
+        working_set_bytes.checked_div(files).unwrap_or(0),
+        snapshot_bytes.checked_div(files).unwrap_or(0)
     );
 }
 

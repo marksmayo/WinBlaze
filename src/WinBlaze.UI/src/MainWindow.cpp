@@ -698,53 +698,57 @@ namespace winrt::WinBlaze::UI::implementation
             nav_strip,
             L"Compact shell menus. Use Navigate for sections and View for optional panels.");
 
-        auto menu_bar = MenuBar{};
-        nav_strip.Child(menu_bar);
+        auto menu_row = StackPanel{};
+        menu_row.Orientation(Orientation::Horizontal);
+        menu_row.Spacing(10);
+        nav_strip.Child(menu_row);
 
         m_nav_chips.clear();
-        auto navigate_menu = MenuBarItem{};
-        navigate_menu.Title(L"Navigate");
+        auto navigate_label = TextBlock{};
+        navigate_label.Text(L"Navigate");
+        navigate_label.VerticalAlignment(VerticalAlignment::Center);
+        navigate_label.Opacity(0.76);
+        menu_row.Children().Append(navigate_label);
 
-        auto make_nav_item = [&](std::wstring_view text, ShellSection section, std::wstring_view access_key) {
-            auto item = MenuFlyoutItem{};
-            item.Text(winrt::hstring(text));
-            item.AccessKey(winrt::hstring(access_key));
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item, winrt::hstring(text));
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
-                item,
-                winrt::hstring(L"Navigate to " + SectionName(section) + L". Shortcut: Ctrl+" + std::wstring(access_key) + L" or Alt+" + std::wstring(access_key) + L"."));
-            ToolTipService::SetToolTip(
-                item,
-                box_value(winrt::hstring(L"Ctrl+" + std::wstring(access_key) + L" or Alt+" + std::wstring(access_key))));
-            item.Click([this, section](auto const&, auto const&) {
-                SetSection(section);
-            });
-            return item;
+        m_section_menu = ComboBox{};
+        m_section_menu.Width(170.0);
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_section_menu, L"Navigate menu");
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
+            m_section_menu,
+            L"Choose the active section. Keyboard shortcuts Ctrl or Alt plus 1 through 5 still work.");
+        auto append_section_item = [&](std::wstring_view text) {
+            auto item = ComboBoxItem{};
+            item.Content(box_value(winrt::hstring(text)));
+            m_section_menu.Items().Append(item);
         };
+        append_section_item(L"Overview");
+        append_section_item(L"Folder tree");
+        append_section_item(L"Treemap");
+        append_section_item(L"Search");
+        append_section_item(L"Diagnostics");
+        m_section_menu.SelectedIndex(SectionMenuIndex(m_active_section));
+        m_section_menu.SelectionChanged({ this, &MainWindow::OnSectionMenuSelectionChanged });
+        menu_row.Children().Append(m_section_menu);
 
-        navigate_menu.Items().Append(make_nav_item(L"Overview", ShellSection::Overview, L"1"));
-        navigate_menu.Items().Append(make_nav_item(L"Folder tree", ShellSection::Tree, L"2"));
-        navigate_menu.Items().Append(make_nav_item(L"Treemap", ShellSection::Treemap, L"3"));
-        navigate_menu.Items().Append(make_nav_item(L"Search", ShellSection::Search, L"4"));
-        navigate_menu.Items().Append(make_nav_item(L"Diagnostics", ShellSection::Diagnostics, L"5"));
-        menu_bar.Items().Append(navigate_menu);
+        auto view_label = TextBlock{};
+        view_label.Text(L"View");
+        view_label.VerticalAlignment(VerticalAlignment::Center);
+        view_label.Opacity(0.76);
+        menu_row.Children().Append(view_label);
 
-        auto view_menu = MenuBarItem{};
-        view_menu.Title(L"View");
-        auto make_view_toggle = [&](ToggleMenuFlyoutItem& storage, std::wstring_view text, std::wstring_view help_text) {
-            auto item = ToggleMenuFlyoutItem{};
+        auto make_view_toggle = [&](CheckBox& storage, std::wstring_view text, std::wstring_view help_text) {
+            auto item = CheckBox{};
             storage = item;
-            item.Text(winrt::hstring(text));
+            item.Content(box_value(winrt::hstring(text)));
             item.IsChecked(false);
             Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item, winrt::hstring(text));
             Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(item, winrt::hstring(help_text));
             item.Click({ this, &MainWindow::OnOptionalPanelToggleClicked });
-            view_menu.Items().Append(item);
+            menu_row.Children().Append(item);
         };
         make_view_toggle(m_current_state_toggle, L"Current state", L"Show or hide the current state panel.");
         make_view_toggle(m_folder_view_toggle, L"Folder view", L"Show or hide the folder and file detail panel.");
         make_view_toggle(m_folder_tree_toggle, L"Folder tree", L"Show or hide the virtualized folder tree panel.");
-        menu_bar.Items().Append(view_menu);
 
         shell.Children().Append(nav_strip);
         TraceStartup(L"BuildShell after menu strip");
@@ -1530,8 +1534,12 @@ namespace winrt::WinBlaze::UI::implementation
         winrt::Windows::Foundation::IInspectable const&,
         Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
-        auto is_checked = [](Microsoft::UI::Xaml::Controls::ToggleMenuFlyoutItem const& item) {
-            return item && item.IsChecked();
+        auto is_checked = [](Microsoft::UI::Xaml::Controls::CheckBox item) {
+            if (!item) {
+                return false;
+            }
+            const auto value = item.IsChecked();
+            return value && value.Value();
         };
 
         m_show_current_state = is_checked(CurrentStateToggle());
@@ -1540,6 +1548,17 @@ namespace winrt::WinBlaze::UI::implementation
 
         SetSection(m_active_section);
         UpdateStatus(L"View options updated.");
+    }
+
+    void MainWindow::OnSectionMenuSelectionChanged(
+        winrt::Windows::Foundation::IInspectable const&,
+        Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&)
+    {
+        if (m_section_menu_updates_suppressed || !SectionMenu()) {
+            return;
+        }
+
+        NavigateToSection(SectionFromMenuIndex(SectionMenu().SelectedIndex()));
     }
 
     void MainWindow::OnBreadcrumbClicked(winrt::Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const&)
@@ -2143,6 +2162,11 @@ namespace winrt::WinBlaze::UI::implementation
         }
         SectionText().Text(winrt::hstring(SectionName(section)));
         UpdateNavigationChips();
+        if (SectionMenu()) {
+            m_section_menu_updates_suppressed = true;
+            SectionMenu().SelectedIndex(SectionMenuIndex(section));
+            m_section_menu_updates_suppressed = false;
+        }
         UpdateBreadcrumbs();
         UpdateSummaryText();
 
@@ -2171,6 +2195,41 @@ namespace winrt::WinBlaze::UI::implementation
 
             const std::wstring section = winrt::unbox_value_or<winrt::hstring>(chip.Tag(), L"").c_str();
             ApplyNavigationChipStyle(chip, section == active);
+        }
+    }
+
+    int MainWindow::SectionMenuIndex(ShellSection section) const
+    {
+        switch (section) {
+        case ShellSection::Overview:
+            return 0;
+        case ShellSection::Tree:
+            return 1;
+        case ShellSection::Treemap:
+            return 2;
+        case ShellSection::Search:
+            return 3;
+        case ShellSection::Diagnostics:
+            return 4;
+        default:
+            return 0;
+        }
+    }
+
+    ShellSection MainWindow::SectionFromMenuIndex(int index) const
+    {
+        switch (index) {
+        case 1:
+            return ShellSection::Tree;
+        case 2:
+            return ShellSection::Treemap;
+        case 3:
+            return ShellSection::Search;
+        case 4:
+            return ShellSection::Diagnostics;
+        case 0:
+        default:
+            return ShellSection::Overview;
         }
     }
 
