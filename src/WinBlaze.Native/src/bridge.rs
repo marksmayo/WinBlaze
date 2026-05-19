@@ -6,7 +6,7 @@ use std::{
     ptr::null_mut,
     sync::{mpsc, Mutex},
     thread,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use winblaze_core::{
@@ -27,6 +27,9 @@ use crate::api::{
 
 const MAX_JSON_LOG_BYTES: u64 = 2 * 1024 * 1024;
 const SNAPSHOT_ENTRY_LIMIT: usize = 8192;
+const UI_LIVE_CATALOG_EVENT_LIMIT: usize = SNAPSHOT_ENTRY_LIMIT;
+const UI_PROGRESS_MIN_ITEM_DELTA: u64 = 10_000;
+const UI_PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(150);
 
 pub struct NativeSession {
     controller: ScanController,
@@ -50,6 +53,85 @@ struct OwnedEvent {
     _strings: Vec<CString>,
 }
 
+struct UiEventForwarder {
+    callback: WbEventCallback,
+    user_data: usize,
+    live_catalog_events: usize,
+    last_progress_at: Option<Instant>,
+    last_progress_items: u64,
+}
+
+impl UiEventForwarder {
+    fn new(callback: WbEventCallback, user_data: usize) -> Self {
+        Self {
+            callback,
+            user_data,
+            live_catalog_events: 0,
+            last_progress_at: None,
+            last_progress_items: 0,
+        }
+    }
+
+    fn forward(&mut self, event: &ScanEvent) {
+        let Some(cb) = self.callback else {
+            return;
+        };
+        if !self.should_forward(event) {
+            return;
+        }
+
+        let native_event = convert_event(event.clone());
+        cb(
+            &native_event.event as *const WbEvent,
+            self.user_data as *mut core::ffi::c_void,
+        );
+    }
+
+    fn should_forward(&mut self, event: &ScanEvent) -> bool {
+        match event {
+            ScanEvent::DirectoryFound(_) | ScanEvent::FileFound(_) => {
+                if self.live_catalog_events >= UI_LIVE_CATALOG_EVENT_LIMIT {
+                    return false;
+                }
+                self.live_catalog_events += 1;
+                true
+            }
+            ScanEvent::Progress(progress) => self.should_forward_progress(progress),
+            ScanEvent::SessionStarted(_)
+            | ScanEvent::VolumeDiscovered(_)
+            | ScanEvent::Issue(_)
+            | ScanEvent::Summary(_)
+            | ScanEvent::Completed
+            | ScanEvent::Cancelled
+            | ScanEvent::Failed(_) => true,
+        }
+    }
+
+    fn should_forward_progress(&mut self, progress: &ScanProgress) -> bool {
+        let now = Instant::now();
+        let item_delta = progress
+            .completed_items
+            .saturating_sub(self.last_progress_items);
+        let interval_elapsed = self
+            .last_progress_at
+            .is_none_or(|last| now.duration_since(last) >= UI_PROGRESS_MIN_INTERVAL);
+        let is_complete =
+            progress.total_items > 0 && progress.completed_items >= progress.total_items;
+
+        if self.last_progress_at.is_none()
+            || is_complete
+            || item_delta >= UI_PROGRESS_MIN_ITEM_DELTA
+            || interval_elapsed
+        {
+            self.last_progress_at = Some(now);
+            self.last_progress_items = progress.completed_items;
+            return true;
+        }
+
+        false
+    }
+}
+
 impl NativeSession {
     fn new(
         callback: WbEventCallback,
@@ -65,10 +147,14 @@ impl NativeSession {
             scan_handle: Mutex::new(None),
         };
 
+        let max_parallelism = thread::available_parallelism()
+            .map(|parallelism| parallelism.get())
+            .unwrap_or(4);
         let request = ScanRequest {
             root_path: root_path.clone().into(),
             config: ScanRuntimeConfig {
                 root_path: root_path_for_config.into(),
+                max_parallelism,
                 ..ScanRuntimeConfig::default()
             },
         };
@@ -120,17 +206,12 @@ fn forward_events(
     let mut transaction = BufferedIndexTransaction::default();
     let log_path = structured_log_path(&index_root);
     let mut flushed = false;
+    let mut ui_forwarder = UiEventForwarder::new(callback, user_data);
 
     for event in rx {
         append_scan_event_log(&log_path, &event);
         persist_scan_event(&mut transaction, &event);
-        if let Some(cb) = callback {
-            let native_event = convert_event(event.clone());
-            cb(
-                &native_event.event as *const WbEvent,
-                user_data as *mut core::ffi::c_void,
-            );
-        }
+        ui_forwarder.forward(&event);
 
         if should_flush_index(&event, persistence_mode) {
             let result = apply_scan_transaction(&mut repository, &transaction, persistence_mode);
