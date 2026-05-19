@@ -26,9 +26,9 @@
     <TargetFrameworkIdentifier>native</TargetFrameworkIdentifier>
     <TargetFrameworkVersion>v0.0</TargetFrameworkVersion>
     <TargetFrameworkMoniker>native,Version=v0.0</TargetFrameworkMoniker>
-    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformMinVersion>10.0.19041.0</WindowsTargetPlatformMinVersion>
-    <TargetPlatformVersion>10.0.19041.0</TargetPlatformVersion>
+    <TargetPlatformVersion>10.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <BaseOutputPath>bin\</BaseOutputPath>
     <ProjectName>WinBlaze.UI</ProjectName>
