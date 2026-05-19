@@ -749,6 +749,7 @@ namespace winrt::WinBlaze::UI::implementation
         make_view_toggle(m_current_state_toggle, L"Current state", L"Show or hide the current state panel.");
         make_view_toggle(m_folder_view_toggle, L"Folder view", L"Show or hide the folder and file detail panel.");
         make_view_toggle(m_folder_tree_toggle, L"Folder tree", L"Show or hide the virtualized folder tree panel.");
+        make_view_toggle(m_runtime_metrics_toggle, L"Runtime metrics", L"Show or hide runtime metrics at the bottom of the UI.");
 
         shell.Children().Append(nav_strip);
         TraceStartup(L"BuildShell after menu strip");
@@ -1074,67 +1075,6 @@ namespace winrt::WinBlaze::UI::implementation
         TraceStartup(L"BuildShell tree card end");
 
         {
-            auto runtime_card = Border{};
-            m_diagnostics_card = runtime_card;
-            apply_card_style(runtime_card);
-
-            auto runtime_stack = StackPanel{};
-            runtime_stack.Spacing(6);
-            runtime_card.Child(runtime_stack);
-
-            runtime_stack.Children().Append(make_card_title(L"Runtime metrics"));
-
-            m_developer_diagnostics_toggle = CheckBox{};
-            m_developer_diagnostics_toggle.Content(box_value(L"Developer diagnostics"));
-            m_developer_diagnostics_toggle.IsChecked(true);
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-                m_developer_diagnostics_toggle,
-                L"Developer diagnostics");
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
-                m_developer_diagnostics_toggle,
-                L"Show or hide correctness, recent issue, and runtime diagnostic details.");
-            m_developer_diagnostics_toggle.Checked({ this, &MainWindow::OnDeveloperDiagnosticsToggled });
-            m_developer_diagnostics_toggle.Unchecked({ this, &MainWindow::OnDeveloperDiagnosticsToggled });
-            runtime_stack.Children().Append(m_developer_diagnostics_toggle);
-
-            m_developer_diagnostics_panel = StackPanel{};
-            m_developer_diagnostics_panel.Spacing(6);
-            runtime_stack.Children().Append(m_developer_diagnostics_panel);
-
-            m_runtime_snapshot_text = TextBlock{};
-            m_runtime_snapshot_text.Text(L"UI batching: startup, flushes=0, queued events=0, last latency=0 ms, last input=0 ms, flush cost=0 ms");
-            m_runtime_snapshot_text.TextWrapping(TextWrapping::WrapWholeWords);
-            m_developer_diagnostics_panel.Children().Append(m_runtime_snapshot_text);
-
-            m_performance_text = TextBlock{};
-            m_performance_text.Text(L"Performance counters are ready.");
-            m_performance_text.Opacity(0.75);
-            m_performance_text.TextWrapping(TextWrapping::WrapWholeWords);
-            m_developer_diagnostics_panel.Children().Append(m_performance_text);
-
-            m_correctness_text = TextBlock{};
-            m_correctness_text.Text(L"Correctness: waiting for scan summary.");
-            m_correctness_text.Opacity(0.75);
-            m_correctness_text.TextWrapping(TextWrapping::WrapWholeWords);
-            m_developer_diagnostics_panel.Children().Append(m_correctness_text);
-
-            m_recent_issues_text = TextBlock{};
-            m_recent_issues_text.Text(L"Recent issues: none");
-            m_recent_issues_text.Opacity(0.75);
-            m_recent_issues_text.TextWrapping(TextWrapping::WrapWholeWords);
-            m_developer_diagnostics_panel.Children().Append(m_recent_issues_text);
-
-            m_issue_drilldown_text = TextBlock{};
-            m_issue_drilldown_text.Text(L"Issue drill-down: errors=0, skipped=0, transient=0, permissions=0, missing=0, last=none");
-            m_issue_drilldown_text.Opacity(0.75);
-            m_issue_drilldown_text.TextWrapping(TextWrapping::WrapWholeWords);
-            m_developer_diagnostics_panel.Children().Append(m_issue_drilldown_text);
-
-            shell.Children().Append(runtime_card);
-        }
-        TraceStartup(L"BuildShell runtime card end");
-
-        {
             auto catalog_card = Border{};
             apply_card_style(catalog_card);
 
@@ -1289,6 +1229,67 @@ namespace winrt::WinBlaze::UI::implementation
             shell.Children().Append(treemap_card);
         }
         TraceStartup(L"BuildShell treemap card end");
+
+        {
+            auto runtime_card = Border{};
+            m_diagnostics_card = runtime_card;
+            apply_card_style(runtime_card);
+
+            auto runtime_stack = StackPanel{};
+            runtime_stack.Spacing(6);
+            runtime_card.Child(runtime_stack);
+
+            runtime_stack.Children().Append(make_card_title(L"Runtime metrics"));
+
+            m_developer_diagnostics_toggle = CheckBox{};
+            m_developer_diagnostics_toggle.Content(box_value(L"Developer diagnostics"));
+            m_developer_diagnostics_toggle.IsChecked(true);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                m_developer_diagnostics_toggle,
+                L"Developer diagnostics");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
+                m_developer_diagnostics_toggle,
+                L"Show or hide correctness, recent issue, and runtime diagnostic details.");
+            m_developer_diagnostics_toggle.Checked({ this, &MainWindow::OnDeveloperDiagnosticsToggled });
+            m_developer_diagnostics_toggle.Unchecked({ this, &MainWindow::OnDeveloperDiagnosticsToggled });
+            runtime_stack.Children().Append(m_developer_diagnostics_toggle);
+
+            m_developer_diagnostics_panel = StackPanel{};
+            m_developer_diagnostics_panel.Spacing(6);
+            runtime_stack.Children().Append(m_developer_diagnostics_panel);
+
+            m_runtime_snapshot_text = TextBlock{};
+            m_runtime_snapshot_text.Text(L"UI batching: startup, flushes=0, queued events=0, last latency=0 ms, last input=0 ms, flush cost=0 ms");
+            m_runtime_snapshot_text.TextWrapping(TextWrapping::WrapWholeWords);
+            m_developer_diagnostics_panel.Children().Append(m_runtime_snapshot_text);
+
+            m_performance_text = TextBlock{};
+            m_performance_text.Text(L"Performance counters are ready.");
+            m_performance_text.Opacity(0.75);
+            m_performance_text.TextWrapping(TextWrapping::WrapWholeWords);
+            m_developer_diagnostics_panel.Children().Append(m_performance_text);
+
+            m_correctness_text = TextBlock{};
+            m_correctness_text.Text(L"Correctness: waiting for scan summary.");
+            m_correctness_text.Opacity(0.75);
+            m_correctness_text.TextWrapping(TextWrapping::WrapWholeWords);
+            m_developer_diagnostics_panel.Children().Append(m_correctness_text);
+
+            m_recent_issues_text = TextBlock{};
+            m_recent_issues_text.Text(L"Recent issues: none");
+            m_recent_issues_text.Opacity(0.75);
+            m_recent_issues_text.TextWrapping(TextWrapping::WrapWholeWords);
+            m_developer_diagnostics_panel.Children().Append(m_recent_issues_text);
+
+            m_issue_drilldown_text = TextBlock{};
+            m_issue_drilldown_text.Text(L"Issue drill-down: errors=0, skipped=0, transient=0, permissions=0, missing=0, last=none");
+            m_issue_drilldown_text.Opacity(0.75);
+            m_issue_drilldown_text.TextWrapping(TextWrapping::WrapWholeWords);
+            m_developer_diagnostics_panel.Children().Append(m_issue_drilldown_text);
+
+            shell.Children().Append(runtime_card);
+        }
+        TraceStartup(L"BuildShell runtime card end");
 
         {
             auto shell_scroll = ScrollViewer{};
@@ -1545,6 +1546,7 @@ namespace winrt::WinBlaze::UI::implementation
         m_show_current_state = is_checked(CurrentStateToggle());
         m_show_folder_view = is_checked(FolderViewToggle());
         m_show_folder_tree = is_checked(FolderTreeToggle());
+        m_show_runtime_metrics = is_checked(RuntimeMetricsToggle());
 
         SetSection(m_active_section);
         UpdateStatus(L"View options updated.");
@@ -2179,7 +2181,7 @@ namespace winrt::WinBlaze::UI::implementation
         SetControlVisibility(OverviewCard(), m_show_current_state && (section == ShellSection::Overview || section == ShellSection::Diagnostics));
         SetControlVisibility(TreeCard(), m_show_folder_tree && (section == ShellSection::Overview || section == ShellSection::Tree));
         SetControlVisibility(SearchCard(), section == ShellSection::Overview || section == ShellSection::Search);
-        SetControlVisibility(DiagnosticsCard(), section == ShellSection::Overview || section == ShellSection::Diagnostics);
+        SetControlVisibility(DiagnosticsCard(), m_show_runtime_metrics && (section == ShellSection::Overview || section == ShellSection::Diagnostics));
         SetControlVisibility(TreemapCard(), true);
         SetControlVisibility(DetailCard(), m_show_folder_view && (section == ShellSection::Overview || section == ShellSection::Treemap || section == ShellSection::Diagnostics));
         TraceStartup(L"SetSection end");
