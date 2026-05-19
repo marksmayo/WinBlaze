@@ -26,9 +26,9 @@
     <TargetFrameworkIdentifier>native</TargetFrameworkIdentifier>
     <TargetFrameworkVersion>v0.0</TargetFrameworkVersion>
     <TargetFrameworkMoniker>native,Version=v0.0</TargetFrameworkMoniker>
-    <WindowsTargetPlatformVersion>10.0.20348.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformMinVersion>10.0.19041.0</WindowsTargetPlatformMinVersion>
-    <TargetPlatformVersion>10.0.20348.0</TargetPlatformVersion>
+    <TargetPlatformVersion>10.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <BaseOutputPath>bin\</BaseOutputPath>
     <ProjectName>WinBlaze.UI</ProjectName>
@@ -90,13 +90,13 @@
       <ReferenceSourceTarget>ResolveAssemblyReference</ReferenceSourceTarget>
       <Private>false</Private>
     </ReferencePath>
-    <ReferencePath Include="$(WindowsSdkPath)References\$(TargetPlatformVersion)\Windows.Foundation.UniversalApiContract\15.0.0.0\Windows.Foundation.UniversalApiContract.winmd">
+    <ReferencePath Include="$(WindowsSdkPath)References\$(WindowsTargetPlatformVersion)\Windows.Foundation.UniversalApiContract\15.0.0.0\Windows.Foundation.UniversalApiContract.winmd">
       <WinMDFile>true</WinMDFile>
       <ReferenceSourceTarget>ResolveAssemblyReference</ReferenceSourceTarget>
       <Private>false</Private>
     </ReferencePath>
     <WinMDReferenceToCompile Include="$(WindowsSDK_MetadataFoundationPath)\Windows.Foundation.FoundationContract.winmd" />
-    <WinMDReferenceToCompile Include="$(WindowsSdkPath)References\$(TargetPlatformVersion)\Windows.Foundation.UniversalApiContract\15.0.0.0\Windows.Foundation.UniversalApiContract.winmd" />
+    <WinMDReferenceToCompile Include="$(WindowsSdkPath)References\$(WindowsTargetPlatformVersion)\Windows.Foundation.UniversalApiContract\15.0.0.0\Windows.Foundation.UniversalApiContract.winmd" />
     <ReferencePath Include="$(UserProfile)\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260125001\metadata\10.0.18362.0\Microsoft.Foundation.winmd">
       <WinMDFile>true</WinMDFile>
       <ReferenceSourceTarget>ResolveAssemblyReference</ReferenceSourceTarget>
