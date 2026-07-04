@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     ffi::CString,
     fs::{self, OpenOptions},
     io::Write,
@@ -21,8 +22,8 @@ use winblaze_scanner::{ScanController, ScanRequest, ScanRuntimeConfig};
 
 use crate::api::{
     WbCStringView, WbCatalogCallback, WbCatalogEntry, WbEvent, WbEventCallback, WbEventKind,
-    WbIncrementalChangeSummary, WbIndexSnapshotStats, WbNativeError, WbScanSessionHandle,
-    WbScanSummary,
+    WbExtensionStat, WbExtensionStatCallback, WbExtensionStatsSnapshot, WbIncrementalChangeSummary,
+    WbIndexSnapshotStats, WbNativeError, WbScanSessionHandle, WbScanSummary,
 };
 
 const MAX_JSON_LOG_BYTES: u64 = 2 * 1024 * 1024;
@@ -30,6 +31,8 @@ const SNAPSHOT_ENTRY_LIMIT: usize = 8192;
 const UI_LIVE_CATALOG_EVENT_LIMIT: usize = SNAPSHOT_ENTRY_LIMIT;
 const UI_PROGRESS_MIN_ITEM_DELTA: u64 = 10_000;
 const UI_PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(150);
+const EXTENSION_STATS_MIN_INTERVAL: Duration = Duration::from_millis(400);
+const EXTENSION_STATS_TOP_LIMIT: usize = 40;
 
 pub struct NativeSession {
     controller: ScanController,
@@ -59,6 +62,8 @@ struct UiEventForwarder {
     live_catalog_events: usize,
     last_progress_at: Option<Instant>,
     last_progress_items: u64,
+    extension_totals: HashMap<String, (u64, u64)>,
+    last_extension_stats_at: Option<Instant>,
 }
 
 impl UiEventForwarder {
@@ -69,22 +74,64 @@ impl UiEventForwarder {
             live_catalog_events: 0,
             last_progress_at: None,
             last_progress_items: 0,
+            extension_totals: HashMap::new(),
+            last_extension_stats_at: None,
         }
     }
 
     fn forward(&mut self, event: &ScanEvent) {
+        // Extension totals are aggregated from every FileFound event, not
+        // just the ones actually forwarded to the UI: should_forward() below
+        // caps individual catalog events at UI_LIVE_CATALOG_EVENT_LIMIT, but
+        // the aggregate breakdown must stay accurate for the whole scan.
+        if let ScanEvent::FileFound(file) = event {
+            self.record_extension(file);
+        }
+
+        if let Some(cb) = self.callback {
+            if self.should_forward(event) {
+                let native_event = convert_event(event.clone());
+                cb(
+                    &native_event.event as *const WbEvent,
+                    self.user_data as *mut core::ffi::c_void,
+                );
+            }
+        }
+
+        let force_emit = matches!(event, ScanEvent::Completed | ScanEvent::Summary(_));
+        self.maybe_emit_extension_stats(force_emit);
+    }
+
+    fn record_extension(&mut self, file: &FileRecord) {
+        let key = extension_key(&file.name);
+        let totals = self.extension_totals.entry(key).or_insert((0, 0));
+        totals.0 = totals.0.saturating_add(file.size_bytes);
+        totals.1 = totals.1.saturating_add(1);
+    }
+
+    fn maybe_emit_extension_stats(&mut self, force: bool) {
         let Some(cb) = self.callback else {
             return;
         };
-        if !self.should_forward(event) {
+        if self.extension_totals.is_empty() {
             return;
         }
+        let now = Instant::now();
+        let due = force
+            || self
+                .last_extension_stats_at
+                .is_none_or(|last| now.duration_since(last) >= EXTENSION_STATS_MIN_INTERVAL);
+        if !due {
+            return;
+        }
+        self.last_extension_stats_at = Some(now);
 
-        let native_event = convert_event(event.clone());
-        cb(
-            &native_event.event as *const WbEvent,
-            self.user_data as *mut core::ffi::c_void,
-        );
+        let stats: Vec<(String, u64, u64)> = self
+            .extension_totals
+            .iter()
+            .map(|(extension, (bytes, files))| (extension.clone(), *bytes, *files))
+            .collect();
+        emit_extension_stats(cb, self.user_data, stats);
     }
 
     fn should_forward(&mut self, event: &ScanEvent) -> bool {
@@ -295,6 +342,123 @@ fn incremental_change_summary(change_set: &FileChangeSet) -> WbIncrementalChange
         }
     }
     summary
+}
+
+/// Lowercased extension without the leading dot, or an empty string for
+/// files with no extension (e.g. `README`, `Makefile`).
+fn extension_key(file_name: &str) -> String {
+    match file_name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => ext.to_ascii_lowercase(),
+        _ => String::new(),
+    }
+}
+
+/// Best-effort friendly label for the extension breakdown table. Unknown
+/// extensions fall back to "<EXT> File"; matches the spirit (not an exact
+/// copy) of the descriptions shown by tools like WizTree.
+fn extension_description(extension: &str) -> String {
+    if extension.is_empty() {
+        return "No extension".to_string();
+    }
+    let description = match extension {
+        "exe" => "Application",
+        "dll" => "Application extension",
+        "sys" => "System file",
+        "msi" => "Windows Installer package",
+        "msix" | "appx" => "App package",
+        "zip" => "Compressed archive",
+        "7z" => "7-Zip archive",
+        "rar" => "RAR archive",
+        "tar" | "gz" | "tgz" => "Compressed archive",
+        "iso" => "Disc image file",
+        "vhd" | "vhdx" => "Hard disk image file",
+        "pdf" => "PDF document",
+        "doc" | "docx" => "Word document",
+        "xls" | "xlsx" => "Excel spreadsheet",
+        "ppt" | "pptx" => "PowerPoint presentation",
+        "txt" => "Text document",
+        "log" => "Log file",
+        "json" => "JSON file",
+        "xml" => "XML file",
+        "ini" | "cfg" | "config" => "Configuration file",
+        "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" => "Image file",
+        "mp3" | "wav" | "flac" | "aac" => "Audio file",
+        "mp4" | "mkv" | "avi" | "mov" | "webm" => "Video file",
+        "js" | "mjs" | "cjs" => "JavaScript source file",
+        "ts" | "tsx" => "TypeScript source file",
+        "py" => "Python source file",
+        "rs" => "Rust source file",
+        "c" | "h" => "C source/header file",
+        "cpp" | "cc" | "hpp" => "C++ source/header file",
+        "java" | "class" | "jar" => "Java file",
+        "obj" | "o" => "Object file",
+        "lib" | "a" => "Object file library",
+        "pdb" => "Program debug database",
+        "dat" | "bin" => "Binary data file",
+        "db" | "sqlite" | "sqlite3" => "Database file",
+        "cache" | "tmp" => "Temporary file",
+        "node" => "Node native module",
+        "wasm" => "WebAssembly module",
+        "sh" | "ps1" | "bat" | "cmd" => "Script file",
+        "yml" | "yaml" | "toml" => "Configuration file",
+        "md" => "Markdown document",
+        "html" | "htm" => "HTML document",
+        "css" => "Stylesheet",
+        _ => return format!("{} File", extension.to_ascii_uppercase()),
+    };
+    description.to_string()
+}
+
+struct OwnedExtensionStats {
+    items: Vec<WbExtensionStat>,
+    _strings: Vec<CString>,
+}
+
+/// Sorts extension totals by bytes descending and keeps only the top N, so
+/// the FFI payload (and the UI table) stay bounded regardless of how many
+/// distinct extensions a scan encounters.
+fn sorted_top_extension_totals(mut totals: Vec<(String, u64, u64)>) -> Vec<(String, u64, u64)> {
+    totals.sort_by(|a, b| b.1.cmp(&a.1));
+    totals.truncate(EXTENSION_STATS_TOP_LIMIT);
+    totals
+}
+
+fn build_extension_stats(totals: Vec<(String, u64, u64)>) -> OwnedExtensionStats {
+    let totals = sorted_top_extension_totals(totals);
+    let mut strings = Vec::new();
+    let items = totals
+        .into_iter()
+        .map(|(extension, bytes, files)| WbExtensionStat {
+            extension: c_view(extension.clone(), &mut strings),
+            description: c_view(extension_description(&extension), &mut strings),
+            bytes,
+            files,
+        })
+        .collect();
+    OwnedExtensionStats {
+        items,
+        _strings: strings,
+    }
+}
+
+fn emit_extension_stats(
+    cb: extern "C" fn(event: *const WbEvent, user_data: *mut core::ffi::c_void),
+    user_data: usize,
+    totals: Vec<(String, u64, u64)>,
+) {
+    let owned = build_extension_stats(totals);
+    let native_event = WbEvent {
+        kind: WbEventKind::ExtensionStats,
+        extension_stats: WbExtensionStatsSnapshot {
+            items: owned.items.as_ptr(),
+            count: owned.items.len(),
+        },
+        ..WbEvent::default()
+    };
+    cb(
+        &native_event as *const WbEvent,
+        user_data as *mut core::ffi::c_void,
+    );
 }
 
 fn persist_scan_event(transaction: &mut BufferedIndexTransaction, event: &ScanEvent) {
@@ -604,6 +768,42 @@ fn convert_event(event: ScanEvent) -> OwnedEvent {
     }
 }
 
+fn load_extension_stats_from_snapshot(
+    callback: WbExtensionStatCallback,
+    user_data: *mut core::ffi::c_void,
+) {
+    let Some(cb) = callback else {
+        return;
+    };
+
+    let repository = SqliteIndexRepository::open(&index_storage_root(), IndexBackend::BinaryCache);
+    let files = repository.snapshot_files();
+
+    let mut totals: HashMap<String, (u64, u64)> = HashMap::new();
+    for file in &files {
+        let entry = totals.entry(extension_key(&file.name)).or_insert((0, 0));
+        entry.0 = entry.0.saturating_add(file.size_bytes);
+        entry.1 = entry.1.saturating_add(1);
+    }
+
+    let totals: Vec<(String, u64, u64)> = totals
+        .into_iter()
+        .map(|(extension, (bytes, files))| (extension, bytes, files))
+        .collect();
+    let totals = sorted_top_extension_totals(totals);
+
+    for (extension, bytes, files) in totals {
+        let mut strings = Vec::new();
+        let entry = WbExtensionStat {
+            extension: c_view(extension.clone(), &mut strings),
+            description: c_view(extension_description(&extension), &mut strings),
+            bytes,
+            files,
+        };
+        cb(&entry as *const WbExtensionStat, user_data);
+    }
+}
+
 fn c_view(text: String, strings: &mut Vec<CString>) -> WbCStringView {
     let c_string = CString::new(text).unwrap_or_default();
     let view = WbCStringView {
@@ -692,6 +892,8 @@ fn catalog_entry_from_volume(volume: &VolumeRecord) -> OwnedCatalogEntry {
             &mut strings,
         ),
         size_bytes: volume.total_bytes,
+        allocation_bytes: volume.total_bytes,
+        total_entries: 0,
         modified_utc: 0,
         has_modified_utc: 0,
     };
@@ -716,6 +918,8 @@ fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntr
             &mut strings,
         ),
         size_bytes: directory.total_bytes,
+        allocation_bytes: directory.total_bytes,
+        total_entries: directory.total_entries,
         modified_utc: 0,
         has_modified_utc: 0,
     };
@@ -737,6 +941,8 @@ fn catalog_entry_from_file(file: &FileRecord) -> OwnedCatalogEntry {
             &mut strings,
         ),
         size_bytes: file.size_bytes,
+        allocation_bytes: file.allocation_bytes,
+        total_entries: 1,
         modified_utc: file.modified_utc.unwrap_or(0),
         has_modified_utc: u8::from(file.modified_utc.is_some()),
     };
@@ -843,6 +1049,14 @@ pub extern "C" fn wb_index_snapshot_stats() -> WbIndexSnapshotStats {
 }
 
 #[no_mangle]
+pub extern "C" fn wb_index_snapshot_extension_stats(
+    callback: WbExtensionStatCallback,
+    user_data: *mut core::ffi::c_void,
+) {
+    load_extension_stats_from_snapshot(callback, user_data);
+}
+
+#[no_mangle]
 pub extern "C" fn wb_scan_session_cancel(handle: WbScanSessionHandle) {
     if handle._private.is_null() {
         return;
@@ -860,4 +1074,55 @@ pub extern "C" fn wb_scan_session_destroy(handle: WbScanSessionHandle) {
 
     let session = unsafe { Box::from_raw(handle._private.cast::<NativeSession>()) };
     session.join();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extension_key_lowercases_and_strips_dot() {
+        assert_eq!(extension_key("Report.PDF"), "pdf");
+        assert_eq!(extension_key("archive.tar.gz"), "gz");
+        assert_eq!(extension_key("README"), "");
+        assert_eq!(extension_key(".gitignore"), "");
+    }
+
+    #[test]
+    fn extension_description_covers_known_and_unknown_extensions() {
+        assert_eq!(extension_description(""), "No extension");
+        assert_eq!(extension_description("exe"), "Application");
+        assert_eq!(extension_description("zzzz"), "ZZZZ File");
+    }
+
+    #[test]
+    fn sorted_top_extension_totals_sorts_by_bytes_desc_and_truncates() {
+        let totals: Vec<(String, u64, u64)> = (0..EXTENSION_STATS_TOP_LIMIT + 5)
+            .map(|i| (format!("ext{i}"), i as u64, 1))
+            .collect();
+
+        let sorted = sorted_top_extension_totals(totals);
+
+        assert_eq!(sorted.len(), EXTENSION_STATS_TOP_LIMIT);
+        assert_eq!(sorted[0].0, format!("ext{}", EXTENSION_STATS_TOP_LIMIT + 4));
+        assert!(sorted.windows(2).all(|pair| pair[0].1 >= pair[1].1));
+    }
+
+    #[test]
+    fn build_extension_stats_produces_matching_owned_strings() {
+        let owned = build_extension_stats(vec![
+            ("rs".to_string(), 100, 3),
+            ("exe".to_string(), 500, 1),
+        ]);
+
+        assert_eq!(owned.items.len(), 2);
+        assert_eq!(owned.items[0].bytes, 500);
+        let extension = unsafe {
+            std::slice::from_raw_parts(
+                owned.items[0].extension.ptr.cast::<u8>(),
+                owned.items[0].extension.len,
+            )
+        };
+        assert_eq!(std::str::from_utf8(extension).unwrap(), "exe");
+    }
 }

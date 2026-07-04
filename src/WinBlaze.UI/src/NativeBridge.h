@@ -10,6 +10,7 @@ namespace WinBlaze::UI::NativeBridge
 {
     using EventHandler = std::function<void(const WbEvent&)>;
     using CatalogHandler = std::function<void(const WbCatalogEntry&)>;
+    using ExtensionStatHandler = std::function<void(const WbExtensionStat&)>;
 
     struct SessionHandle
     {
@@ -23,4 +24,5 @@ namespace WinBlaze::UI::NativeBridge
     void CancelScan(SessionHandle handle);
     void DestroyScan(SessionHandle handle);
     WbIndexSnapshotStats LoadCatalogSnapshotWithStats(CatalogHandler handler);
+    void LoadExtensionStatsSnapshot(ExtensionStatHandler handler);
 }

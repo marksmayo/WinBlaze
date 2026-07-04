@@ -122,6 +122,8 @@ namespace winrt::WinBlaze::UI::implementation
             std::wstring kind;
             std::wstring size_text;
             uint64_t size_bytes{};
+            uint64_t allocation_bytes{};
+            uint64_t total_entries{};
             int progress{};
             std::optional<int64_t> modified_utc;
             std::wstring description;
@@ -130,6 +132,14 @@ namespace winrt::WinBlaze::UI::implementation
             int path_depth{};
             std::wstring parent_path;
             std::wstring top_group;
+        };
+
+        struct ExtensionStatEntry
+        {
+            std::wstring extension;
+            std::wstring description;
+            uint64_t bytes{};
+            uint64_t files{};
         };
 
         struct TreemapTileLayout
@@ -156,6 +166,11 @@ namespace winrt::WinBlaze::UI::implementation
         static std::wstring Utf8ToWide(std::string_view text);
         TreeCatalogEntry CatalogEntryFromNative(WbCatalogEntry const& entry) const;
         void RenderTreemapProbeFrame(int width, int height);
+
+        Microsoft::UI::Xaml::Controls::ListViewItem CreateExtensionListItem(ExtensionStatEntry const& entry, uint64_t total_bytes) const;
+        void PopulateExtensionList(std::vector<ExtensionStatEntry> const& entries);
+        static ExtensionStatEntry ExtensionStatFromNative(WbExtensionStat const& entry);
+        void LoadExtensionStatsSnapshot();
 
         Microsoft::UI::Xaml::Controls::TextBlock StatusText() const { return m_status_text; }
         Microsoft::UI::Xaml::Controls::TextBlock SectionText() const { return m_section_text; }
@@ -201,6 +216,9 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::Border TreemapCard() const { return m_treemap_card; }
         Microsoft::UI::Xaml::Controls::Border DetailCard() const { return m_detail_card; }
         Microsoft::UI::Xaml::Controls::ListView TreeListView() const { return m_tree_list_view; }
+        Microsoft::UI::Xaml::Controls::Border ExtensionCard() const { return m_extension_card; }
+        Microsoft::UI::Xaml::Controls::ListView ExtensionListView() const { return m_extension_list_view; }
+        Microsoft::UI::Xaml::Controls::TextBlock ExtensionListStatusText() const { return m_extension_list_status_text; }
         Microsoft::UI::Xaml::Controls::TextBox SearchBox() const { return m_search_box; }
         Microsoft::UI::Xaml::Controls::TextBox ExtensionBox() const { return m_extension_box; }
         Microsoft::UI::Xaml::Controls::TextBox MinSizeBox() const { return m_min_size_box; }
@@ -266,6 +284,10 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::Border m_detail_card{ nullptr };
         std::vector<Microsoft::UI::Xaml::Controls::Button> m_nav_chips;
         Microsoft::UI::Xaml::Controls::ListView m_tree_list_view{ nullptr };
+        Microsoft::UI::Xaml::Controls::Border m_extension_card{ nullptr };
+        Microsoft::UI::Xaml::Controls::ListView m_extension_list_view{ nullptr };
+        Microsoft::UI::Xaml::Controls::TextBlock m_extension_list_status_text{ nullptr };
+        std::vector<ExtensionStatEntry> m_extension_stats;
         Microsoft::UI::Xaml::Controls::TextBox m_search_box{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_extension_box{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_min_size_box{ nullptr };
@@ -306,10 +328,10 @@ namespace winrt::WinBlaze::UI::implementation
         bool m_session_active{ false };
         bool m_has_results{ false };
         bool m_has_error{ false };
-        bool m_show_current_state{ false };
-        bool m_show_folder_view{ false };
-        bool m_show_folder_tree{ false };
-        bool m_show_runtime_metrics{ false };
+        bool m_show_current_state{ true };
+        bool m_show_folder_view{ true };
+        bool m_show_folder_tree{ true };
+        bool m_show_runtime_metrics{ true };
         bool m_section_menu_updates_suppressed{ false };
         ShellSection m_active_section{ ShellSection::Overview };
         std::chrono::steady_clock::time_point m_scan_started_at{};
@@ -366,6 +388,8 @@ namespace winrt::WinBlaze::UI::implementation
             std::wstring treemap_hover_size;
             bool catalog_dirty{ false };
             std::vector<TreeCatalogEntry> catalog_entries;
+            bool extension_stats_dirty{ false };
+            std::vector<ExtensionStatEntry> extension_stats;
             bool reload_snapshot{ false };
             bool diagnostics_dirty{ false };
             bool correctness_dirty{ false };

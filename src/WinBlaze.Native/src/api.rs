@@ -25,6 +25,12 @@ pub struct WbCatalogEntry {
     pub size_text: WbCStringView,
     pub description: WbCStringView,
     pub size_bytes: u64,
+    /// Physical (on-disk allocation) size. For files this is the file's own
+    /// allocation size; for directories/volumes it is the same rolled-up
+    /// value already used for `size_bytes` (this crate does not currently
+    /// track a separate logical-size rollup for directories).
+    pub allocation_bytes: u64,
+    pub total_entries: u64,
     pub modified_utc: i64,
     pub has_modified_utc: u8,
 }
@@ -66,6 +72,29 @@ pub enum WbEventKind {
     DirectoryFound = 9,
     FileFound = 10,
     IncrementalChanges = 11,
+    ExtensionStats = 12,
+}
+
+/// One row of the live per-extension breakdown (bytes/files aggregated
+/// across the whole scan, not just the UI's capped live catalog sample).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WbExtensionStat {
+    pub extension: WbCStringView,
+    pub description: WbCStringView,
+    pub bytes: u64,
+    pub files: u64,
+}
+
+/// Borrowed view over a set of `WbExtensionStat` rows, sorted by `bytes`
+/// descending. Only valid for the duration of the callback invocation that
+/// provided it (same lifetime discipline as the `WbCStringView` fields it
+/// contains).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WbExtensionStatsSnapshot {
+    pub items: *const WbExtensionStat,
+    pub count: usize,
 }
 
 #[repr(C)]
@@ -99,6 +128,7 @@ pub struct WbEvent {
     pub incremental_changes: WbIncrementalChangeSummary,
     pub error: WbNativeError,
     pub catalog_entry: WbCatalogEntry,
+    pub extension_stats: WbExtensionStatsSnapshot,
 }
 
 #[repr(C)]
@@ -112,3 +142,6 @@ pub type WbEventCallback =
 
 pub type WbCatalogCallback =
     Option<extern "C" fn(entry: *const WbCatalogEntry, user_data: *mut core::ffi::c_void)>;
+
+pub type WbExtensionStatCallback =
+    Option<extern "C" fn(entry: *const WbExtensionStat, user_data: *mut core::ffi::c_void)>;

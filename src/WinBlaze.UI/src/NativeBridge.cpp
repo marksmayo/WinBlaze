@@ -12,6 +12,7 @@ namespace
     using CancelScanFn = void(__stdcall *)(WbScanSessionHandle);
     using DestroyScanFn = void(__stdcall *)(WbScanSessionHandle);
     using LoadCatalogSnapshotWithStatsFn = WbIndexSnapshotStats(__stdcall *)(WbCatalogCallback, void*);
+    using LoadExtensionStatsFn = void(__stdcall *)(WbExtensionStatCallback, void*);
 
     struct DllApi
     {
@@ -21,6 +22,7 @@ namespace
         CancelScanFn cancel_scan{ nullptr };
         DestroyScanFn destroy_scan{ nullptr };
         LoadCatalogSnapshotWithStatsFn load_catalog_snapshot_with_stats{ nullptr };
+        LoadExtensionStatsFn load_extension_stats{ nullptr };
     };
 
     DllApi& Api()
@@ -51,6 +53,11 @@ namespace
         WinBlaze::UI::NativeBridge::CatalogHandler handler;
     };
 
+    struct ExtensionStatCallbackContext
+    {
+        WinBlaze::UI::NativeBridge::ExtensionStatHandler handler;
+    };
+
     void EnsureLoaded()
     {
         auto& api = Api();
@@ -69,8 +76,9 @@ namespace
         api.cancel_scan = reinterpret_cast<CancelScanFn>(GetProcAddress(api.module, "wb_scan_session_cancel"));
         api.destroy_scan = reinterpret_cast<DestroyScanFn>(GetProcAddress(api.module, "wb_scan_session_destroy"));
         api.load_catalog_snapshot_with_stats = reinterpret_cast<LoadCatalogSnapshotWithStatsFn>(GetProcAddress(api.module, "wb_index_snapshot_load_with_stats"));
+        api.load_extension_stats = reinterpret_cast<LoadExtensionStatsFn>(GetProcAddress(api.module, "wb_index_snapshot_extension_stats"));
 
-        if (api.start_scan == nullptr || api.start_incremental_scan == nullptr || api.cancel_scan == nullptr || api.destroy_scan == nullptr || api.load_catalog_snapshot_with_stats == nullptr) {
+        if (api.start_scan == nullptr || api.start_incremental_scan == nullptr || api.cancel_scan == nullptr || api.destroy_scan == nullptr || api.load_catalog_snapshot_with_stats == nullptr || api.load_extension_stats == nullptr) {
             throw std::runtime_error("Failed to resolve winblaze_native exports");
         }
     }
@@ -94,6 +102,18 @@ namespace
         }
 
         auto* context = static_cast<CatalogCallbackContext*>(user_data);
+        if (context->handler) {
+            context->handler(*entry);
+        }
+    }
+
+    extern "C" void __stdcall OnExtensionStatWithContext(const WbExtensionStat* entry, void* user_data)
+    {
+        if (entry == nullptr || user_data == nullptr) {
+            return;
+        }
+
+        auto* context = static_cast<ExtensionStatCallbackContext*>(user_data);
         if (context->handler) {
             context->handler(*entry);
         }
@@ -171,5 +191,13 @@ namespace WinBlaze::UI::NativeBridge
         auto context = std::make_shared<CatalogCallbackContext>();
         context->handler = std::move(handler);
         return Api().load_catalog_snapshot_with_stats(&OnCatalogWithContext, context.get());
+    }
+
+    void LoadExtensionStatsSnapshot(ExtensionStatHandler handler)
+    {
+        EnsureLoaded();
+        auto context = std::make_shared<ExtensionStatCallbackContext>();
+        context->handler = std::move(handler);
+        Api().load_extension_stats(&OnExtensionStatWithContext, context.get());
     }
 }

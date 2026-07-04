@@ -27,11 +27,32 @@ typedef struct WbCatalogEntry
     WbCStringView size_text;
     WbCStringView description;
     uint64_t size_bytes;
+    /* Physical (on-disk allocation) size. For directories/volumes this is
+       the same rolled-up value as size_bytes (no separate logical-size
+       rollup is tracked for directories yet). */
+    uint64_t allocation_bytes;
+    uint64_t total_entries;
     int64_t modified_utc;
     uint8_t has_modified_utc;
 } WbCatalogEntry;
 
 typedef void(__stdcall* WbCatalogCallback)(const WbCatalogEntry* entry, void* user_data);
+
+typedef struct WbExtensionStat
+{
+    WbCStringView extension;
+    WbCStringView description;
+    uint64_t bytes;
+    uint64_t files;
+} WbExtensionStat;
+
+typedef struct WbExtensionStatsSnapshot
+{
+    const WbExtensionStat* items;
+    size_t count;
+} WbExtensionStatsSnapshot;
+
+typedef void(__stdcall* WbExtensionStatCallback)(const WbExtensionStat* entry, void* user_data);
 
 typedef struct WbIndexSnapshotStats
 {
@@ -58,6 +79,7 @@ typedef enum WbEventKind
     WbEventKind_DirectoryFound = 9,
     WbEventKind_FileFound = 10,
     WbEventKind_IncrementalChanges = 11,
+    WbEventKind_ExtensionStats = 12,
 } WbEventKind;
 
 typedef struct WbScanSummary
@@ -88,6 +110,7 @@ typedef struct WbEvent
     WbIncrementalChangeSummary incremental_changes;
     WbNativeError error;
     WbCatalogEntry catalog_entry;
+    WbExtensionStatsSnapshot extension_stats;
 } WbEvent;
 
 typedef struct WbScanSessionHandle
@@ -104,6 +127,7 @@ void wb_scan_session_destroy(WbScanSessionHandle handle);
 void wb_index_snapshot_load(WbCatalogCallback callback, void* user_data);
 WbIndexSnapshotStats wb_index_snapshot_load_with_stats(WbCatalogCallback callback, void* user_data);
 WbIndexSnapshotStats wb_index_snapshot_stats(void);
+void wb_index_snapshot_extension_stats(WbExtensionStatCallback callback, void* user_data);
 
 #ifdef __cplusplus
 }
