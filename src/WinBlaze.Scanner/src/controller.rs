@@ -1,21 +1,24 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     fs,
-    path::PathBuf,
+    os::windows::fs::MetadataExt,
+    path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{self, Receiver, Sender},
-        Arc,
+        Arc, Condvar, Mutex,
     },
     thread,
 };
 
-use winblaze_core::{ScanEvent, ScanIssueKind, ScanIssueRecord};
+use winblaze_core::{FileAttributes, ScanEvent, ScanIssueKind, ScanIssueRecord};
 
 use crate::errors::{classify_io_error, ScanErrorKind};
 use crate::filesystem::build_scan_access_plan;
 use crate::ntfs::{enumerate_ntfs_volume_parallel_streaming, NtfsEnumerationError};
+use crate::performance::ScanPipelineConfig;
 use crate::pipeline::ScanEventPipeline;
+use crate::policy::{should_descend_into_reparse_target, ReparseTraversalPolicy};
 use crate::types::ScanRuntimeConfig;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,6 +70,7 @@ impl ScanController {
         let access_plan = build_scan_access_plan(&request.root_path, request.config.backend_hint());
         let pipeline_config = request.config.pipeline;
         let worker_count = request.config.max_parallelism.max(1);
+        let reparse_policy = request.config.reparse_policy;
 
         let join = thread::spawn(move || {
             let mut pipeline = ScanEventPipeline::new(event_tx, pipeline_config);
@@ -99,6 +103,8 @@ impl ScanController {
                             &cancelled_thread,
                             &access_plan.selected_root,
                             &mut issue_keys,
+                            reparse_policy,
+                            worker_count,
                         );
                     }
                 }
@@ -108,6 +114,8 @@ impl ScanController {
                     &cancelled_thread,
                     &access_plan.selected_root,
                     &mut issue_keys,
+                    reparse_policy,
+                    worker_count,
                 );
             }
         });
@@ -129,6 +137,8 @@ fn run_fallback_scan(
     cancelled: &AtomicBool,
     selected_root: &std::path::Path,
     issue_keys: &mut HashSet<String>,
+    reparse_policy: ReparseTraversalPolicy,
+    worker_count: usize,
 ) {
     pipeline.emit_session_started(winblaze_core::VolumeRecord {
         id: winblaze_core::VolumeId(0),
@@ -151,42 +161,76 @@ fn run_fallback_scan(
         return;
     }
 
-    let mut walk_state = DirectoryWalkState::new();
-    let mut directory_ids = HashMap::new();
     let root_id = winblaze_core::DirectoryId(5);
-    directory_ids.insert(selected_root.to_path_buf(), root_id);
-    emit_directory_record(
-        pipeline,
-        &mut walk_state,
-        root_id,
-        None,
-        selected_root,
-        selected_root
+    pipeline.emit_directory(winblaze_core::DirectoryRecord {
+        id: root_id,
+        parent_directory_id: None,
+        name: selected_root
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_else(|| selected_root.display().to_string()),
-        0,
-    );
-    walk_state.maybe_emit_progress(pipeline, true);
+        full_path: selected_root.display().to_string(),
+        direct_bytes: 0,
+        total_bytes: 0,
+        direct_entries: 0,
+        total_entries: 0,
+    });
 
-    walk_directory_tree(
-        pipeline,
-        cancelled,
-        selected_root,
-        root_id,
-        &mut walk_state,
-        &mut directory_ids,
-        issue_keys,
-    );
+    // The walker only needs a resolved identity for the handful of
+    // directories actually reached through a reparse point, so a single
+    // canonicalize() call for the root is the only unconditional cost.
+    let root_canonical = fs::canonicalize(selected_root)
+        .map(|resolved| strip_verbatim_prefix(&resolved))
+        .unwrap_or_else(|_| selected_root.to_path_buf());
+
+    let (files_seen, directories_seen, total_size_bytes, total_allocation_bytes) =
+        if worker_count > 1 {
+            run_fallback_scan_parallel(
+                pipeline,
+                cancelled,
+                selected_root,
+                root_id,
+                reparse_policy,
+                worker_count,
+                root_canonical,
+            )
+        } else {
+            let mut walk_state = DirectoryWalkState::new();
+            walk_state.directories_seen = 1;
+            walk_state.maybe_emit_progress(pipeline, true);
+
+            let mut directory_ids = HashMap::new();
+            directory_ids.insert(selected_root.to_path_buf(), root_id);
+            let mut ancestor_canonical_stack = vec![root_canonical];
+
+            walk_directory_tree(
+                pipeline,
+                cancelled,
+                selected_root,
+                root_id,
+                &mut walk_state,
+                &mut directory_ids,
+                issue_keys,
+                reparse_policy,
+                &mut ancestor_canonical_stack,
+            );
+
+            (
+                walk_state.files_seen,
+                walk_state.directories_seen,
+                walk_state.total_size_bytes,
+                walk_state.total_allocation_bytes,
+            )
+        };
 
     if cancelled.load(Ordering::SeqCst) {
         pipeline.emit_cancelled();
     } else {
         pipeline.emit_summary(winblaze_core::ScanSummary {
-            files_seen: walk_state.files_seen,
-            directories_seen: walk_state.directories_seen,
-            total_size_bytes: walk_state.total_size_bytes,
-            total_allocation_bytes: walk_state.total_allocation_bytes,
+            files_seen,
+            directories_seen,
+            total_size_bytes,
+            total_allocation_bytes,
         });
         pipeline.emit_completed();
     }
@@ -222,31 +266,110 @@ fn validate_directory_walk_root(
     }
 }
 
+/// Reports that the fast NTFS-MFT reader is unavailable and the scan is
+/// falling back to the much slower directory-walk backend. This is always
+/// reported as `FastScanUnavailable` (rather than the underlying IO error
+/// kind) so the UI can reliably detect the downgrade and explain it, instead
+/// of it being buried among ordinary per-file scan issues.
 fn convert_ntfs_error(error: &NtfsEnumerationError, path: String) -> ScanIssueRecord {
-    match error {
+    let detail = match error {
         NtfsEnumerationError::Io(io_error) => {
-            let kind = match classify_io_error(io_error) {
-                ScanErrorKind::PermissionDenied => ScanIssueKind::PermissionDenied,
-                ScanErrorKind::NotFound => ScanIssueKind::NotFound,
-                ScanErrorKind::SharingViolation => ScanIssueKind::SharingViolation,
-                ScanErrorKind::TransientIo => ScanIssueKind::TransientIo,
-                ScanErrorKind::UnsupportedFilesystem => ScanIssueKind::UnsupportedFilesystem,
-                ScanErrorKind::Unknown => ScanIssueKind::Unknown,
-            };
-            ScanIssueRecord {
-                kind,
-                path: Some(path),
-                message: io_error.to_string(),
+            if matches!(classify_io_error(io_error), ScanErrorKind::PermissionDenied) {
+                format!(
+                    "access denied reading the NTFS master file table ({io_error}); \
+                     restart WinBlaze as Administrator for full-speed scans"
+                )
+            } else {
+                format!("could not read the NTFS master file table ({io_error})")
             }
         }
-        NtfsEnumerationError::InvalidRecord(message) => ScanIssueRecord {
-            kind: ScanIssueKind::Unknown,
-            path: Some(path),
-            message: message.clone(),
-        },
+        NtfsEnumerationError::InvalidRecord(message) => {
+            format!("NTFS master file table record could not be parsed ({message})")
+        }
+    };
+
+    ScanIssueRecord {
+        kind: ScanIssueKind::FastScanUnavailable,
+        path: Some(path),
+        message: format!("Falling back to a standard directory scan: {detail}"),
     }
 }
 
+/// Strips the `\\?\` (or `\\?\UNC\`) verbatim prefix that `fs::canonicalize`
+/// adds, so canonicalized paths can be compared against plain joined paths.
+fn strip_verbatim_prefix(path: &Path) -> PathBuf {
+    let text = path.as_os_str().to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+fn is_ancestor_cycle(ancestor_canonical_stack: &[PathBuf], resolved_target: &Path) -> bool {
+    ancestor_canonical_stack
+        .iter()
+        .any(|ancestor| ancestor.as_path() == resolved_target)
+}
+
+enum ReparseDecision {
+    /// Safe to descend; carries the canonical identity to push onto the
+    /// ancestor stack (a cheap path join for plain directories, or a
+    /// resolved target for an actual reparse point).
+    Follow(PathBuf),
+    SkippedByPolicy,
+    SkippedCycle,
+    SkippedUnresolvable,
+}
+
+/// Decides whether to descend into `entry_path`, guarding against directory
+/// cycles created by junctions/symlinks that point back at an ancestor (for
+/// example the stock `AppData\Local\Application Data` compatibility
+/// junction, which points at its own parent directory).
+fn evaluate_reparse_descent(
+    directory: &Path,
+    entry_path: &Path,
+    entry_name: &str,
+    attributes: FileAttributes,
+    policy: ReparseTraversalPolicy,
+    ancestor_canonical_stack: &[PathBuf],
+) -> ReparseDecision {
+    if !attributes.is_reparse_point() {
+        let canonical = ancestor_canonical_stack
+            .last()
+            .map(|parent| parent.join(entry_name))
+            .unwrap_or_else(|| directory.join(entry_name));
+        return ReparseDecision::Follow(canonical);
+    }
+
+    if !should_descend_into_reparse_target(entry_path, attributes, policy) {
+        return ReparseDecision::SkippedByPolicy;
+    }
+
+    match fs::canonicalize(entry_path) {
+        Ok(resolved) => {
+            let resolved = strip_verbatim_prefix(&resolved);
+            if is_ancestor_cycle(ancestor_canonical_stack, &resolved) {
+                ReparseDecision::SkippedCycle
+            } else {
+                ReparseDecision::Follow(resolved)
+            }
+        }
+        Err(_) => ReparseDecision::SkippedUnresolvable,
+    }
+}
+
+fn reparse_cycle_issue(entry_path: &Path) -> ScanIssueRecord {
+    ScanIssueRecord {
+        kind: ScanIssueKind::Unknown,
+        path: Some(entry_path.display().to_string()),
+        message: "skipped reparse point that would create a directory cycle".to_string(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn walk_directory_tree(
     pipeline: &mut ScanEventPipeline,
     cancelled: &AtomicBool,
@@ -255,6 +378,8 @@ fn walk_directory_tree(
     walk_state: &mut DirectoryWalkState,
     directory_ids: &mut HashMap<PathBuf, winblaze_core::DirectoryId>,
     issue_keys: &mut HashSet<String>,
+    reparse_policy: ReparseTraversalPolicy,
+    ancestor_canonical_stack: &mut Vec<PathBuf>,
 ) {
     let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
@@ -301,6 +426,22 @@ fn walk_directory_tree(
         };
 
         if file_type.is_dir() {
+            // Free on Windows: DirEntry::metadata() is built from the
+            // WIN32_FIND_DATAW the directory enumeration already cached.
+            let attributes = entry
+                .metadata()
+                .map(|metadata| FileAttributes(metadata.file_attributes()))
+                .unwrap_or_default();
+
+            let decision = evaluate_reparse_descent(
+                directory,
+                &entry_path,
+                &entry_name,
+                attributes,
+                reparse_policy,
+                ancestor_canonical_stack,
+            );
+
             let directory_id = walk_state.next_directory_id();
             directory_ids.insert(entry_path.clone(), directory_id);
             emit_directory_record(
@@ -312,15 +453,28 @@ fn walk_directory_tree(
                 entry_name,
                 0,
             );
-            walk_directory_tree(
-                pipeline,
-                cancelled,
-                &entry_path,
-                directory_id,
-                walk_state,
-                directory_ids,
-                issue_keys,
-            );
+
+            match decision {
+                ReparseDecision::Follow(canonical) => {
+                    ancestor_canonical_stack.push(canonical);
+                    walk_directory_tree(
+                        pipeline,
+                        cancelled,
+                        &entry_path,
+                        directory_id,
+                        walk_state,
+                        directory_ids,
+                        issue_keys,
+                        reparse_policy,
+                        ancestor_canonical_stack,
+                    );
+                    ancestor_canonical_stack.pop();
+                }
+                ReparseDecision::SkippedCycle => {
+                    emit_deduplicated_issue(pipeline, issue_keys, reparse_cycle_issue(&entry_path));
+                }
+                ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
+            }
         } else {
             let metadata = match entry.metadata() {
                 Ok(metadata) => metadata,
@@ -504,5 +658,393 @@ fn provisional_volume_record(
         total_bytes: 0,
         free_bytes: 0,
         root_directory_id: winblaze_core::DirectoryId(0),
+    }
+}
+
+/// Task queue and counters shared across the fallback walker's worker
+/// threads. `outstanding` counts tasks that are queued or in flight; the
+/// walk is finished once it drops to zero with an empty queue.
+struct FallbackTask {
+    path: PathBuf,
+    directory_id: winblaze_core::DirectoryId,
+    ancestor_canonical_stack: Vec<PathBuf>,
+}
+
+struct FallbackQueue {
+    tasks: VecDeque<FallbackTask>,
+    outstanding: usize,
+}
+
+struct FallbackSharedState {
+    queue: Mutex<FallbackQueue>,
+    work_available: Condvar,
+    reparse_policy: ReparseTraversalPolicy,
+    issue_keys: Mutex<HashSet<String>>,
+    next_directory_id: AtomicU64,
+    next_file_id: AtomicU64,
+    directories_seen: AtomicU64,
+    files_seen: AtomicU64,
+    total_size_bytes: AtomicU64,
+    total_allocation_bytes: AtomicU64,
+    last_progress_reported_items: AtomicU64,
+}
+
+/// Multi-threaded counterpart to `walk_directory_tree`, used once
+/// `worker_count > 1`. The fallback backend is only reached when the fast
+/// NTFS-MFT reader is unavailable (relative roots, or the caller lacks the
+/// elevation `$MFT` reads require), so unlike the MFT path it previously
+/// never used `max_parallelism` at all and ran fully single-threaded.
+#[allow(clippy::too_many_arguments)]
+fn run_fallback_scan_parallel(
+    pipeline: &mut ScanEventPipeline,
+    cancelled: &AtomicBool,
+    selected_root: &std::path::Path,
+    root_id: winblaze_core::DirectoryId,
+    reparse_policy: ReparseTraversalPolicy,
+    worker_count: usize,
+    root_canonical: PathBuf,
+) -> (u64, u64, u64, u64) {
+    let shared = FallbackSharedState {
+        queue: Mutex::new(FallbackQueue {
+            tasks: VecDeque::from(vec![FallbackTask {
+                path: selected_root.to_path_buf(),
+                directory_id: root_id,
+                ancestor_canonical_stack: vec![root_canonical],
+            }]),
+            outstanding: 1,
+        }),
+        work_available: Condvar::new(),
+        reparse_policy,
+        issue_keys: Mutex::new(HashSet::new()),
+        next_directory_id: AtomicU64::new(6),
+        next_file_id: AtomicU64::new(1),
+        directories_seen: AtomicU64::new(1),
+        files_seen: AtomicU64::new(0),
+        total_size_bytes: AtomicU64::new(0),
+        total_allocation_bytes: AtomicU64::new(0),
+        last_progress_reported_items: AtomicU64::new(0),
+    };
+
+    let pipeline_config = pipeline.config();
+    let event_tx = pipeline.cloned_sender();
+
+    thread::scope(|scope| {
+        for _ in 0..worker_count.max(1) {
+            let shared = &shared;
+            let event_tx = event_tx.clone();
+            scope.spawn(move || {
+                run_fallback_worker(shared, cancelled, event_tx, pipeline_config);
+            });
+        }
+    });
+
+    (
+        shared.files_seen.load(Ordering::Relaxed),
+        shared.directories_seen.load(Ordering::Relaxed),
+        shared.total_size_bytes.load(Ordering::Relaxed),
+        shared.total_allocation_bytes.load(Ordering::Relaxed),
+    )
+}
+
+fn run_fallback_worker(
+    shared: &FallbackSharedState,
+    cancelled: &AtomicBool,
+    event_tx: Sender<ScanEvent>,
+    pipeline_config: ScanPipelineConfig,
+) {
+    let mut pipeline = ScanEventPipeline::new(event_tx, pipeline_config);
+
+    loop {
+        let task = {
+            let mut guard = shared.queue.lock().unwrap();
+            loop {
+                if let Some(task) = guard.tasks.pop_front() {
+                    break Some(task);
+                }
+                if guard.outstanding == 0 {
+                    break None;
+                }
+                guard = shared.work_available.wait(guard).unwrap();
+            }
+        };
+
+        let Some(task) = task else {
+            break;
+        };
+
+        let new_tasks = if cancelled.load(Ordering::SeqCst) {
+            Vec::new()
+        } else {
+            process_fallback_directory(shared, &mut pipeline, &task, cancelled)
+        };
+
+        let mut guard = shared.queue.lock().unwrap();
+        guard.outstanding += new_tasks.len();
+        guard.tasks.extend(new_tasks);
+        guard.outstanding -= 1;
+        if guard.outstanding == 0 || !guard.tasks.is_empty() {
+            shared.work_available.notify_all();
+        }
+        drop(guard);
+    }
+
+    pipeline.flush();
+}
+
+fn process_fallback_directory(
+    shared: &FallbackSharedState,
+    pipeline: &mut ScanEventPipeline,
+    task: &FallbackTask,
+    cancelled: &AtomicBool,
+) -> Vec<FallbackTask> {
+    let entries = match fs::read_dir(&task.path) {
+        Ok(entries) => entries,
+        Err(error) => {
+            emit_deduplicated_issue_shared(
+                pipeline,
+                shared,
+                convert_io_error(&error, task.path.display().to_string()),
+            );
+            return Vec::new();
+        }
+    };
+
+    let mut new_tasks = Vec::new();
+    for entry_result in entries {
+        if cancelled.load(Ordering::SeqCst) {
+            break;
+        }
+
+        let entry = match entry_result {
+            Ok(entry) => entry,
+            Err(error) => {
+                emit_deduplicated_issue_shared(
+                    pipeline,
+                    shared,
+                    convert_io_error(&error, task.path.display().to_string()),
+                );
+                continue;
+            }
+        };
+
+        let entry_path = entry.path();
+        let entry_name = entry.file_name().to_string_lossy().to_string();
+
+        let file_type = match entry.file_type() {
+            Ok(file_type) => file_type,
+            Err(error) => {
+                emit_deduplicated_issue_shared(
+                    pipeline,
+                    shared,
+                    convert_io_error(&error, entry_path.display().to_string()),
+                );
+                continue;
+            }
+        };
+
+        if file_type.is_dir() {
+            let attributes = entry
+                .metadata()
+                .map(|metadata| FileAttributes(metadata.file_attributes()))
+                .unwrap_or_default();
+
+            let decision = evaluate_reparse_descent(
+                &task.path,
+                &entry_path,
+                &entry_name,
+                attributes,
+                shared.reparse_policy,
+                &task.ancestor_canonical_stack,
+            );
+
+            let directory_id =
+                winblaze_core::DirectoryId(shared.next_directory_id.fetch_add(1, Ordering::Relaxed));
+            emit_directory_record_shared(
+                pipeline,
+                shared,
+                directory_id,
+                task.directory_id,
+                &entry_path,
+                entry_name,
+            );
+
+            match decision {
+                ReparseDecision::Follow(canonical) => {
+                    let mut ancestor_canonical_stack = task.ancestor_canonical_stack.clone();
+                    ancestor_canonical_stack.push(canonical);
+                    new_tasks.push(FallbackTask {
+                        path: entry_path,
+                        directory_id,
+                        ancestor_canonical_stack,
+                    });
+                }
+                ReparseDecision::SkippedCycle => {
+                    emit_deduplicated_issue_shared(pipeline, shared, reparse_cycle_issue(&entry_path));
+                }
+                ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
+            }
+        } else {
+            let size_bytes = match entry.metadata() {
+                Ok(metadata) => metadata.len(),
+                Err(error) => {
+                    emit_deduplicated_issue_shared(
+                        pipeline,
+                        shared,
+                        convert_io_error(&error, entry_path.display().to_string()),
+                    );
+                    continue;
+                }
+            };
+            emit_file_record_shared(pipeline, shared, task.directory_id, &entry_path, entry_name, size_bytes);
+        }
+    }
+
+    maybe_emit_progress_shared(shared, pipeline);
+    new_tasks
+}
+
+fn emit_directory_record_shared(
+    pipeline: &mut ScanEventPipeline,
+    shared: &FallbackSharedState,
+    directory_id: winblaze_core::DirectoryId,
+    parent_directory_id: winblaze_core::DirectoryId,
+    full_path: &std::path::Path,
+    name: String,
+) {
+    shared.directories_seen.fetch_add(1, Ordering::Relaxed);
+    pipeline.emit_directory(winblaze_core::DirectoryRecord {
+        id: directory_id,
+        parent_directory_id: Some(parent_directory_id),
+        name,
+        full_path: full_path.display().to_string(),
+        direct_bytes: 0,
+        total_bytes: 0,
+        direct_entries: 0,
+        total_entries: 0,
+    });
+}
+
+fn emit_file_record_shared(
+    pipeline: &mut ScanEventPipeline,
+    shared: &FallbackSharedState,
+    parent_directory_id: winblaze_core::DirectoryId,
+    full_path: &std::path::Path,
+    name: String,
+    size_bytes: u64,
+) {
+    shared.files_seen.fetch_add(1, Ordering::Relaxed);
+    shared.total_size_bytes.fetch_add(size_bytes, Ordering::Relaxed);
+    shared
+        .total_allocation_bytes
+        .fetch_add(size_bytes, Ordering::Relaxed);
+    let file_id = shared.next_file_id.fetch_add(1, Ordering::Relaxed);
+
+    pipeline.emit_file(winblaze_core::FileRecord {
+        id: winblaze_core::FileId(file_id),
+        parent_directory_id,
+        name,
+        full_path: full_path.display().to_string(),
+        size_bytes,
+        allocation_bytes: size_bytes,
+        attributes: winblaze_core::FileAttributes::ARCHIVE,
+        created_utc: None,
+        modified_utc: None,
+        accessed_utc: None,
+    });
+}
+
+fn emit_deduplicated_issue_shared(
+    pipeline: &mut ScanEventPipeline,
+    shared: &FallbackSharedState,
+    issue: ScanIssueRecord,
+) {
+    let key = format!(
+        "{:?}|{}|{}",
+        issue.kind,
+        issue.path.as_deref().unwrap_or(""),
+        issue.message
+    );
+    let is_new = shared.issue_keys.lock().unwrap().insert(key);
+    if is_new {
+        pipeline.emit_issue(issue);
+    }
+}
+
+fn maybe_emit_progress_shared(shared: &FallbackSharedState, pipeline: &mut ScanEventPipeline) {
+    let completed_items = shared
+        .files_seen
+        .load(Ordering::Relaxed)
+        .saturating_add(shared.directories_seen.load(Ordering::Relaxed));
+    let last_reported = shared.last_progress_reported_items.load(Ordering::Relaxed);
+    if completed_items.saturating_sub(last_reported) >= 256 {
+        shared
+            .last_progress_reported_items
+            .store(completed_items, Ordering::Relaxed);
+        pipeline.emit_progress(
+            completed_items,
+            0,
+            shared.total_size_bytes.load(Ordering::Relaxed),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_ancestor_cycle_detects_exact_and_nested_matches() {
+        let ancestors = vec![
+            PathBuf::from(r"C:\Users\markm"),
+            PathBuf::from(r"C:\Users\markm\AppData\Local"),
+        ];
+
+        assert!(is_ancestor_cycle(
+            &ancestors,
+            Path::new(r"C:\Users\markm\AppData\Local")
+        ));
+        assert!(is_ancestor_cycle(&ancestors, Path::new(r"C:\Users\markm")));
+        assert!(!is_ancestor_cycle(
+            &ancestors,
+            Path::new(r"C:\Users\markm\AppData\Roaming")
+        ));
+    }
+
+    #[test]
+    fn strip_verbatim_prefix_normalizes_canonicalized_paths() {
+        assert_eq!(
+            strip_verbatim_prefix(Path::new(r"\\?\C:\Users\markm")),
+            PathBuf::from(r"C:\Users\markm")
+        );
+        assert_eq!(
+            strip_verbatim_prefix(Path::new(r"C:\Users\markm")),
+            PathBuf::from(r"C:\Users\markm")
+        );
+    }
+
+    #[test]
+    fn evaluate_reparse_descent_skips_self_referential_junction() {
+        // Mirrors the stock `AppData\Local\Application Data` junction,
+        // which points back at its own parent directory.
+        let ancestors = vec![
+            PathBuf::from(r"C:\Users\markm"),
+            PathBuf::from(r"C:\Users\markm\AppData\Local"),
+        ];
+
+        assert!(is_ancestor_cycle(
+            &ancestors,
+            Path::new(r"C:\Users\markm\AppData\Local")
+        ));
+
+        let decision = should_descend_into_reparse_target(
+            Path::new(r"C:\Users\markm\AppData\Local\Application Data"),
+            FileAttributes::DIRECTORY | FileAttributes::REPARSE_POINT,
+            ReparseTraversalPolicy::FollowAll,
+        );
+        assert!(
+            decision,
+            "policy allows following the junction; the ancestor-stack check \
+             in evaluate_reparse_descent is what actually breaks the cycle"
+        );
     }
 }

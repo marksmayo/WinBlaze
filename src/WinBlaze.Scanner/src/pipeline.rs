@@ -27,6 +27,16 @@ impl ScanEventPipeline {
         }
     }
 
+    /// Clones the underlying sender so a worker thread can drive its own
+    /// pipeline instance while still funneling events into the same channel.
+    pub fn cloned_sender(&self) -> Sender<ScanEvent> {
+        self.sender.clone()
+    }
+
+    pub fn config(&self) -> ScanPipelineConfig {
+        self.config
+    }
+
     pub fn emit_session_started(&mut self, volume: VolumeRecord) {
         self.enqueue(ScanEvent::SessionStarted(volume), 128);
     }

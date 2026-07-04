@@ -10,6 +10,10 @@ pub enum ScanIssueKind {
     TransientIo,
     UnsupportedFilesystem,
     Unknown,
+    /// The fast NTFS-MFT reader could not be used (commonly because the
+    /// process is not elevated) and the scan fell back to the much slower
+    /// directory-walk backend.
+    FastScanUnavailable,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

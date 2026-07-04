@@ -110,6 +110,7 @@ fn issue_counts_json(summary: &ScanIssueSummary) -> String {
             "unsupported_filesystem",
         ),
         (ScanIssueKind::Unknown, "unknown"),
+        (ScanIssueKind::FastScanUnavailable, "fast_scan_unavailable"),
     ];
     let fields = values
         .iter()

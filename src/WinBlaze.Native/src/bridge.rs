@@ -578,6 +578,7 @@ fn convert_event(event: ScanEvent) -> OwnedEvent {
                 winblaze_core::ScanIssueKind::TransientIo => 13,
                 winblaze_core::ScanIssueKind::UnsupportedFilesystem => 14,
                 winblaze_core::ScanIssueKind::Unknown => 15,
+                winblaze_core::ScanIssueKind::FastScanUnavailable => 16,
             };
             OwnedEvent {
                 event: WbEvent {

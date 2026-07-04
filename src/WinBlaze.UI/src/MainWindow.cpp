@@ -11,6 +11,10 @@ namespace
     constexpr size_t kTreeListVirtualizedWindowLimit = 256;
     constexpr size_t kCatalogSnapshotLoadLimit = 8192;
     constexpr size_t kRecentIssueLimit = 6;
+    // Mirrors winblaze_core::ScanIssueKind::FastScanUnavailable's wire code
+    // (see WinBlaze.Native/src/bridge.rs); the fast NTFS-MFT reader was
+    // unavailable and the scan fell back to the slower directory walk.
+    constexpr uint32_t kFastScanUnavailableIssueCode = 16;
 
     std::wstring FirstTextBlockText(winrt::Windows::Foundation::IInspectable const& value)
     {
@@ -233,6 +237,8 @@ namespace
             return L"Unsupported filesystem";
         case 15:
             return L"Unknown";
+        case 16:
+            return L"Fast scan unavailable";
         default:
             return L"Native error";
         }
@@ -2466,6 +2472,12 @@ namespace winrt::WinBlaze::UI::implementation
                 m_incremental_modified = 0;
                 m_incremental_renamed = 0;
                 m_incremental_moved = 0;
+                m_fast_scan_unavailable = false;
+                m_fast_scan_unavailable_message.clear();
+            }
+            if (pending.fast_scan_unavailable) {
+                m_fast_scan_unavailable = true;
+                m_fast_scan_unavailable_message = pending.fast_scan_unavailable_message;
             }
             m_scan_issue_count += pending.issue_count_delta;
             for (auto const& [code, count] : pending.issue_code_deltas) {
@@ -2672,7 +2684,13 @@ namespace winrt::WinBlaze::UI::implementation
             }
         }
 
-        const std::wstring text =
+        std::wstring text;
+        if (m_fast_scan_unavailable) {
+            text += L"SLOW SCAN MODE: the fast NTFS scan is unavailable, so this scan is "
+                L"running the much slower standard directory walk. Restart WinBlaze as "
+                L"Administrator for full-speed scans. (" + m_fast_scan_unavailable_message + L") | ";
+        }
+        text +=
             L"Correctness: issues=" + std::to_wstring(m_scan_issue_count) +
             L", issue codes=" + issue_breakdown +
             L", incremental added=" + std::to_wstring(m_incremental_added) +
@@ -3467,6 +3485,10 @@ namespace winrt::WinBlaze::UI::implementation
                 ++m_pending_ui_state.issue_code_deltas[static_cast<uint32_t>(event.error.code)];
                 m_pending_ui_state.last_issue_text = last_issue_text;
                 m_pending_ui_state.recent_issue_texts.push_back(last_issue_text);
+                if (static_cast<uint32_t>(event.error.code) == kFastScanUnavailableIssueCode) {
+                    m_pending_ui_state.fast_scan_unavailable = true;
+                    m_pending_ui_state.fast_scan_unavailable_message = last_issue_text;
+                }
             } else if (event.kind == WbEventKind_IncrementalChanges) {
                 m_pending_ui_state.correctness_dirty = true;
                 m_pending_ui_state.incremental_changes_dirty = true;

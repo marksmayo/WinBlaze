@@ -319,6 +319,8 @@ namespace winrt::WinBlaze::UI::implementation
         uint64_t m_scan_issue_count{ 0 };
         std::wstring m_last_scan_issue_text{ L"none" };
         std::vector<std::wstring> m_recent_scan_issues;
+        bool m_fast_scan_unavailable{ false };
+        std::wstring m_fast_scan_unavailable_message;
         std::wstring m_current_root_path{ L"C:\\" };
         std::wstring m_current_selection_name{ L"Root volume" };
         std::wstring m_current_selection_path{ L"C:\\" };
@@ -372,6 +374,8 @@ namespace winrt::WinBlaze::UI::implementation
             std::map<uint32_t, uint64_t> issue_code_deltas;
             std::wstring last_issue_text;
             std::vector<std::wstring> recent_issue_texts;
+            bool fast_scan_unavailable{ false };
+            std::wstring fast_scan_unavailable_message;
             bool incremental_changes_dirty{ false };
             uint64_t incremental_added{ 0 };
             uint64_t incremental_removed{ 0 };
