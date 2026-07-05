@@ -1609,6 +1609,8 @@ namespace winrt::WinBlaze::UI::implementation
         m_tree_visible_rows.clear();
         m_tree_node_index_by_id.clear();
         m_live_orphans.clear();
+        m_live_directory_backlog.clear();
+        m_live_backlog_cursor = 0;
         m_last_live_tree_refresh = {};
         {
             std::lock_guard guard(m_pending_ui_mutex);
@@ -2067,6 +2069,7 @@ namespace winrt::WinBlaze::UI::implementation
             std::vector<TreemapTileLayout> layout;
             std::wstring layout_name;
             size_t directories_recursed = 0;
+            bool needs_deepening = false;
 
             if (TreeArenaActive()) {
                 // Hierarchical squarified layout over the display-tree arena:
@@ -2077,6 +2080,10 @@ namespace winrt::WinBlaze::UI::implementation
                 constexpr size_t kTileBudget = 20000;
                 constexpr float kMinTileDim = 6.0f;
                 constexpr float kRecurseMinDim = 28.0f;
+                // Budget measured in nodes created, not fetch calls: one
+                // directory fetch can populate up to 4096 nodes, so a
+                // call-count budget still allowed multi-second stalls.
+                const size_t node_budget_limit = m_tree_nodes.size() + 2500;
                 const D2D1_COLOR_F folder_fill = D2D1::ColorF(0.15f, 0.18f, 0.22f, 1.0f);
                 const D2D1_COLOR_F folder_frame = D2D1::ColorF(0.05f, 0.06f, 0.08f, 1.0f);
 
@@ -2145,7 +2152,18 @@ namespace winrt::WinBlaze::UI::implementation
                         continue;
                     }
 
-                    EnsureTreeChildrenLoaded(item.node);
+                    // Fetching children mid-paint crosses the FFI and can
+                    // populate thousands of nodes; unbounded it stalls the UI
+                    // thread for seconds on the first post-scan render.
+                    // Budget the fetches and refine over subsequent frames.
+                    if (!m_tree_nodes[item.node].children_loaded) {
+                        if (m_tree_nodes.size() >= node_budget_limit) {
+                            emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth);
+                            needs_deepening = true;
+                            continue;
+                        }
+                        EnsureTreeChildrenLoaded(item.node);
+                    }
                     std::vector<size_t> children;
                     double child_total = 0.0;
                     for (size_t child : m_tree_nodes[item.node].children) {
@@ -2364,18 +2382,21 @@ namespace winrt::WinBlaze::UI::implementation
                 }
             }
 
+            // One brush recolored per tile: creating a COM brush object per
+            // tile stalls the UI thread for seconds at 20k tiles.
+            winrt::com_ptr<ID2D1SolidColorBrush> tile_brush;
+            result = d2d_context->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), tile_brush.put());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap probe frame D2D brush failed: " + HresultText(result);
+                return;
+            }
             for (auto const& tile : tiles) {
-                winrt::com_ptr<ID2D1SolidColorBrush> brush;
-                result = d2d_context->CreateSolidColorBrush(tile.color, brush.put());
-                if (FAILED(result)) {
-                    m_treemap_render_status = L"Treemap probe frame D2D brush failed: " + HresultText(result);
-                    return;
-                }
+                tile_brush->SetColor(tile.color);
                 const auto rect = D2D1::RectF(tile.left, tile.top, tile.right, tile.bottom);
                 if (tile.frame) {
-                    d2d_context->DrawRectangle(rect, brush.get(), 1.0f);
+                    d2d_context->DrawRectangle(rect, tile_brush.get(), 1.0f);
                 } else {
-                    d2d_context->FillRectangle(rect, brush.get());
+                    d2d_context->FillRectangle(rect, tile_brush.get());
                 }
             }
 
@@ -2442,6 +2463,13 @@ namespace winrt::WinBlaze::UI::implementation
                 L", directories=" + std::to_wstring(directories_recursed) +
                 L", labels=" + std::to_wstring(labels_drawn) +
                 L", first tile=\"" + first_tile + L"\".";
+
+            if (needs_deepening) {
+                // The per-frame child-fetch budget ran out; refine the
+                // treemap over the next coalesced render tick.
+                m_treemap_render_dirty = true;
+                ScheduleTreemapRender(L"progressive deepening");
+            }
         }
         catch (winrt::hresult_error const& error) {
             m_treemap_render_status = L"Treemap probe frame failed: " + std::wstring(error.message().c_str());
@@ -2654,14 +2682,29 @@ namespace winrt::WinBlaze::UI::implementation
             m_treemap_render_timer.IsRepeating(false);
             m_treemap_render_timer.Tick([this](auto const&, auto const&) {
                 m_treemap_render_requested = false;
-                ++m_total_treemap_render_flush_count;
                 if (!TreemapSurface()) {
                     return;
                 }
 
+                // While a scan streams events, cap treemap redraws: catalog
+                // flushes mark the map dirty continuously, and re-laying-out
+                // the live arena tens of times per second starves the UI
+                // thread.
+                if (m_session_active) {
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now - m_last_treemap_render_completed_at < std::chrono::milliseconds(750)) {
+                        m_treemap_render_requested = true;
+                        m_treemap_render_timer.Stop();
+                        m_treemap_render_timer.Start();
+                        return;
+                    }
+                }
+                ++m_total_treemap_render_flush_count;
+
                 const int width = (std::max)(1, static_cast<int>(TreemapSurface().ActualWidth()));
                 const int height = (std::max)(1, static_cast<int>(TreemapSurface().ActualHeight()));
                 RenderTreemapProbeFrame(width, height);
+                m_last_treemap_render_completed_at = std::chrono::steady_clock::now();
                 if (TreemapSurfaceStatusText()) {
                     TreemapSurfaceStatusText().Text(winrt::hstring(
                         L"SwapChainPanel host active: " +
@@ -2712,6 +2755,10 @@ namespace winrt::WinBlaze::UI::implementation
         }
 
         if (!has_pending) {
+            if (m_live_backlog_cursor < m_live_directory_backlog.size()) {
+                // No fresh events, but queued live directories remain.
+                ApplyLiveDirectories({});
+            }
             TraceStartup(L"FlushPendingUiState no pending work");
             return;
         }
@@ -2805,7 +2852,7 @@ namespace winrt::WinBlaze::UI::implementation
         }
 
         if (!pending.live_directories.empty()) {
-            ApplyLiveDirectories(pending.live_directories);
+            ApplyLiveDirectories(std::move(pending.live_directories));
         }
 
         if (pending.catalog_dirty && !pending.catalog_entries.empty()) {
@@ -2823,8 +2870,13 @@ namespace winrt::WinBlaze::UI::implementation
                 LoadPersistedCatalogSnapshot();
             }
         } else if (pending.catalog_dirty && !pending.catalog_entries.empty()) {
-            UpdateTreeSnapshotPreview(FilterTreeCatalog());
-            UpdateCatalogSnapshot();
+            // The flat catalog previews are expensive to rebuild and not the
+            // focus during a scan (the live tree owns the pane); they
+            // refresh from the post-scan snapshot reload instead.
+            if (!m_session_active) {
+                UpdateTreeSnapshotPreview(FilterTreeCatalog());
+                UpdateCatalogSnapshot();
+            }
             m_treemap_render_dirty = true;
             ScheduleTreemapRender(L"catalog flush");
         }
@@ -3618,10 +3670,15 @@ namespace winrt::WinBlaze::UI::implementation
         ScheduleTreemapRender(L"snapshot loaded");
         UpdateSummaryText();
         UpdateRuntimeSnapshot();
-        LoadExtensionStatsSnapshot();
         // Replace the flat preview in the tree pane with the real expandable
         // folder tree served by the native tree index (hot cache by now).
         LoadTreeSnapshot();
+        // Extension stats spawn another FFI pass plus a ListView rebuild;
+        // run them on the next dispatcher tick so this apply never blocks
+        // the UI thread for one long stretch.
+        DispatcherQueue().TryEnqueue([this]() {
+            LoadExtensionStatsSnapshot();
+        });
         UpdateStatus(L"Catalog snapshot loaded.");
         TraceStartup(L"ApplyPersistedCatalogSnapshot end");
     }
@@ -4263,6 +4320,8 @@ namespace winrt::WinBlaze::UI::implementation
         m_tree_visible_rows.clear();
         m_tree_node_index_by_id.clear();
         m_live_orphans.clear();
+        m_live_directory_backlog.clear();
+        m_live_backlog_cursor = 0;
         m_tree_window_offset = 0;
 
         ::WinBlaze::UI::NativeBridge::Initialize();
@@ -4300,8 +4359,39 @@ namespace winrt::WinBlaze::UI::implementation
     // out of order, in which case the orphan is skipped here and appears when
     // the finished tree replaces the live one. Sizes stay pending ("...")
     // until the scan completes and rollups exist.
-    void MainWindow::ApplyLiveDirectories(std::vector<LiveDirectory> const& directories)
+    void MainWindow::ApplyLiveDirectories(std::vector<LiveDirectory> directories)
     {
+        // Accumulate into the backlog and apply a bounded chunk per flush: a
+        // fast scan can hand one flush tens of thousands of directories, and
+        // splicing them all at once stalls the UI thread.
+        constexpr size_t kMaxLiveDirectoriesPerFlush = 4096;
+        // Live rows deeper than this are dropped: the live view exists to
+        // show scan progress at the top of the hierarchy, and materializing
+        // every deep directory burns UI-thread time for rows nobody can see
+        // until they expand. The complete tree replaces this at scan end.
+        constexpr uint32_t kMaxLiveDepth = 3;
+        if (m_live_backlog_cursor >= m_live_directory_backlog.size()) {
+            m_live_directory_backlog = std::move(directories);
+            m_live_backlog_cursor = 0;
+        } else if (!directories.empty()) {
+            m_live_directory_backlog.insert(
+                m_live_directory_backlog.end(),
+                std::make_move_iterator(directories.begin()),
+                std::make_move_iterator(directories.end()));
+        }
+        // Consume via cursor: erasing the processed prefix each flush moved
+        // the whole several-hundred-thousand-element tail every 16ms.
+        const size_t chunk_begin = m_live_backlog_cursor;
+        const size_t chunk_end = (std::min)(
+            chunk_begin + kMaxLiveDirectoriesPerFlush, m_live_directory_backlog.size());
+        m_live_backlog_cursor = chunk_end;
+        if (m_live_backlog_cursor >= m_live_directory_backlog.size()) {
+            // Fully consumed; release the storage next assignment.
+        } else {
+            // Keep draining even if no further scan events arrive.
+            ScheduleUiFlush();
+        }
+
         bool structure_changed = false;
 
         // Insert one directory and drain any orphans that were waiting for
@@ -4334,15 +4424,19 @@ namespace winrt::WinBlaze::UI::implementation
 
                 const auto orphan_it = m_live_orphans.find(directory.id);
                 if (orphan_it != m_live_orphans.end()) {
-                    for (auto& orphan : orphan_it->second) {
-                        work.emplace_back(std::move(orphan), node_index);
+                    // Only drain orphans that stay within the live depth cap.
+                    if (m_tree_nodes[node_index].depth + 1 <= kMaxLiveDepth) {
+                        for (auto& orphan : orphan_it->second) {
+                            work.emplace_back(std::move(orphan), node_index);
+                        }
                     }
                     m_live_orphans.erase(orphan_it);
                 }
             }
         };
 
-        for (auto const& directory : directories) {
+        for (size_t backlog_index = chunk_begin; backlog_index < chunk_end; ++backlog_index) {
+            auto& directory = m_live_directory_backlog[backlog_index];
             if (m_tree_node_index_by_id.count(directory.id) != 0) {
                 continue;
             }
@@ -4358,8 +4452,15 @@ namespace winrt::WinBlaze::UI::implementation
             const auto parent_it = m_tree_node_index_by_id.find(directory.parent_id);
             if (parent_it == m_tree_node_index_by_id.end()) {
                 // Parent not seen yet (per-worker event batching reorders
-                // across workers); park it until the parent arrives.
-                m_live_orphans[directory.parent_id].push_back(directory);
+                // across workers) — or it was depth-capped. Park a bounded
+                // number: reordering recovery only matters for the shallow
+                // levels that arrive in the first moments of the scan.
+                if (m_live_orphans.size() < 5000) {
+                    m_live_orphans[directory.parent_id].push_back(std::move(directory));
+                }
+                continue;
+            }
+            if (m_tree_nodes[parent_it->second].depth + 1 > kMaxLiveDepth) {
                 continue;
             }
             insert_with_orphans(directory, parent_it->second);
@@ -4369,11 +4470,13 @@ namespace winrt::WinBlaze::UI::implementation
             return;
         }
 
-        // Directories stream in constantly during a scan; rebuilding the
-        // visible rows and repopulating the ListView on every 16ms flush
-        // would dominate the UI thread, so refresh at most twice a second.
+        // Directories stream in constantly during a scan, and rebuilding the
+        // ListView costs real UI-thread time (hundreds of XAML objects); at
+        // a 500ms cadence the dispatcher never idled and input/automation
+        // starved for the scan's whole duration. Refresh sparsely — the live
+        // view is a progress indicator, not a working surface.
         const auto now = std::chrono::steady_clock::now();
-        if (now - m_last_live_tree_refresh < std::chrono::milliseconds(500)) {
+        if (now - m_last_live_tree_refresh < std::chrono::milliseconds(2000)) {
             return;
         }
         m_last_live_tree_refresh = now;
@@ -4511,8 +4614,11 @@ namespace winrt::WinBlaze::UI::implementation
                 ((rows.size() - 1) / kTreeListVirtualizedWindowLimit) * kTreeListVirtualizedWindowLimit;
         }
 
+        // During a scan the list is a lightweight progress view: render a
+        // small window so each refresh stays cheap on the UI thread.
+        const size_t window_limit = m_session_active ? 64 : kTreeListVirtualizedWindowLimit;
         const auto window_start = (std::min)(m_tree_window_offset, rows.size());
-        const auto window_end = (std::min)(window_start + kTreeListVirtualizedWindowLimit, rows.size());
+        const auto window_end = (std::min)(window_start + window_limit, rows.size());
 
         m_tree_selection_updates_suppressed = true;
         TreeListView().Items().Clear();

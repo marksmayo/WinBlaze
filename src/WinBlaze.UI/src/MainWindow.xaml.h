@@ -191,7 +191,7 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::ListViewItem CreateTreeListItem(TreeCatalogEntry const& entry) const;
         void PopulateTreeList(std::vector<TreeCatalogEntry> const& entries);
         void LoadTreeSnapshot();
-        void ApplyLiveDirectories(std::vector<LiveDirectory> const& directories);
+        void ApplyLiveDirectories(std::vector<LiveDirectory> directories);
         void ApplyPersistedCatalogSnapshot(WbIndexSnapshotStats stats, std::vector<TreeCatalogEntry> snapshot);
         void EnsureTreeChildrenLoaded(size_t node_index);
         void RebuildTreeVisibleRows();
@@ -352,7 +352,12 @@ namespace winrt::WinBlaze::UI::implementation
         // walker's per-worker event batching can deliver children first);
         // keyed by the missing parent id and attached when it shows up.
         std::unordered_map<uint64_t, std::vector<LiveDirectory>> m_live_orphans;
+        // Live directories not yet spliced into the arena: applied in
+        // bounded chunks per UI flush so one flush never stalls the thread.
+        std::vector<LiveDirectory> m_live_directory_backlog;
+        size_t m_live_backlog_cursor{ 0 };
         std::chrono::steady_clock::time_point m_last_live_tree_refresh{};
+        std::chrono::steady_clock::time_point m_last_treemap_render_completed_at{};
         // Discards stale async snapshot loads (a newer scan superseded them).
         std::atomic<uint64_t> m_snapshot_load_generation{ 0 };
         size_t m_tree_window_offset{ 0 };
