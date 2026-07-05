@@ -480,6 +480,16 @@ namespace winrt::WinBlaze::UI::implementation
         menu_row.Spacing(4.0);
         menu_row.Padding(Thickness{ 8.0, 2.0, 8.0, 2.0 });
 
+        // Wordmark, electric-cyan per the Obsidian Flux design system.
+        auto wordmark = TextBlock{};
+        wordmark.Text(L"WinBlaze");
+        wordmark.FontSize(16.0);
+        wordmark.FontWeight({ 700 });
+        wordmark.Foreground(make_brush(theme.chip_active_background));
+        wordmark.VerticalAlignment(VerticalAlignment::Center);
+        wordmark.Margin(Thickness{ 4.0, 0.0, 12.0, 0.0 });
+        menu_row.Children().Append(wordmark);
+
         auto make_menu_button = [&](std::wstring_view title, std::wstring_view automation_name) {
             auto button = Button{};
             button.Content(box_value(winrt::hstring(title)));
@@ -2022,7 +2032,7 @@ namespace winrt::WinBlaze::UI::implementation
 
             d2d_context->SetTarget(target_bitmap.get());
             d2d_context->BeginDraw();
-            d2d_context->Clear(D2D1::ColorF(0.04f, 0.10f, 0.14f, 1.0f));
+            d2d_context->Clear(D2D1::ColorF(0.051f, 0.082f, 0.082f, 1.0f)); // #0d1515 surface
 
             winrt::com_ptr<IDWriteFactory> dwrite_factory;
             result = ::DWriteCreateFactory(
@@ -2084,8 +2094,8 @@ namespace winrt::WinBlaze::UI::implementation
                 // directory fetch can populate up to 4096 nodes, so a
                 // call-count budget still allowed multi-second stalls.
                 const size_t node_budget_limit = m_tree_nodes.size() + 2500;
-                const D2D1_COLOR_F folder_fill = D2D1::ColorF(0.15f, 0.18f, 0.22f, 1.0f);
-                const D2D1_COLOR_F folder_frame = D2D1::ColorF(0.05f, 0.06f, 0.08f, 1.0f);
+                const D2D1_COLOR_F folder_fill = D2D1::ColorF(0.098f, 0.129f, 0.133f, 1.0f);  // #192122
+                const D2D1_COLOR_F folder_frame = D2D1::ColorF(0.031f, 0.059f, 0.063f, 1.0f); // #080f10
 
                 auto to_d2d_color = [](winrt::Windows::UI::Color const& color) {
                     return D2D1::ColorF(
@@ -2617,13 +2627,23 @@ namespace winrt::WinBlaze::UI::implementation
         panel.BorderThickness(UniformThickness(1.0));
     }
 
+    // Card titles follow the Obsidian Flux label style: small uppercase
+    // monospace with wide tracking (the "ROOT DIRECTORIES" look from the
+    // Storage Pulse mockups).
     Microsoft::UI::Xaml::Controls::TextBlock MainWindow::MakeCardTitle(std::wstring_view text) const
     {
         auto const& theme = ActiveShellTheme();
+        std::wstring upper(text);
+        for (auto& ch : upper) {
+            ch = static_cast<wchar_t>(std::towupper(ch));
+        }
         auto title = Microsoft::UI::Xaml::Controls::TextBlock{};
-        title.Text(winrt::hstring(text));
-        title.FontSize(theme.card_title_size);
-        title.Foreground(MakeBrush(theme.text_primary));
+        title.Text(winrt::hstring(upper));
+        title.FontSize(11.0);
+        title.FontWeight({ 700 });
+        title.CharacterSpacing(180);
+        title.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+        title.Foreground(MakeBrush(theme.text_secondary));
         return title;
     }
 
