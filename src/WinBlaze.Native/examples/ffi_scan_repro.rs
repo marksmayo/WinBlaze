@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -8,6 +9,15 @@ use winblaze_native::bridge::{
     wb_scan_session_destroy, wb_scan_session_start, wb_tree_children, wb_tree_root,
 };
 
+static SCAN_STARTED: OnceLock<Instant> = OnceLock::new();
+
+fn elapsed_ms() -> u64 {
+    SCAN_STARTED
+        .get()
+        .map(|started| started.elapsed().as_millis() as u64)
+        .unwrap_or(0)
+}
+
 #[derive(Default)]
 struct Counters {
     files: AtomicU64,
@@ -15,6 +25,10 @@ struct Counters {
     progress_events: AtomicU64,
     completed: AtomicU64,
     last_items_done: AtomicU64,
+    // Phase timing (ms from scan start): Summary marks producer+persist-at-
+    // summary done; Completed marks the full native drain done.
+    summary_ms: AtomicU64,
+    completed_ms: AtomicU64,
 }
 
 extern "C" fn on_event(event: *const WbEvent, user_data: *mut c_void) {
@@ -36,7 +50,11 @@ extern "C" fn on_event(event: *const WbEvent, user_data: *mut c_void) {
                 .last_items_done
                 .store(event.progress_items_done, Ordering::Relaxed);
         }
+        WbEventKind::Summary => {
+            counters.summary_ms.store(elapsed_ms(), Ordering::Relaxed);
+        }
         WbEventKind::Completed => {
+            counters.completed_ms.store(elapsed_ms(), Ordering::Relaxed);
             counters.completed.store(1, Ordering::Relaxed);
         }
         _ => {}
@@ -54,6 +72,7 @@ fn main() {
     };
 
     let started = Instant::now();
+    let _ = SCAN_STARTED.set(started);
     let handle = wb_scan_session_start(view, Some(on_event), counters_ptr as *mut c_void);
 
     loop {
@@ -78,8 +97,10 @@ fn main() {
 
     let counters = unsafe { &*counters_ptr };
     println!(
-        "{{\"elapsed_ms\":{},\"files\":{},\"directories\":{},\"progress_events\":{},\"completed\":{}}}",
+        "{{\"elapsed_ms\":{},\"summary_ms\":{},\"completed_ms\":{},\"files\":{},\"directories\":{},\"progress_events\":{},\"completed\":{}}}",
         started.elapsed().as_millis(),
+        counters.summary_ms.load(Ordering::Relaxed),
+        counters.completed_ms.load(Ordering::Relaxed),
         counters.files.load(Ordering::Relaxed),
         counters.directories.load(Ordering::Relaxed),
         counters.progress_events.load(Ordering::Relaxed),

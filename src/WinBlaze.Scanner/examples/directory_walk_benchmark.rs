@@ -21,6 +21,11 @@ struct EventCounts {
     summary_directories: u64,
     summary_bytes: u64,
     issue_summary: ScanIssueSummary,
+    // Phase timing: first event received, Summary seen (producer done),
+    // Completed seen (consumer done). Milliseconds from scan start.
+    first_event_ms: Option<u128>,
+    summary_ms: Option<u128>,
+    completed_ms: Option<u128>,
 }
 
 fn main() {
@@ -42,6 +47,9 @@ fn main() {
 
     let mut counts = EventCounts::default();
     for event in rx {
+        if counts.first_event_ms.is_none() {
+            counts.first_event_ms = Some(started.elapsed().as_millis());
+        }
         match event {
             ScanEvent::DirectoryFound(_) => counts.directories += 1,
             ScanEvent::FileFound(_) => counts.files += 1,
@@ -54,9 +62,11 @@ fn main() {
                 counts.summary_files = summary.files_seen;
                 counts.summary_directories = summary.directories_seen;
                 counts.summary_bytes = summary.total_size_bytes;
+                counts.summary_ms = Some(started.elapsed().as_millis());
             }
             ScanEvent::Completed => {
                 counts.completed = true;
+                counts.completed_ms = Some(started.elapsed().as_millis());
                 break;
             }
             ScanEvent::Cancelled => {
@@ -75,9 +85,12 @@ fn main() {
 
     let elapsed = started.elapsed();
     println!(
-        "{{\"root\":\"{}\",\"elapsed_ms\":{},\"files\":{},\"directories\":{},\"summary_files\":{},\"summary_directories\":{},\"summary_bytes\":{},\"progress_events\":{},\"issues\":{},\"issues_by_kind\":{},\"recent_issues\":{},\"completed\":{},\"cancelled\":{},\"failed\":{},\"failure_message\":\"{}\",\"files_per_second\":{}}}",
+        "{{\"root\":\"{}\",\"elapsed_ms\":{},\"first_event_ms\":{},\"summary_ms\":{},\"completed_ms\":{},\"files\":{},\"directories\":{},\"summary_files\":{},\"summary_directories\":{},\"summary_bytes\":{},\"progress_events\":{},\"issues\":{},\"issues_by_kind\":{},\"recent_issues\":{},\"completed\":{},\"cancelled\":{},\"failed\":{},\"failure_message\":\"{}\",\"files_per_second\":{}}}",
         json_escape(&root.display().to_string()),
         millis(elapsed),
+        counts.first_event_ms.unwrap_or(0),
+        counts.summary_ms.unwrap_or(0),
+        counts.completed_ms.unwrap_or(0),
         counts.files,
         counts.directories,
         counts.summary_files,

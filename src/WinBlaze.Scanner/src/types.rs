@@ -45,10 +45,12 @@ impl ScanRuntimeConfig {
     }
 
     pub fn backend_hint(&self) -> ScanBackend {
-        if self.root_path.as_os_str().is_empty() {
-            self.backend
-        } else {
-            select_scan_backend(&self.root_path)
+        // An explicit DirectoryWalk request always wins; auto-selection only
+        // upgrades the default NtfsMft preference for paths that support it.
+        match self.backend {
+            ScanBackend::DirectoryWalk => ScanBackend::DirectoryWalk,
+            ScanBackend::NtfsMft if self.root_path.as_os_str().is_empty() => ScanBackend::NtfsMft,
+            ScanBackend::NtfsMft => select_scan_backend(&self.root_path),
         }
     }
 
@@ -58,5 +60,30 @@ impl ScanRuntimeConfig {
 
     pub fn follows_reparse_points(&self) -> bool {
         !matches!(self.reparse_policy, ReparseTraversalPolicy::SkipAll)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backend_hint_honors_explicit_directory_walk_for_volume_roots() {
+        let config = ScanRuntimeConfig {
+            backend: ScanBackend::DirectoryWalk,
+            root_path: PathBuf::from(r"C:\"),
+            ..ScanRuntimeConfig::default()
+        };
+        assert_eq!(config.backend_hint(), ScanBackend::DirectoryWalk);
+    }
+
+    #[test]
+    fn backend_hint_auto_selects_for_default_mft_preference() {
+        let config = ScanRuntimeConfig {
+            backend: ScanBackend::NtfsMft,
+            root_path: PathBuf::from(r"C:\Users"),
+            ..ScanRuntimeConfig::default()
+        };
+        assert_eq!(config.backend_hint(), ScanBackend::DirectoryWalk);
     }
 }
