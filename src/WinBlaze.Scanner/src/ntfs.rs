@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, Read, Seek, SeekFrom};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{FromRawHandle, RawHandle};
 use std::path::Path;
@@ -19,6 +19,7 @@ const FILE_RECORD_SIGNATURE: &[u8; 4] = b"FILE";
 const NTFS_RECORD_SIZE: usize = 1024;
 const ATTRIBUTE_FILE_NAME: u32 = 0x30;
 const ATTRIBUTE_DATA: u32 = 0x80;
+const FILE_RECORD_FLAG_IN_USE: u16 = 0x0001;
 const FILE_RECORD_FLAG_DIRECTORY: u16 = 0x0002;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,8 +43,10 @@ impl From<io::Error> for NtfsEnumerationError {
 }
 
 pub fn enumerate_ntfs_volume(root: &Path) -> Result<NtfsEnumeration, NtfsEnumerationError> {
+    let mut stream = open_mft_stream(root)?;
     let mut mft_bytes = Vec::new();
-    open_ntfs_metadata_file(root, "$MFT")?.read_to_end(&mut mft_bytes)?;
+    stream.read_to_end(&mut mft_bytes)?;
+    apply_mft_fixups(&mut mft_bytes, stream.bytes_per_sector as usize);
     parse_mft_records(root, &mft_bytes)
 }
 
@@ -51,8 +54,10 @@ pub fn enumerate_ntfs_volume_parallel(
     root: &Path,
     worker_count: usize,
 ) -> Result<NtfsEnumeration, NtfsEnumerationError> {
+    let mut stream = open_mft_stream(root)?;
     let mut mft_bytes = Vec::new();
-    open_ntfs_metadata_file(root, "$MFT")?.read_to_end(&mut mft_bytes)?;
+    stream.read_to_end(&mut mft_bytes)?;
+    apply_mft_fixups(&mut mft_bytes, stream.bytes_per_sector as usize);
     parse_mft_records_parallel(root, &mft_bytes, worker_count)
 }
 
@@ -90,12 +95,9 @@ fn stream_ntfs_entries(
     worker_count: usize,
     on_event: &mut dyn FnMut(ScanEvent),
 ) -> Result<HashMap<u64, ParsedNtfsEntry>, NtfsEnumerationError> {
-    let mut file = open_ntfs_metadata_file(root, "$MFT")?;
-    let total_records = file
-        .metadata()
-        .ok()
-        .map(|metadata| (metadata.len() / NTFS_RECORD_SIZE as u64).max(1))
-        .unwrap_or(1);
+    let mut file = open_mft_stream(root)?;
+    let bytes_per_sector = file.bytes_per_sector as usize;
+    let total_records = (file.total_bytes / NTFS_RECORD_SIZE as u64).max(1);
     let workers = worker_count.max(1);
     let records_per_read = workers.saturating_mul(1024).clamp(1024, 65_536);
     let mut buffer = vec![0u8; NTFS_RECORD_SIZE * records_per_read];
@@ -104,6 +106,7 @@ fn stream_ntfs_entries(
     let mut resolved_paths: HashMap<u64, String> = HashMap::new();
     let mut emitted: HashSet<u64> = HashSet::new();
     let mut pending: Vec<u64> = Vec::new();
+    let mut pending_extensions: HashMap<u64, ExtensionSizes> = HashMap::new();
     let mut processed_records = 0u64;
     let root_text = root.display().to_string();
 
@@ -117,14 +120,40 @@ fn stream_ntfs_entries(
         let full_records = carry.len() / NTFS_RECORD_SIZE;
         let full_bytes = full_records * NTFS_RECORD_SIZE;
 
-        let parsed = parse_batch(&carry[..full_bytes], full_records, workers)?;
+        // Restore the sector-tail bytes the on-disk update sequence array
+        // displaced; raw MFT data is unusable without this.
+        apply_mft_fixups(&mut carry[..full_bytes], bytes_per_sector);
+        let (parsed, extensions) = parse_batch(&carry[..full_bytes], full_records, workers)?;
         processed_records = processed_records.saturating_add(full_records as u64);
 
         let mut parsed_ids = Vec::with_capacity(parsed.len());
-        for entry in parsed {
+        for mut entry in parsed {
             let file_id = entry.file_id.0;
+            if let Some(sizes) = pending_extensions.remove(&file_id) {
+                entry.size_bytes = entry.size_bytes.max(sizes.size_bytes);
+                entry.allocation_bytes = entry.allocation_bytes.max(sizes.allocation_bytes);
+            }
             entries.insert(file_id, entry);
             parsed_ids.push(file_id);
+        }
+
+        // Merge sizes carried by extension records into their base entries;
+        // if the base was already emitted, re-emit it so downstream
+        // consumers upsert the corrected sizes.
+        for extension in extensions {
+            match entries.get_mut(&extension.base_record) {
+                Some(entry) => {
+                    entry.size_bytes = entry.size_bytes.max(extension.size_bytes);
+                    entry.allocation_bytes =
+                        entry.allocation_bytes.max(extension.allocation_bytes);
+                    if emitted.remove(&extension.base_record) {
+                        parsed_ids.push(extension.base_record);
+                    }
+                }
+                None => {
+                    pending_extensions.insert(extension.base_record, extension);
+                }
+            }
         }
 
         carry.drain(..full_bytes);
@@ -167,7 +196,7 @@ fn parse_batch(
     batch: &[u8],
     record_count: usize,
     workers: usize,
-) -> Result<Vec<ParsedNtfsEntry>, NtfsEnumerationError> {
+) -> Result<(Vec<ParsedNtfsEntry>, Vec<ExtensionSizes>), NtfsEnumerationError> {
     if workers <= 1 || record_count < 2048 {
         return parse_record_range(batch, 0, record_count);
     }
@@ -185,9 +214,13 @@ fn parse_batch(
         }
 
         let mut parsed = Vec::new();
+        let mut extensions = Vec::new();
         for handle in handles {
             match handle.join() {
-                Ok(Ok(chunk)) => parsed.extend(chunk),
+                Ok(Ok((chunk_entries, chunk_extensions))) => {
+                    parsed.extend(chunk_entries);
+                    extensions.extend(chunk_extensions);
+                }
                 Ok(Err(error)) => return Err(error),
                 Err(_) => {
                     return Err(NtfsEnumerationError::InvalidRecord(String::from(
@@ -196,7 +229,7 @@ fn parse_batch(
                 }
             }
         }
-        Ok(parsed)
+        Ok((parsed, extensions))
     })
 }
 
@@ -227,6 +260,425 @@ fn summarize_entries(entries: &HashMap<u64, ParsedNtfsEntry>) -> ScanSummary {
         directories_seen,
         total_size_bytes,
         total_allocation_bytes,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Raw-volume MFT access.
+//
+// NTFS refuses to open metadata files like $MFT through the filesystem
+// namespace — for every caller, elevated or not, backup privilege or not —
+// so the only way to read the MFT is the volume itself: open \\.\C:, read
+// the boot sector for geometry, read the MFT's own record (record 0) to get
+// its $DATA runlist, then read those extents directly. Requires Administrator
+// (volume handles are ACL'd), which is exactly the "fast scan" contract.
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+struct MftGeometry {
+    bytes_per_sector: u16,
+    bytes_per_cluster: u64,
+    mft_start_offset: u64,
+    record_size: u32,
+}
+
+/// Reader over the MFT's extents on a raw volume handle. Buffers internally
+/// in sector-aligned chunks because direct volume access requires aligned
+/// offsets and lengths, while callers read in arbitrary sizes.
+pub struct VolumeMftReader {
+    volume: File,
+    /// (byte offset on the volume, byte length), cluster-aligned by
+    /// construction.
+    extents: Vec<(u64, u64)>,
+    extent_index: usize,
+    consumed_in_extent: u64,
+    chunk: Vec<u8>,
+    chunk_pos: usize,
+    chunk_len: usize,
+}
+
+const VOLUME_READ_CHUNK: usize = 4 * 1024 * 1024;
+
+impl VolumeMftReader {
+    fn total_bytes(&self) -> u64 {
+        self.extents.iter().map(|extent| extent.1).sum()
+    }
+
+    fn fill_chunk(&mut self) -> io::Result<()> {
+        while self.extent_index < self.extents.len() {
+            let (start, length) = self.extents[self.extent_index];
+            let remaining = length - self.consumed_in_extent;
+            if remaining == 0 {
+                self.extent_index += 1;
+                self.consumed_in_extent = 0;
+                continue;
+            }
+
+            // Chunk size and consumed offset are both sector multiples, so
+            // the volume read below stays aligned.
+            let to_read = remaining.min(VOLUME_READ_CHUNK as u64) as usize;
+            self.volume
+                .seek(SeekFrom::Start(start + self.consumed_in_extent))?;
+            self.chunk.resize(to_read, 0);
+            self.volume.read_exact(&mut self.chunk[..to_read])?;
+            self.consumed_in_extent += to_read as u64;
+            self.chunk_pos = 0;
+            self.chunk_len = to_read;
+            return Ok(());
+        }
+        self.chunk_pos = 0;
+        self.chunk_len = 0;
+        Ok(())
+    }
+}
+
+impl Read for VolumeMftReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.chunk_pos >= self.chunk_len {
+            self.fill_chunk()?;
+            if self.chunk_len == 0 {
+                return Ok(0);
+            }
+        }
+        let available = self.chunk_len - self.chunk_pos;
+        let count = available.min(buf.len());
+        buf[..count].copy_from_slice(&self.chunk[self.chunk_pos..self.chunk_pos + count]);
+        self.chunk_pos += count;
+        Ok(count)
+    }
+}
+
+/// The MFT byte stream plus the metadata batch-processing needs.
+pub struct MftStream {
+    reader: Box<dyn Read + Send>,
+    pub bytes_per_sector: u16,
+    pub total_bytes: u64,
+}
+
+impl Read for MftStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.reader.read(buf)
+    }
+}
+
+fn open_volume_handle(root: &Path) -> io::Result<File> {
+    let root_text = root.display().to_string();
+    let drive = root_text
+        .chars()
+        .next()
+        .filter(|ch| ch.is_ascii_alphabetic())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("scan root {root_text} is not a drive root"),
+            )
+        })?;
+    if root_text.len() > 3 || root_text.chars().nth(1) != Some(':') {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("MFT fast path requires a drive root, got {root_text}"),
+        ));
+    }
+
+    let volume_path = format!(r"\\.\{drive}:");
+    let wide_path: Vec<u16> = volume_path
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let handle = unsafe {
+        CreateFileW(
+            wide_path.as_ptr(),
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            null_mut(),
+            OPEN_EXISTING,
+            FILE_FLAG_SEQUENTIAL_SCAN,
+            null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(unsafe { File::from_raw_handle(handle as RawHandle) })
+}
+
+fn read_volume_geometry(volume: &mut File) -> io::Result<MftGeometry> {
+    let mut boot = [0u8; 512];
+    volume.seek(SeekFrom::Start(0))?;
+    volume.read_exact(&mut boot)?;
+
+    if &boot[3..7] != b"NTFS" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "volume is not NTFS",
+        ));
+    }
+
+    let bytes_per_sector = u16::from_le_bytes([boot[11], boot[12]]);
+    let sectors_per_cluster = boot[13] as u64;
+    let mft_lcn = u64::from_le_bytes(boot[48..56].try_into().unwrap());
+    let clusters_per_record = boot[64] as i8;
+
+    if bytes_per_sector == 0 || sectors_per_cluster == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid NTFS boot sector geometry",
+        ));
+    }
+
+    let bytes_per_cluster = bytes_per_sector as u64 * sectors_per_cluster;
+    let record_size = if clusters_per_record > 0 {
+        clusters_per_record as u32 * bytes_per_cluster as u32
+    } else {
+        1u32 << (-(clusters_per_record as i32))
+    };
+
+    Ok(MftGeometry {
+        bytes_per_sector,
+        bytes_per_cluster,
+        mft_start_offset: mft_lcn * bytes_per_cluster,
+        record_size,
+    })
+}
+
+/// Decodes an NTFS data-run list into (volume byte offset, byte length)
+/// extents. Sparse runs (offset size 0) are invalid for the MFT.
+fn decode_data_runs(runs: &[u8], bytes_per_cluster: u64) -> io::Result<Vec<(u64, u64)>> {
+    let mut extents = Vec::new();
+    let mut cursor = 0usize;
+    let mut current_lcn: i64 = 0;
+
+    while cursor < runs.len() {
+        let header = runs[cursor];
+        if header == 0 {
+            break;
+        }
+        cursor += 1;
+        let length_size = (header & 0x0F) as usize;
+        let offset_size = (header >> 4) as usize;
+        if length_size == 0 || length_size > 8 || offset_size > 8 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid data run header",
+            ));
+        }
+        if cursor + length_size + offset_size > runs.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "truncated data run",
+            ));
+        }
+
+        let mut run_length = 0u64;
+        for i in 0..length_size {
+            run_length |= (runs[cursor + i] as u64) << (8 * i);
+        }
+        cursor += length_size;
+
+        if offset_size == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "sparse run in MFT data attribute",
+            ));
+        }
+        let mut offset_delta = 0i64;
+        for i in 0..offset_size {
+            offset_delta |= (runs[cursor + i] as i64) << (8 * i);
+        }
+        // Sign-extend the offset delta.
+        let shift = 64 - 8 * offset_size;
+        offset_delta = (offset_delta << shift) >> shift;
+        cursor += offset_size;
+
+        current_lcn += offset_delta;
+        if current_lcn < 0 || run_length == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "data run points before volume start",
+            ));
+        }
+        extents.push((
+            current_lcn as u64 * bytes_per_cluster,
+            run_length * bytes_per_cluster,
+        ));
+    }
+
+    if extents.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "MFT data attribute has no runs",
+        ));
+    }
+    Ok(extents)
+}
+
+/// Reads the MFT's own file record (record 0) and extracts the $DATA
+/// runlist. A heavily fragmented MFT whose runs spill into an attribute
+/// list is not supported and falls back to the directory walk.
+fn read_mft_extents(volume: &mut File, geometry: &MftGeometry) -> io::Result<Vec<(u64, u64)>> {
+    // Read a full cluster (aligned) which contains record 0 at its start.
+    let read_len = (geometry.record_size as u64)
+        .max(geometry.bytes_per_cluster)
+        .max(geometry.bytes_per_sector as u64) as usize;
+    let mut record = vec![0u8; read_len];
+    volume.seek(SeekFrom::Start(geometry.mft_start_offset))?;
+    volume.read_exact(&mut record)?;
+    record.truncate(geometry.record_size as usize);
+
+    if &record[0..4] != FILE_RECORD_SIGNATURE {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "MFT record 0 has no FILE signature",
+        ));
+    }
+    if !apply_record_fixups(&mut record, geometry.bytes_per_sector as usize) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "MFT record 0 fixup mismatch",
+        ));
+    }
+
+    let first_attribute = u16::from_le_bytes([record[20], record[21]]) as usize;
+    let mut cursor = first_attribute;
+    while cursor + 8 <= record.len() {
+        let attribute_type = u32::from_le_bytes(record[cursor..cursor + 4].try_into().unwrap());
+        if attribute_type == u32::MAX {
+            break;
+        }
+        let attribute_length =
+            u32::from_le_bytes(record[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
+        if attribute_length == 0 || cursor + attribute_length > record.len() {
+            break;
+        }
+        let non_resident = record.get(cursor + 8).copied().unwrap_or(0);
+        if attribute_type == ATTRIBUTE_DATA {
+            if non_resident == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "MFT $DATA attribute unexpectedly resident",
+                ));
+            }
+            let run_offset =
+                u16::from_le_bytes([record[cursor + 32], record[cursor + 33]]) as usize;
+            if run_offset >= attribute_length {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "MFT $DATA run offset out of bounds",
+                ));
+            }
+            let runs = &record[cursor + run_offset..cursor + attribute_length];
+            return decode_data_runs(runs, geometry.bytes_per_cluster);
+        }
+        cursor += attribute_length;
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        "MFT record 0 has no non-resident $DATA attribute",
+    ))
+}
+
+/// Applies the NTFS Update Sequence Array fixups to one file record: the
+/// last two bytes of every sector are replaced on disk by the update
+/// sequence number and must be restored from the USA before parsing.
+/// Returns false when the check bytes don't match (torn/invalid record).
+fn apply_record_fixups(record: &mut [u8], bytes_per_sector: usize) -> bool {
+    if record.len() < 8 || bytes_per_sector < 2 {
+        return false;
+    }
+    let usa_offset = u16::from_le_bytes([record[4], record[5]]) as usize;
+    let usa_count = u16::from_le_bytes([record[6], record[7]]) as usize;
+    if usa_count < 2 || usa_offset + usa_count * 2 > record.len() {
+        return false;
+    }
+    let usn = [record[usa_offset], record[usa_offset + 1]];
+    for index in 1..usa_count {
+        let sector_end = index * bytes_per_sector;
+        if sector_end > record.len() {
+            return false;
+        }
+        if record[sector_end - 2..sector_end] != usn {
+            return false;
+        }
+        let fix = [
+            record[usa_offset + index * 2],
+            record[usa_offset + index * 2 + 1],
+        ];
+        record[sector_end - 2] = fix[0];
+        record[sector_end - 1] = fix[1];
+    }
+    true
+}
+
+/// Applies fixups across a buffer of whole file records. Records whose
+/// check bytes don't match get their signature cleared so parsing skips
+/// them instead of reading torn data.
+pub(crate) fn apply_mft_fixups(batch: &mut [u8], bytes_per_sector: usize) {
+    let mut offset = 0usize;
+    while offset + NTFS_RECORD_SIZE <= batch.len() {
+        let record = &mut batch[offset..offset + NTFS_RECORD_SIZE];
+        if &record[0..4] == FILE_RECORD_SIGNATURE
+            && !apply_record_fixups(record, bytes_per_sector)
+        {
+            record[0..4].copy_from_slice(b"BAAD");
+        }
+        offset += NTFS_RECORD_SIZE;
+    }
+}
+
+/// Opens the MFT byte stream: raw volume access first (the only method that
+/// works on modern Windows; requires Administrator), then the legacy
+/// metadata-file open as a fallback.
+fn open_mft_stream(root: &Path) -> Result<MftStream, NtfsEnumerationError> {
+    let volume_error = match open_volume_handle(root) {
+        Ok(mut volume) => match read_volume_geometry(&mut volume) {
+            Ok(geometry) => {
+                if geometry.record_size as usize != NTFS_RECORD_SIZE {
+                    io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        format!(
+                            "unsupported MFT record size {} (expected {NTFS_RECORD_SIZE})",
+                            geometry.record_size
+                        ),
+                    )
+                } else {
+                    match read_mft_extents(&mut volume, &geometry) {
+                        Ok(extents) => {
+                            let reader = VolumeMftReader {
+                                volume,
+                                extents,
+                                extent_index: 0,
+                                consumed_in_extent: 0,
+                                chunk: Vec::new(),
+                                chunk_pos: 0,
+                                chunk_len: 0,
+                            };
+                            let total_bytes = reader.total_bytes();
+                            return Ok(MftStream {
+                                bytes_per_sector: geometry.bytes_per_sector,
+                                total_bytes,
+                                reader: Box::new(reader),
+                            });
+                        }
+                        Err(error) => error,
+                    }
+                }
+            }
+            Err(error) => error,
+        },
+        Err(error) => error,
+    };
+
+    match open_ntfs_metadata_file(root, "$MFT") {
+        Ok(file) => {
+            let total_bytes = file.metadata().map(|metadata| metadata.len()).unwrap_or(0);
+            Ok(MftStream {
+                bytes_per_sector: 512,
+                total_bytes,
+                reader: Box::new(file),
+            })
+        }
+        Err(_) => Err(NtfsEnumerationError::Io(volume_error)),
     }
 }
 
@@ -386,12 +838,14 @@ where
         }
 
         let mut entries: HashMap<u64, ParsedNtfsEntry> = HashMap::new();
+        let mut extensions: Vec<ExtensionSizes> = Vec::new();
         for handle in handles {
             match handle.join() {
-                Ok(Ok(chunk_entries)) => {
+                Ok(Ok((chunk_entries, chunk_extensions))) => {
                     for entry in chunk_entries {
                         entries.insert(entry.file_id.0, entry);
                     }
+                    extensions.extend(chunk_extensions);
                 }
                 Ok(Err(error)) => return Err(error),
                 Err(_) => {
@@ -401,6 +855,7 @@ where
                 }
             }
         }
+        apply_extension_sizes(&mut entries, extensions);
         Ok(entries)
     })?;
 
@@ -426,26 +881,46 @@ fn parse_mft_records_sequential_streaming(
     }
 
     let mut entries: HashMap<u64, ParsedNtfsEntry> = HashMap::new();
+    let mut extensions: Vec<ExtensionSizes> = Vec::new();
 
     for record in bytes.chunks(NTFS_RECORD_SIZE) {
         if record.len() < NTFS_RECORD_SIZE || &record[0..4] != FILE_RECORD_SIGNATURE {
             continue;
         }
 
-        if let Some(entry) = parse_record(record)? {
-            entries.insert(entry.file_id.0, entry);
+        match parse_record(record)? {
+            ParsedRecordOutcome::Entry(entry) => {
+                entries.insert(entry.file_id.0, entry);
+            }
+            ParsedRecordOutcome::Extension(extension) => extensions.push(extension),
+            ParsedRecordOutcome::None => {}
         }
     }
 
+    apply_extension_sizes(&mut entries, extensions);
     parse_entries(root, entries, on_event)
+}
+
+/// Folds sizes carried by extension records into their base entries.
+fn apply_extension_sizes(
+    entries: &mut HashMap<u64, ParsedNtfsEntry>,
+    extensions: Vec<ExtensionSizes>,
+) {
+    for extension in extensions {
+        if let Some(entry) = entries.get_mut(&extension.base_record) {
+            entry.size_bytes = entry.size_bytes.max(extension.size_bytes);
+            entry.allocation_bytes = entry.allocation_bytes.max(extension.allocation_bytes);
+        }
+    }
 }
 
 fn parse_record_range(
     shared: &[u8],
     start_record: usize,
     end_record: usize,
-) -> Result<Vec<ParsedNtfsEntry>, NtfsEnumerationError> {
+) -> Result<(Vec<ParsedNtfsEntry>, Vec<ExtensionSizes>), NtfsEnumerationError> {
     let mut entries = Vec::new();
+    let mut extensions = Vec::new();
     for index in start_record..end_record {
         let start = index * NTFS_RECORD_SIZE;
         let end = start + NTFS_RECORD_SIZE;
@@ -454,12 +929,14 @@ fn parse_record_range(
             continue;
         }
 
-        if let Some(entry) = parse_record(record)? {
-            entries.push(entry);
+        match parse_record(record)? {
+            ParsedRecordOutcome::Entry(entry) => entries.push(entry),
+            ParsedRecordOutcome::Extension(extension) => extensions.push(extension),
+            ParsedRecordOutcome::None => {}
         }
     }
 
-    Ok(entries)
+    Ok((entries, extensions))
 }
 
 fn parse_entries(
@@ -716,13 +1193,36 @@ struct ParsedNtfsEntry {
     accessed_utc: Option<i64>,
 }
 
-fn parse_record(record: &[u8]) -> Result<Option<ParsedNtfsEntry>, NtfsEnumerationError> {
+/// Sizes found in an extension record (a record whose base reference points
+/// at another record): heavily attributed files move their unnamed $DATA out
+/// of the base record via $ATTRIBUTE_LIST, so the authoritative sizes live
+/// here and must be merged into the base entry.
+#[derive(Clone, Copy, Debug)]
+struct ExtensionSizes {
+    base_record: u64,
+    size_bytes: u64,
+    allocation_bytes: u64,
+}
+
+enum ParsedRecordOutcome {
+    None,
+    Entry(ParsedNtfsEntry),
+    Extension(ExtensionSizes),
+}
+
+fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationError> {
     if record.len() < NTFS_RECORD_SIZE || &record[0..4] != FILE_RECORD_SIGNATURE {
-        return Ok(None);
+        return Ok(ParsedRecordOutcome::None);
     }
 
     let file_index = read_u32(record, 0x2C)? as u64;
     let flags = read_u16(record, 0x16)?;
+    // The MFT retains records of deleted files for slot reuse; they still
+    // carry the FILE signature but must not be counted.
+    if flags & FILE_RECORD_FLAG_IN_USE == 0 {
+        return Ok(ParsedRecordOutcome::None);
+    }
+    let base_record = read_u64(record, 0x20)? & 0x0000_FFFF_FFFF_FFFF;
     let is_directory = flags & FILE_RECORD_FLAG_DIRECTORY != 0;
     let first_attr_offset = read_u16(record, 0x14)? as usize;
     let mut cursor = first_attr_offset;
@@ -742,6 +1242,10 @@ fn parse_record(record: &[u8]) -> Result<Option<ParsedNtfsEntry>, NtfsEnumeratio
         }
 
         let non_resident = record[cursor + 8];
+        // Named $DATA streams (alternate data streams, and metadata streams
+        // like $BadClus:$Bad whose sparse size spans the whole volume) must
+        // not count toward file size; only the unnamed default stream does.
+        let attribute_name_length = record[cursor + 9];
         match attribute_type {
             ATTRIBUTE_FILE_NAME if non_resident == 0 => {
                 let value_offset = read_u16(record, cursor + 20)? as usize;
@@ -751,31 +1255,51 @@ fn parse_record(record: &[u8]) -> Result<Option<ParsedNtfsEntry>, NtfsEnumeratio
                         &record[cursor + value_offset..cursor + value_offset + value_length],
                     ) {
                         Ok(name) => file_name = Some(name),
-                        Err(_) => return Ok(None),
+                        Err(_) => return Ok(ParsedRecordOutcome::None),
                     }
                 }
             }
-            ATTRIBUTE_DATA if non_resident == 0 => {
+            ATTRIBUTE_DATA if non_resident == 0 && attribute_name_length == 0 => {
                 size_bytes = read_u32(record, cursor + 16)? as u64;
                 allocation_bytes = size_bytes;
             }
-            ATTRIBUTE_DATA if non_resident != 0 => {
-                allocation_bytes = read_u64(record, cursor + 40)?;
-                size_bytes = read_u64(record, cursor + 48)?;
+            ATTRIBUTE_DATA if non_resident != 0 && attribute_name_length == 0 => {
+                // Allocated/real sizes are only valid on the fragment whose
+                // starting VCN is zero.
+                if read_u64(record, cursor + 16)? == 0 {
+                    allocation_bytes = read_u64(record, cursor + 40)?;
+                    size_bytes = read_u64(record, cursor + 48)?;
+                }
             }
             _ => {}
         }
 
-        if file_name.is_some() && (is_directory || size_bytes != 0 || allocation_bytes != 0) {
+        if base_record == 0
+            && file_name.is_some()
+            && (is_directory || size_bytes != 0 || allocation_bytes != 0)
+        {
             break;
         }
 
         cursor += attribute_length;
     }
 
+    if base_record != 0 {
+        // Extension record: carries attributes for `base_record`, never an
+        // entry of its own.
+        if size_bytes != 0 || allocation_bytes != 0 {
+            return Ok(ParsedRecordOutcome::Extension(ExtensionSizes {
+                base_record,
+                size_bytes,
+                allocation_bytes,
+            }));
+        }
+        return Ok(ParsedRecordOutcome::None);
+    }
+
     let file_name = match file_name {
         Some(value) => value,
-        None => return Ok(None),
+        None => return Ok(ParsedRecordOutcome::None),
     };
 
     let attributes = if is_directory {
@@ -784,7 +1308,7 @@ fn parse_record(record: &[u8]) -> Result<Option<ParsedNtfsEntry>, NtfsEnumeratio
         FileAttributes::ARCHIVE
     };
 
-    Ok(Some(ParsedNtfsEntry {
+    Ok(ParsedRecordOutcome::Entry(ParsedNtfsEntry {
         file_id: FileId(file_index),
         parent_directory_id: file_name.parent_reference,
         name: file_name.name,
@@ -911,7 +1435,7 @@ pub fn measure_metadata_extraction_overhead(
         }
 
         bytes_scanned = bytes_scanned.saturating_add(record.len() as u64);
-        if parse_record(record)?.is_some() {
+        if matches!(parse_record(record)?, ParsedRecordOutcome::Entry(_)) {
             record_count = record_count.saturating_add(1);
         }
     }
@@ -1079,6 +1603,70 @@ extern "system" {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decode_data_runs_handles_positive_and_negative_deltas() {
+        // Run 1: header 0x21 -> 1-byte length (0x10 clusters), 2-byte offset
+        // (LCN 0x4000). Run 2: header 0x11 -> 1-byte length (4 clusters),
+        // 1-byte signed offset delta -0x10 (LCN 0x3FF0).
+        let runs = [0x21, 0x10, 0x00, 0x40, 0x11, 0x04, 0xF0, 0x00];
+        let extents = decode_data_runs(&runs, 4096).expect("decode");
+        assert_eq!(
+            extents,
+            vec![(0x4000 * 4096, 0x10 * 4096), (0x3FF0 * 4096, 0x04 * 4096)]
+        );
+    }
+
+    #[test]
+    fn decode_data_runs_rejects_sparse_and_empty() {
+        // Sparse run: offset size 0.
+        let sparse = [0x01, 0x10, 0x00];
+        assert!(decode_data_runs(&sparse, 4096).is_err());
+        // Empty run list.
+        let empty = [0x00];
+        assert!(decode_data_runs(&empty, 4096).is_err());
+    }
+
+    #[test]
+    fn record_fixups_restore_sector_tails() {
+        let mut record = vec![0u8; NTFS_RECORD_SIZE];
+        record[0..4].copy_from_slice(FILE_RECORD_SIGNATURE);
+        // USA at offset 48: count 3 (usn + two sectors of 512).
+        record[4] = 48;
+        record[6] = 3;
+        // Update sequence number 0xAB 0xCD; fixup values 0x11 0x22 and 0x33 0x44.
+        record[48] = 0xAB;
+        record[49] = 0xCD;
+        record[50] = 0x11;
+        record[51] = 0x22;
+        record[52] = 0x33;
+        record[53] = 0x44;
+        // On-disk sector tails carry the usn.
+        record[510] = 0xAB;
+        record[511] = 0xCD;
+        record[1022] = 0xAB;
+        record[1023] = 0xCD;
+
+        assert!(apply_record_fixups(&mut record, 512));
+        assert_eq!(&record[510..512], &[0x11, 0x22]);
+        assert_eq!(&record[1022..1024], &[0x33, 0x44]);
+
+        // Tamper a tail: mismatched check bytes must be rejected and the
+        // batch helper must clear the signature.
+        let mut torn = vec![0u8; NTFS_RECORD_SIZE];
+        torn[0..4].copy_from_slice(FILE_RECORD_SIGNATURE);
+        torn[4] = 48;
+        torn[6] = 3;
+        torn[48] = 0xAB;
+        torn[49] = 0xCD;
+        torn[510] = 0xFF; // wrong
+        torn[511] = 0xCD;
+        torn[1022] = 0xAB;
+        torn[1023] = 0xCD;
+        let mut batch = torn.clone();
+        apply_mft_fixups(&mut batch, 512);
+        assert_eq!(&batch[0..4], b"BAAD");
+    }
 
     fn build_file_name_value(parent: u64, name: &str) -> Vec<u8> {
         let mut bytes = Vec::new();

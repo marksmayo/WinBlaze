@@ -424,8 +424,10 @@ fn walk_directory_tree(
         let entry_path = entry.path();
         let entry_name = entry.file_name().to_string_lossy().to_string();
 
-        let file_type = match entry.file_type() {
-            Ok(file_type) => file_type,
+        // Free on Windows: DirEntry::metadata() is built from the
+        // WIN32_FIND_DATAW the directory enumeration already cached.
+        let metadata = match entry.metadata() {
+            Ok(metadata) => metadata,
             Err(error) => {
                 emit_deduplicated_issue(
                     pipeline,
@@ -435,15 +437,13 @@ fn walk_directory_tree(
                 continue;
             }
         };
+        let attributes = FileAttributes(metadata.file_attributes());
 
-        if file_type.is_dir() {
-            // Free on Windows: DirEntry::metadata() is built from the
-            // WIN32_FIND_DATAW the directory enumeration already cached.
-            let attributes = entry
-                .metadata()
-                .map(|metadata| FileAttributes(metadata.file_attributes()))
-                .unwrap_or_default();
-
+        // Branch on the DIRECTORY attribute bit, not FileType::is_dir():
+        // std reports directory symlinks/junctions as non-directories, which
+        // routed every reparse directory through the file path and made the
+        // cycle detection below unreachable.
+        if attributes.is_directory() {
             let decision = evaluate_reparse_descent(
                 directory,
                 &entry_path,
@@ -487,17 +487,6 @@ fn walk_directory_tree(
                 ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
             }
         } else {
-            let metadata = match entry.metadata() {
-                Ok(metadata) => metadata,
-                Err(error) => {
-                    emit_deduplicated_issue(
-                        pipeline,
-                        issue_keys,
-                        convert_io_error(&error, entry_path.display().to_string()),
-                    );
-                    continue;
-                }
-            };
             emit_file_record(pipeline, walk_state, parent_directory_id, entry_name, &metadata);
         }
     }
@@ -847,8 +836,8 @@ fn process_fallback_directory(
         let entry_path = entry.path();
         let entry_name = entry.file_name().to_string_lossy().to_string();
 
-        let file_type = match entry.file_type() {
-            Ok(file_type) => file_type,
+        let metadata = match entry.metadata() {
+            Ok(metadata) => metadata,
             Err(error) => {
                 emit_deduplicated_issue_shared(
                     pipeline,
@@ -858,13 +847,13 @@ fn process_fallback_directory(
                 continue;
             }
         };
+        let attributes = FileAttributes(metadata.file_attributes());
 
-        if file_type.is_dir() {
-            let attributes = entry
-                .metadata()
-                .map(|metadata| FileAttributes(metadata.file_attributes()))
-                .unwrap_or_default();
-
+        // Branch on the DIRECTORY attribute bit, not FileType::is_dir():
+        // std reports directory symlinks/junctions as non-directories, which
+        // routed every reparse directory through the file path and made the
+        // cycle detection below unreachable.
+        if attributes.is_directory() {
             let decision = evaluate_reparse_descent(
                 &task.path,
                 &entry_path,
@@ -901,17 +890,6 @@ fn process_fallback_directory(
                 ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
             }
         } else {
-            let metadata = match entry.metadata() {
-                Ok(metadata) => metadata,
-                Err(error) => {
-                    emit_deduplicated_issue_shared(
-                        pipeline,
-                        shared,
-                        convert_io_error(&error, entry_path.display().to_string()),
-                    );
-                    continue;
-                }
-            };
             emit_file_record_shared(pipeline, shared, task.directory_id, entry_name, &metadata);
         }
     }

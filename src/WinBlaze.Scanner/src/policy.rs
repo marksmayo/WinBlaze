@@ -4,9 +4,13 @@ use winblaze_core::FileAttributes;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ReparseTraversalPolicy {
+    /// Never descend into reparse points. The default for disk-usage
+    /// accounting: junction/symlink targets are counted at their real
+    /// location, so following them (e.g. the stock `Documents and
+    /// Settings` -> `C:\Users` junction) double-counts entire trees.
+    #[default]
     SkipAll,
     FollowMountPointsAndJunctions,
-    #[default]
     FollowAll,
 }
 

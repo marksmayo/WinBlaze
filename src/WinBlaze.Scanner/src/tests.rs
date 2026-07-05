@@ -7,8 +7,8 @@ use std::{
 use winblaze_core::{ScanEvent, ScanIssueKind};
 
 use crate::{
-    discover_volume_root, normalize_scan_root, select_scan_backend, ScanController, ScanRequest,
-    ScanRuntimeConfig,
+    discover_volume_root, normalize_scan_root, select_scan_backend, ReparseTraversalPolicy,
+    ScanController, ScanRequest, ScanRuntimeConfig,
 };
 
 #[test]
@@ -333,6 +333,9 @@ fn directory_walk_breaks_self_referential_reparse_cycle() {
         root_path: root.clone(),
         config: ScanRuntimeConfig {
             root_path: root.clone(),
+            // Cycle detection only runs when reparse points are
+            // followed; the default policy skips them entirely.
+            reparse_policy: ReparseTraversalPolicy::FollowAll,
             ..ScanRuntimeConfig::default()
         },
     };
