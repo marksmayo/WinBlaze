@@ -279,6 +279,7 @@ namespace winrt::WinBlaze::UI::implementation
 
         Microsoft::UI::Xaml::Controls::TextBlock m_status_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_selection_status_text{ nullptr };
+        Microsoft::UI::Xaml::Controls::TextBlock m_sidebar_status_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_root_path_box{ nullptr };
         Microsoft::UI::Xaml::Controls::Button m_start_scan_button{ nullptr };
         Microsoft::UI::Xaml::Controls::Button m_incremental_scan_button{ nullptr };

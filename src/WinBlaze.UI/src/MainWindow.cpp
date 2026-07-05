@@ -451,9 +451,9 @@ namespace winrt::WinBlaze::UI::implementation
         root.Loaded({ this, &MainWindow::OnWindowLoaded });
         TraceStartup(L"BuildShell after root grid");
 
-        // Root rows: menu bar (auto), workspace content (star), status bar.
-        // WinDirStat-style single window: no header chips, no sidebar, no
-        // navigation tabs.
+        // High Velocity shell: slim sidebar column on the left, then the
+        // workspace (top bar row + content row) and a terminal-style status
+        // strip across the bottom.
         auto menu_row_def = RowDefinition();
         menu_row_def.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
         auto content_row_def = RowDefinition();
@@ -464,6 +464,138 @@ namespace winrt::WinBlaze::UI::implementation
         root.RowDefinitions().Append(menu_row_def);
         root.RowDefinitions().Append(content_row_def);
         root.RowDefinitions().Append(footer_row_def);
+
+        auto sidebar_col_def = ColumnDefinition();
+        sidebar_col_def.Width(GridLengthHelper::FromValueAndType(184.0, GridUnitType::Pixel));
+        auto main_col_def = ColumnDefinition();
+        main_col_def.Width(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star));
+        root.ColumnDefinitions().Append(sidebar_col_def);
+        root.ColumnDefinitions().Append(main_col_def);
+
+        // --- Sidebar (High Velocity navigation rail) ---
+        {
+            auto sidebar_host = Border{};
+            sidebar_host.Background(make_brush(theme.chip_background));
+            sidebar_host.BorderBrush(make_brush(theme.card_border));
+            sidebar_host.BorderThickness(Thickness{ 0.0, 0.0, 1.0, 0.0 });
+
+            auto sidebar_grid = Grid{};
+            auto sidebar_top_row = RowDefinition();
+            sidebar_top_row.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
+            auto sidebar_fill_row = RowDefinition();
+            sidebar_fill_row.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star));
+            auto sidebar_bottom_row = RowDefinition();
+            sidebar_bottom_row.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
+            sidebar_grid.RowDefinitions().Append(sidebar_top_row);
+            sidebar_grid.RowDefinitions().Append(sidebar_fill_row);
+            sidebar_grid.RowDefinitions().Append(sidebar_bottom_row);
+
+            auto sidebar_stack = StackPanel{};
+            sidebar_stack.Padding(Thickness{ 14.0, 16.0, 14.0, 8.0 });
+            sidebar_stack.Spacing(4.0);
+
+            auto wordmark = TextBlock{};
+            wordmark.Text(L"WINBLAZE");
+            wordmark.FontSize(17.0);
+            wordmark.FontWeight({ 800 });
+            wordmark.CharacterSpacing(120);
+            wordmark.Foreground(make_brush(theme.chip_active_background));
+            sidebar_stack.Children().Append(wordmark);
+
+            auto version_caption = TextBlock{};
+            version_caption.Text(L"v2.0 high-velocity");
+            version_caption.FontSize(10.0);
+            version_caption.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+            version_caption.Foreground(make_brush(theme.text_secondary));
+            version_caption.Margin(Thickness{ 1.0, 0.0, 0.0, 14.0 });
+            sidebar_stack.Children().Append(version_caption);
+
+            auto make_sidebar_item = [&](std::wstring_view label, bool active) {
+                auto item = Button{};
+                item.Content(box_value(winrt::hstring(label)));
+                item.HorizontalAlignment(HorizontalAlignment::Stretch);
+                item.HorizontalContentAlignment(HorizontalAlignment::Left);
+                item.Padding(Thickness{ 12.0, 8.0, 12.0, 8.0 });
+                item.CornerRadius(CornerRadius{ 4.0, 4.0, 4.0, 4.0 });
+                item.BorderThickness(Thickness{ 0.0, 0.0, 0.0, 0.0 });
+                item.FontSize(12.0);
+                item.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+                if (active) {
+                    item.Background(make_brush(theme.chip_active_background));
+                    item.Foreground(make_brush(theme.text_on_accent));
+                    item.FontWeight({ 700 });
+                } else {
+                    item.Background(make_brush(Windows::UI::Colors::Transparent()));
+                    item.Foreground(make_brush(theme.text_secondary));
+                }
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                    item, winrt::hstring(label));
+                sidebar_stack.Children().Append(item);
+                return item;
+            };
+
+            auto dashboard_item = make_sidebar_item(L"Dashboard", false);
+            dashboard_item.Click([this](auto const&, auto const&) {
+                m_show_runtime_metrics = true;
+                if (m_runtime_metrics_toggle) {
+                    m_runtime_metrics_toggle.IsChecked(true);
+                }
+                SetSection(m_active_section);
+                UpdateStatus(L"Runtime dashboard revealed.");
+            });
+            auto explorer_item = make_sidebar_item(L"Explorer", true);
+            explorer_item.Click([this](auto const&, auto const&) {
+                SetSection(m_active_section);
+                UpdateStatus(L"Explorer view.");
+            });
+            auto insights_item = make_sidebar_item(L"Insights", false);
+            insights_item.Click([this](auto const&, auto const&) {
+                m_show_search = true;
+                SetSection(m_active_section);
+                UpdateStatus(L"Search and insights revealed.");
+            });
+            auto cleanup_item = make_sidebar_item(L"Cleanup", false);
+            cleanup_item.Click([this](auto const&, auto const&) {
+                UpdateStatus(L"Cleanup center is not available yet.");
+            });
+
+            Grid::SetRow(sidebar_stack, 0);
+            sidebar_grid.Children().Append(sidebar_stack);
+
+            auto sidebar_bottom = StackPanel{};
+            sidebar_bottom.Padding(Thickness{ 14.0, 8.0, 14.0, 12.0 });
+            sidebar_bottom.Spacing(6.0);
+
+            auto make_sidebar_caption = [&](std::wstring_view label) {
+                auto caption = TextBlock{};
+                caption.Text(winrt::hstring(label));
+                caption.FontSize(11.0);
+                caption.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+                caption.Foreground(make_brush(theme.text_secondary));
+                sidebar_bottom.Children().Append(caption);
+                return caption;
+            };
+            make_sidebar_caption(L"SETTINGS");
+            make_sidebar_caption(L"SUPPORT");
+
+            m_sidebar_status_text = TextBlock{};
+            m_sidebar_status_text.Text(L"ENGINE: idle");
+            m_sidebar_status_text.FontSize(10.0);
+            m_sidebar_status_text.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+            m_sidebar_status_text.Foreground(make_brush(theme.chip_active_background));
+            m_sidebar_status_text.TextWrapping(TextWrapping::WrapWholeWords);
+            m_sidebar_status_text.Margin(Thickness{ 0.0, 8.0, 0.0, 0.0 });
+            sidebar_bottom.Children().Append(m_sidebar_status_text);
+
+            Grid::SetRow(sidebar_bottom, 2);
+            sidebar_grid.Children().Append(sidebar_bottom);
+
+            sidebar_host.Child(sidebar_grid);
+            Grid::SetRow(sidebar_host, 0);
+            Grid::SetRowSpan(sidebar_host, 2);
+            Grid::SetColumn(sidebar_host, 0);
+            root.Children().Append(sidebar_host);
+        }
 
         // Menu bar
         auto menu_host = Border{};
@@ -480,15 +612,6 @@ namespace winrt::WinBlaze::UI::implementation
         menu_row.Spacing(4.0);
         menu_row.Padding(Thickness{ 8.0, 2.0, 8.0, 2.0 });
 
-        // Wordmark, electric-cyan per the Obsidian Flux design system.
-        auto wordmark = TextBlock{};
-        wordmark.Text(L"WinBlaze");
-        wordmark.FontSize(16.0);
-        wordmark.FontWeight({ 700 });
-        wordmark.Foreground(make_brush(theme.chip_active_background));
-        wordmark.VerticalAlignment(VerticalAlignment::Center);
-        wordmark.Margin(Thickness{ 4.0, 0.0, 12.0, 0.0 });
-        menu_row.Children().Append(wordmark);
 
         auto make_menu_button = [&](std::wstring_view title, std::wstring_view automation_name) {
             auto button = Button{};
@@ -538,6 +661,7 @@ namespace winrt::WinBlaze::UI::implementation
 
         menu_host.Child(menu_row);
         Grid::SetRow(menu_host, 0);
+        Grid::SetColumn(menu_host, 1);
         root.Children().Append(menu_host);
 
         // Status bar: scan status, progress with elapsed time, and the
@@ -595,6 +719,7 @@ namespace winrt::WinBlaze::UI::implementation
         footer_stack.Children().Append(m_selection_status_text);
 
         Grid::SetRow(footer_bar, 2);
+        Grid::SetColumnSpan(footer_bar, 2);
         root.Children().Append(footer_bar);
 
         // Create the scrollable main content Grid
@@ -675,6 +800,10 @@ namespace winrt::WinBlaze::UI::implementation
                 m_start_scan_button,
                 L"Start a full scan of the configured root path.");
             m_start_scan_button.Click({ this, &MainWindow::OnStartClicked });
+            m_start_scan_button.Background(make_brush(theme.chip_active_background));
+            m_start_scan_button.Foreground(make_brush(theme.text_on_accent));
+            m_start_scan_button.FontWeight({ 700 });
+            m_start_scan_button.CornerRadius(CornerRadius{ 4.0, 4.0, 4.0, 4.0 });
             root_row.Children().Append(m_start_scan_button);
 
             m_incremental_scan_button = Button{};
@@ -1467,6 +1596,7 @@ namespace winrt::WinBlaze::UI::implementation
         {
             // The panes size to the window now (star rows); no outer scroll.
             Grid::SetRow(shell, 1);
+            Grid::SetColumn(shell, 1);
             root.Children().Append(shell);
             Content(root);
         }
@@ -3493,6 +3623,9 @@ namespace winrt::WinBlaze::UI::implementation
             return;
         }
         StatusText().Text(winrt::hstring(text));
+        if (m_sidebar_status_text) {
+            m_sidebar_status_text.Text(winrt::hstring(L"ENGINE: " + text));
+        }
         UpdateSummaryText();
     }
 

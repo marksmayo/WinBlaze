@@ -13,7 +13,11 @@ namespace winrt::WinBlaze::UI::implementation
         // "Obsidian Flux" — the Stitch design system: deep teal-black
         // surfaces with an electric-cyan primary, magenta secondary, and
         // lime tertiary. Matches the user's Storage Pulse mockups.
-        ObsidianFlux
+        ObsidianFlux,
+        // "High Velocity" — the Stitch WinBlaze desktop mockups: neutral
+        // cool-black surfaces with a pure-red primary, monospace labels,
+        // slim sidebar navigation, and a terminal-style status strip.
+        HighVelocity
     };
 
     struct ShellTheme
@@ -137,6 +141,27 @@ namespace winrt::WinBlaze::UI::implementation
             theme.file_accent = { 0xFF, 0x7D, 0xF4, 0xFF };        // #7df4ff - primary-fixed
             theme.archive_accent = { 0xFF, 0xFF, 0xB4, 0xAB };     // peach (error family)
             break;
+
+        case ThemeVariant::HighVelocity:
+            theme.app_background = { 0xFF, 0x0E, 0x0E, 0x10 };     // #0e0e10 - near black
+            theme.card_background = { 0xFF, 0x17, 0x17, 0x1A };    // #17171a - panel
+            theme.card_border = { 0xFF, 0x2B, 0x24, 0x26 };        // warm hairline
+            theme.text_primary = { 0xFF, 0xE6, 0xE1, 0xE0 };       // light warm gray
+            theme.text_secondary = { 0xFF, 0xA8, 0x9F, 0x9E };     // muted warm gray
+            theme.text_on_accent = { 0xFF, 0x1A, 0x04, 0x04 };     // near-black on red
+            theme.subtle_background = { 0xFF, 0x0A, 0x0A, 0x0C };  // wells
+            theme.subtle_border = { 0xFF, 0x2B, 0x24, 0x26 };
+            theme.chip_background = { 0xFF, 0x13, 0x13, 0x15 };    // #131315
+            theme.chip_active_background = { 0xFF, 0xFF, 0x2A, 0x1A }; // vivid red
+            theme.chip_inactive_background = { 0xFF, 0x13, 0x13, 0x15 };
+            theme.chip_active_border = { 0xFF, 0xFF, 0x2A, 0x1A };
+            theme.progress_track = { 0xFF, 0x0A, 0x0A, 0x0C };
+            theme.progress_fill = { 0xFF, 0xFF, 0x2A, 0x1A };      // red fill
+            theme.volume_accent = { 0xFF, 0xFF, 0x2A, 0x1A };
+            theme.folder_accent = { 0xFF, 0xFF, 0x6B, 0x5A };      // coral
+            theme.file_accent = { 0xFF, 0xFF, 0xA2, 0x94 };        // light coral
+            theme.archive_accent = { 0xFF, 0xFF, 0xB0, 0x20 };     // amber
+            break;
         }
         
         return theme;
@@ -144,7 +169,7 @@ namespace winrt::WinBlaze::UI::implementation
 
     inline ShellTheme const& ActiveShellTheme()
     {
-        static const ShellTheme theme = CreateTheme(ThemeVariant::ObsidianFlux);
+        static const ShellTheme theme = CreateTheme(ThemeVariant::HighVelocity);
         return theme;
     }
 
@@ -156,7 +181,7 @@ namespace winrt::WinBlaze::UI::implementation
 
     inline ThemeVariant GetActiveThemeVariant()
     {
-        return ThemeVariant::ObsidianFlux;
+        return ThemeVariant::HighVelocity;
     }
 
     // Fixed categorical palette for the per-extension breakdown table and
@@ -166,18 +191,18 @@ namespace winrt::WinBlaze::UI::implementation
     inline winrt::Windows::UI::Color ExtensionSwatchColor(std::wstring_view extension)
     {
         static constexpr winrt::Windows::UI::Color kPalette[] = {
-            { 0xFF, 0x00, 0xF0, 0xFF }, // electric cyan (primary)
-            { 0xFF, 0xFE, 0x00, 0xFE }, // magenta (secondary)
-            { 0xFF, 0x9F, 0xF0, 0x1A }, // lime (tertiary)
-            { 0xFF, 0x00, 0x9F, 0xB8 }, // deep cyan
-            { 0xFF, 0xFF, 0xB4, 0xAB }, // peach
-            { 0xFF, 0xFF, 0xC1, 0x07 }, // amber
-            { 0xFF, 0x9C, 0x7B, 0xF6 }, // violet
-            { 0xFF, 0xFF, 0x8A, 0x3D }, // orange
-            { 0xFF, 0x2E, 0xC7, 0x9B }, // teal green
-            { 0xFF, 0xF0, 0x5C, 0x5C }, // coral red
-            { 0xFF, 0x7D, 0xF4, 0xFF }, // ice blue
-            { 0xFF, 0xD4, 0xE1, 0x57 }, // yellow-green
+            { 0xFF, 0xFF, 0x2A, 0x1A }, // vivid red (primary)
+            { 0xFF, 0xFF, 0x7A, 0x5C }, // coral
+            { 0xFF, 0xFF, 0xB0, 0x20 }, // amber
+            { 0xFF, 0xED, 0xE4, 0xDD }, // bone
+            { 0xFF, 0x8F, 0xA3, 0xAD }, // steel
+            { 0xFF, 0xB8, 0xC2, 0x4A }, // olive
+            { 0xFF, 0xC2, 0x45, 0x2D }, // rust
+            { 0xFF, 0xFF, 0x9A, 0xA8 }, // rose
+            { 0xFF, 0x6E, 0x7B, 0x8A }, // slate
+            { 0xFF, 0xD9, 0x8A, 0x4A }, // copper
+            { 0xFF, 0xD9, 0xC2, 0x9A }, // sand
+            { 0xFF, 0x8F, 0x1D, 0x12 }, // deep red
         };
         constexpr size_t paletteSize = sizeof(kPalette) / sizeof(kPalette[0]);
 
