@@ -481,6 +481,9 @@ namespace winrt::WinBlaze::UI::implementation
             bool extension_stats_dirty{ false };
             std::vector<ExtensionStatEntry> extension_stats;
             bool reload_snapshot{ false };
+            // Session ended (completed/cancelled/failed): re-apply shell
+            // state on flush so the scanning banner and status hide.
+            bool shell_state_dirty{ false };
             bool diagnostics_dirty{ false };
             bool correctness_dirty{ false };
             bool reset_scan_issues{ false };

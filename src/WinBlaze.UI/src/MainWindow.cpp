@@ -16,6 +16,36 @@ namespace
     // unavailable and the scan fell back to the slower directory walk.
     constexpr uint32_t kFastScanUnavailableIssueCode = 16;
 
+    bool IsProcessElevated()
+    {
+        static const bool elevated = [] {
+            HANDLE token = nullptr;
+            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
+                return false;
+            }
+            TOKEN_ELEVATION elevation{};
+            DWORD size = 0;
+            const bool queried = GetTokenInformation(
+                token, TokenElevation, &elevation, sizeof(elevation), &size) != 0;
+            CloseHandle(token);
+            return queried && elevation.TokenIsElevated != 0;
+        }();
+        return elevated;
+    }
+
+    /// Relaunches this executable through the UAC consent prompt; returns
+    /// true when the elevated instance started (the caller should exit).
+    bool RelaunchElevated()
+    {
+        wchar_t module_path[MAX_PATH]{};
+        if (GetModuleFileNameW(nullptr, module_path, MAX_PATH) == 0) {
+            return false;
+        }
+        const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(
+            nullptr, L"runas", module_path, nullptr, nullptr, SW_SHOWNORMAL));
+        return result > 32;
+    }
+
     std::wstring FirstTextBlockText(winrt::Windows::Foundation::IInspectable const& value)
     {
         if (!value) {
@@ -1773,6 +1803,7 @@ namespace winrt::WinBlaze::UI::implementation
         }
         ::WinBlaze::UI::NativeBridge::Initialize();
         TraceStartup(L"OnStartClicked native bridge initialized");
+        SelectVisualizationTarget(L"Root volume", m_current_root_path, L"Volume", L"0 B");
         ApplyShellState();
         NavigateToSection(ShellSection::Overview);
         UpdateBreadcrumbs();
@@ -2240,7 +2271,7 @@ namespace winrt::WinBlaze::UI::implementation
                         1.0f);
                 };
 
-                auto emit_tile = [&](size_t node_index, float left, float top, float right, float bottom, bool frame, uint32_t depth) {
+                auto emit_tile = [&](size_t node_index, float left, float top, float right, float bottom, bool frame, bool labeled) {
                     auto const& node = m_tree_nodes[node_index];
                     D2D1_COLOR_F color = frame ? folder_frame : folder_fill;
                     if (!frame && !node.is_directory) {
@@ -2252,7 +2283,7 @@ namespace winrt::WinBlaze::UI::implementation
                         right,
                         bottom,
                         color,
-                        depth <= 1 ? node.name : std::wstring{},
+                        labeled ? node.name : std::wstring{},
                         frame,
                     });
                     layout.push_back(TreemapTileLayout{
@@ -2293,7 +2324,7 @@ namespace winrt::WinBlaze::UI::implementation
                     const bool is_directory =
                         m_tree_nodes[item.node].is_directory && !m_tree_nodes[item.node].is_more_row;
                     if (!is_directory || item_width < kRecurseMinDim || item_height < kRecurseMinDim) {
-                        emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth);
+                        emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth <= 1);
                         continue;
                     }
 
@@ -2303,7 +2334,7 @@ namespace winrt::WinBlaze::UI::implementation
                     // Budget the fetches and refine over subsequent frames.
                     if (!m_tree_nodes[item.node].children_loaded) {
                         if (m_tree_nodes.size() >= node_budget_limit) {
-                            emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth);
+                            emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth <= 1);
                             needs_deepening = true;
                             continue;
                         }
@@ -2320,14 +2351,21 @@ namespace winrt::WinBlaze::UI::implementation
                         child_total += static_cast<double>(child_node.physical_bytes);
                     }
                     if (children.empty() || child_total <= 0.0) {
-                        emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth);
+                        emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth <= 1);
                         continue;
                     }
                     ++directories_recursed;
 
+                    // Directories big enough to caption reserve a header
+                    // strip and lay children below it, so the parent label
+                    // never draws over the first child's label.
+                    const bool labeled_frame =
+                        item.depth <= 1 && item_width >= 64.0f && item_height >= 48.0f;
+                    constexpr float kHeaderStrip = 19.0f;
+
                     // Frame drawn behind the children so the directory still
                     // registers hover/tap hits along its 1px border.
-                    emit_tile(item.node, item.left, item.top, item.right, item.bottom, true, item.depth);
+                    emit_tile(item.node, item.left, item.top, item.right, item.bottom, true, labeled_frame);
 
                     // Weight-balanced binary subdivision of this directory's
                     // rectangle (children arrive sorted largest-first).
@@ -2349,12 +2387,14 @@ namespace winrt::WinBlaze::UI::implementation
                     };
 
                     const float inset = 1.0f;
+                    const float children_top =
+                        labeled_frame ? item.top + kHeaderStrip : item.top + inset;
                     std::vector<Slice> slices;
                     slices.push_back(Slice{
                         0,
                         children.size(),
                         item.left + inset,
-                        item.top + inset,
+                        children_top,
                         item.right - inset,
                         item.bottom - inset,
                     });
@@ -2893,6 +2933,7 @@ namespace winrt::WinBlaze::UI::implementation
                 m_pending_ui_state.error_dirty || m_pending_ui_state.selection_dirty ||
                 m_pending_ui_state.visualization_dirty || m_pending_ui_state.catalog_dirty ||
                 m_pending_ui_state.extension_stats_dirty ||
+                m_pending_ui_state.shell_state_dirty ||
                 !m_pending_ui_state.live_directories.empty();
 
             if (has_pending) {
@@ -3011,6 +3052,12 @@ namespace winrt::WinBlaze::UI::implementation
                     m_tree_catalog.push_back(entry);
                 }
             }
+        }
+
+        if (pending.shell_state_dirty) {
+            // The scan session ended off the UI thread; hide the scanning
+            // banner and refresh the status strip now that state settled.
+            ApplyShellState();
         }
 
         if (pending.reload_snapshot) {
@@ -3144,6 +3191,7 @@ namespace winrt::WinBlaze::UI::implementation
             L" | Section: " + SectionName(m_active_section) +
             L" | Selection: " + m_current_selection_name +
             L" (" + m_current_selection_kind + L")" +
+            L" | Mode: " + std::wstring(IsProcessElevated() ? L"administrator" : L"standard") +
             L" | State: " + std::wstring(m_session_active ? L"scanning" : L"idle") +
             L" | Results: " + std::wstring(m_has_results ? L"loaded" : L"none") +
             L" | " + scan_duration_text +
@@ -4221,6 +4269,7 @@ namespace winrt::WinBlaze::UI::implementation
                 auto session = m_session;
                 m_session = {};
                 m_session_active = false;
+                m_pending_ui_state.shell_state_dirty = true;
                 std::thread([session]() {
                     ::WinBlaze::UI::NativeBridge::DestroyScan(session);
                 }).detach();
@@ -5460,7 +5509,7 @@ namespace winrt::WinBlaze::UI::implementation
         large_stack.Children().Append(MakeCardTitle(L"Largest files"));
         std::vector<std::pair<std::wstring, uint64_t>> largest;
         try {
-            ::WinBlaze::UI::NativeBridge::TreeLargestFiles(10, [&largest](WbTreeNode const& node) {
+            ::WinBlaze::UI::NativeBridge::TreeLargestFiles(50, [&largest](WbTreeNode const& node) {
                 const std::wstring path = node.name.ptr == nullptr
                     ? std::wstring{}
                     : Utf8ToWide(std::string_view{ node.name.ptr, node.name.len });
@@ -5536,6 +5585,24 @@ namespace winrt::WinBlaze::UI::implementation
             content.Children().Append(card);
             return stack;
         };
+
+        if (IsProcessElevated()) {
+            add_setting(L"Process elevation",
+                L"Running as administrator: the raw NTFS MFT fast path is available on every local volume.");
+        } else {
+            auto elevation_stack = add_setting(L"Process elevation",
+                L"Running without administrator rights. Scans still work: WinBlaze reads the MFT when the "
+                L"volume allows it and otherwise falls back to a directory walk. Restart elevated to "
+                L"guarantee the MFT fast path.");
+            auto elevate_button = Button{};
+            elevate_button.Content(box_value(L"Restart as administrator"));
+            elevate_button.Click([](auto const&, auto const&) {
+                if (RelaunchElevated()) {
+                    Application::Current().Exit();
+                }
+            });
+            elevation_stack.Children().Append(elevate_button);
+        }
 
         add_setting(L"Theme", L"High Velocity (red on black, from the Stitch design system)");
         add_setting(L"Reparse points",
