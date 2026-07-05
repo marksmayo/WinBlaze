@@ -109,8 +109,8 @@ pub fn join_path(parent: &str, name: &str) -> String {
 
 /// Resolves a file's full path: the stored path when present (records from
 /// older snapshots still carry one), otherwise parent path + name.
-pub fn derive_file_path(
-    directories: &std::collections::HashMap<DirectoryId, DirectoryRecord>,
+pub fn derive_file_path<S: std::hash::BuildHasher>(
+    directories: &std::collections::HashMap<DirectoryId, DirectoryRecord, S>,
     file: &FileRecord,
 ) -> String {
     if !file.full_path.is_empty() {

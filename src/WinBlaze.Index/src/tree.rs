@@ -12,7 +12,7 @@
 //! multi-million-record volume adds bookkeeping proportional to the record
 //! count without cloning any names or paths.
 
-use std::collections::HashMap;
+use winblaze_core::IdHashMap;
 
 use winblaze_core::{DirectoryRecord, FileRecord, VolumeRecord};
 
@@ -63,7 +63,7 @@ pub struct TreeIndex {
     nodes: Vec<DirNode>,
     dir_children: Vec<u32>,
     file_children: Vec<u32>,
-    dir_index_by_id: HashMap<u64, u32>,
+    dir_index_by_id: IdHashMap<u64, u32>,
     root: Option<u32>,
 }
 
@@ -73,7 +73,7 @@ impl TreeIndex {
         directories.sort_unstable_by_key(|directory| directory.id.0);
         files.sort_unstable_by_key(|file| file.id.0);
 
-        let dir_index_by_id: HashMap<u64, u32> = directories
+        let dir_index_by_id: IdHashMap<u64, u32> = directories
             .iter()
             .enumerate()
             .map(|(index, directory)| (directory.id.0, index as u32))
@@ -409,7 +409,7 @@ impl TreeIndex {
 /// proxy (smallest id) for stability.
 fn choose_root(
     directories: &[DirectoryRecord],
-    dir_index_by_id: &HashMap<u64, u32>,
+    dir_index_by_id: &IdHashMap<u64, u32>,
 ) -> Option<u32> {
     let mut fallback: Option<u32> = None;
     for (index, directory) in directories.iter().enumerate() {

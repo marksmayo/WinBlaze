@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use winblaze_core::{IdHashMap, IdHashSet};
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::os::windows::ffi::OsStrExt;
@@ -94,7 +94,7 @@ fn stream_ntfs_entries(
     root: &Path,
     worker_count: usize,
     on_event: &mut dyn FnMut(ScanEvent),
-) -> Result<HashMap<u64, ParsedNtfsEntry>, NtfsEnumerationError> {
+) -> Result<IdHashMap<u64, ParsedNtfsEntry>, NtfsEnumerationError> {
     let mut file = open_mft_stream(root)?;
     let bytes_per_sector = file.bytes_per_sector as usize;
     let total_records = (file.total_bytes / NTFS_RECORD_SIZE as u64).max(1);
@@ -102,11 +102,16 @@ fn stream_ntfs_entries(
     let records_per_read = workers.saturating_mul(1024).clamp(1024, 65_536);
     let mut buffer = vec![0u8; NTFS_RECORD_SIZE * records_per_read];
     let mut carry: Vec<u8> = Vec::new();
-    let mut entries: HashMap<u64, ParsedNtfsEntry> = HashMap::new();
-    let mut resolved_paths: HashMap<u64, String> = HashMap::new();
-    let mut emitted: HashSet<u64> = HashSet::new();
+    // total_records counts every MFT slot, so these never rehash mid-scan.
+    let sizing = usize::try_from(total_records).unwrap_or(usize::MAX);
+    let mut entries: IdHashMap<u64, ParsedNtfsEntry> =
+        IdHashMap::with_capacity_and_hasher(sizing, Default::default());
+    let mut resolved_paths: IdHashMap<u64, String> =
+        IdHashMap::with_capacity_and_hasher(sizing / 8, Default::default());
+    let mut emitted: IdHashSet<u64> =
+        IdHashSet::with_capacity_and_hasher(sizing, Default::default());
     let mut pending: Vec<u64> = Vec::new();
-    let mut pending_extensions: HashMap<u64, ExtensionSizes> = HashMap::new();
+    let mut pending_extensions: IdHashMap<u64, ExtensionSizes> = IdHashMap::default();
     let mut processed_records = 0u64;
     let root_text = root.display().to_string();
 
@@ -233,7 +238,7 @@ fn parse_batch(
     })
 }
 
-fn summarize_entries(entries: &HashMap<u64, ParsedNtfsEntry>) -> ScanSummary {
+fn summarize_entries(entries: &IdHashMap<u64, ParsedNtfsEntry>) -> ScanSummary {
     let mut files_seen = 0u64;
     let mut directories_seen = 0u64;
     let mut total_size_bytes = 0u64;
@@ -837,7 +842,7 @@ where
             handles.push(s.spawn(move || parse_record_range(bytes, start_record, end_record)));
         }
 
-        let mut entries: HashMap<u64, ParsedNtfsEntry> = HashMap::new();
+        let mut entries: IdHashMap<u64, ParsedNtfsEntry> = IdHashMap::default();
         let mut extensions: Vec<ExtensionSizes> = Vec::new();
         for handle in handles {
             match handle.join() {
@@ -880,7 +885,7 @@ fn parse_mft_records_sequential_streaming(
         )));
     }
 
-    let mut entries: HashMap<u64, ParsedNtfsEntry> = HashMap::new();
+    let mut entries: IdHashMap<u64, ParsedNtfsEntry> = IdHashMap::default();
     let mut extensions: Vec<ExtensionSizes> = Vec::new();
 
     for record in bytes.chunks(NTFS_RECORD_SIZE) {
@@ -903,7 +908,7 @@ fn parse_mft_records_sequential_streaming(
 
 /// Folds sizes carried by extension records into their base entries.
 fn apply_extension_sizes(
-    entries: &mut HashMap<u64, ParsedNtfsEntry>,
+    entries: &mut IdHashMap<u64, ParsedNtfsEntry>,
     extensions: Vec<ExtensionSizes>,
 ) {
     for extension in extensions {
@@ -941,7 +946,7 @@ fn parse_record_range(
 
 fn parse_entries(
     root: &Path,
-    mut entries: HashMap<u64, ParsedNtfsEntry>,
+    mut entries: IdHashMap<u64, ParsedNtfsEntry>,
     mut on_event: Option<&mut dyn FnMut(ScanEvent)>,
 ) -> Result<NtfsEnumeration, NtfsEnumerationError> {
     let root_text = root.display().to_string();
@@ -959,7 +964,7 @@ fn parse_entries(
         accessed_utc: None,
     });
 
-    let mut resolved_paths = HashMap::new();
+    let mut resolved_paths: IdHashMap<u64, String> = IdHashMap::default();
     resolved_paths.insert(5, root_text.clone());
 
     let mut directories = Vec::new();
@@ -1059,11 +1064,11 @@ fn parse_entries(
 
 fn emit_streaming_entries(
     root_text: &str,
-    entries: &HashMap<u64, ParsedNtfsEntry>,
+    entries: &IdHashMap<u64, ParsedNtfsEntry>,
     candidate_ids: &[u64],
     pending: &mut Vec<u64>,
-    resolved_paths: &mut HashMap<u64, String>,
-    emitted: &mut HashSet<u64>,
+    resolved_paths: &mut IdHashMap<u64, String>,
+    emitted: &mut IdHashSet<u64>,
     on_event: &mut dyn FnMut(ScanEvent),
 ) {
     // An empty candidate list marks the final pass: every entry not yet
@@ -1146,8 +1151,8 @@ fn emit_streaming_entries(
 /// its own cycle guard.
 fn parent_chain_known(
     file_id: u64,
-    entries: &HashMap<u64, ParsedNtfsEntry>,
-    resolved_paths: &HashMap<u64, String>,
+    entries: &IdHashMap<u64, ParsedNtfsEntry>,
+    resolved_paths: &IdHashMap<u64, String>,
 ) -> bool {
     let mut current = file_id;
     let mut hops = 0usize;
@@ -1371,8 +1376,8 @@ fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute, NtfsEnumerationErr
 
 fn resolve_entry_path(
     file_id: u64,
-    entries: &HashMap<u64, ParsedNtfsEntry>,
-    resolved: &mut HashMap<u64, String>,
+    entries: &IdHashMap<u64, ParsedNtfsEntry>,
+    resolved: &mut IdHashMap<u64, String>,
     root_text: &str,
     stack: &mut Vec<u64>,
 ) -> String {
@@ -1447,11 +1452,11 @@ pub fn measure_metadata_extraction_overhead(
     })
 }
 
-fn total_file_count(entries: &HashMap<u64, ParsedNtfsEntry>) -> u64 {
+fn total_file_count(entries: &IdHashMap<u64, ParsedNtfsEntry>) -> u64 {
     entries.values().filter(|entry| !entry.is_directory).count() as u64
 }
 
-fn total_directory_count(entries: &HashMap<u64, ParsedNtfsEntry>) -> u64 {
+fn total_directory_count(entries: &IdHashMap<u64, ParsedNtfsEntry>) -> u64 {
     entries.values().filter(|entry| entry.is_directory).count() as u64
 }
 

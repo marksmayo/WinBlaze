@@ -168,7 +168,7 @@ struct UiEventForwarder {
     // Directory id -> full path, accumulated from directory events so the
     // capped set of forwarded file events can carry a derived path (file
     // records no longer store one).
-    directory_paths: HashMap<u64, String>,
+    directory_paths: winblaze_core::IdHashMap<u64, String>,
     // Directories waiting to be delivered as one DirectoryBatch event: a
     // full drive discovers hundreds of thousands, and one FFI crossing per
     // directory dominated scan wall-clock.
@@ -186,7 +186,7 @@ impl UiEventForwarder {
             last_progress_items: 0,
             extension_totals: HashMap::new(),
             last_extension_stats_at: None,
-            directory_paths: HashMap::new(),
+            directory_paths: Default::default(),
             pending_directories: Vec::new(),
             last_directory_batch_at: None,
         }

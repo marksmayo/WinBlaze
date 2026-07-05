@@ -4,6 +4,7 @@ use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{collections::HashMap, iter::FromIterator};
+use winblaze_core::IdHashMap;
 
 use winblaze_core::{
     diff_file_records, DirectoryId, DirectoryRecord, FileAttributes, FileChangeKind,
@@ -254,8 +255,8 @@ fn remap_current_files_by_path(previous: &[FileRecord], current: &[FileRecord]) 
 pub struct BufferedIndexTransaction {
     volumes: HashMap<VolumeId, VolumeRecord>,
     sessions: HashMap<u64, ScanSession>,
-    directories: HashMap<DirectoryId, DirectoryRecord>,
-    files: HashMap<FileId, FileRecord>,
+    directories: IdHashMap<DirectoryId, DirectoryRecord>,
+    files: IdHashMap<FileId, FileRecord>,
     lineages: Vec<FileLineageRecord>,
     file_changes: Vec<FileChangeSet>,
     committed: bool,
@@ -361,9 +362,9 @@ impl BufferedIndexTransaction {
         current: &[FileRecord],
     ) -> FileChangeSet {
         let change_set = diff_file_records(previous, current);
-        let current_by_id: HashMap<FileId, &FileRecord> =
+        let current_by_id: IdHashMap<FileId, &FileRecord> =
             current.iter().map(|record| (record.id, record)).collect();
-        let previous_by_id: HashMap<FileId, &FileRecord> =
+        let previous_by_id: IdHashMap<FileId, &FileRecord> =
             previous.iter().map(|record| (record.id, record)).collect();
 
         for change in &change_set.changes {
@@ -597,10 +598,11 @@ fn deserialize_state(bytes: &[u8]) -> Result<BufferedIndexTransaction, IndexStor
     let mut sessions_map = HashMap::with_capacity(sessions.len());
     sessions_map.extend(sessions.into_iter().map(|s| (s.session_id, s)));
 
-    let mut directories_map = HashMap::with_capacity(directories.len());
+    let mut directories_map =
+        IdHashMap::with_capacity_and_hasher(directories.len(), Default::default());
     directories_map.extend(directories.into_iter().map(|d| (d.id, d)));
 
-    let mut files_map = HashMap::with_capacity(files.len());
+    let mut files_map = IdHashMap::with_capacity_and_hasher(files.len(), Default::default());
     files_map.extend(files.into_iter().map(|f| (f.id, f)));
 
     Ok(BufferedIndexTransaction {
