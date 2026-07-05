@@ -186,6 +186,7 @@ namespace winrt::WinBlaze::UI::implementation
         std::wstring TreeNodePath(size_t node_index) const;
         Microsoft::UI::Xaml::Controls::ListViewItem CreateTreeNodeListItem(size_t node_index);
         bool TreeArenaActive() const { return !m_tree_nodes.empty(); }
+        static std::wstring ExtensionKeyFromName(std::wstring const& name);
         std::vector<TreeCatalogEntry> FilterTreeCatalog() const;
         bool MatchesInstantSearch(TreeCatalogEntry const& entry) const;
         std::wstring TreeCatalogKey(TreeCatalogEntry const& entry) const;

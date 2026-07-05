@@ -150,7 +150,7 @@ try {
     Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
     $frameStatus = Find-TextLike -Window $window -Pattern "*frames=*last frame=*peak frame=*" -TimeoutSeconds 8
     Invoke-Button -Window $window -Name "Treemap" -Required $false | Out-Null
-    $treemapStatus = Find-TextLike -Window $window -Pattern "*layout=balanced*labels=*" -TimeoutSeconds 8
+    $treemapStatus = Find-TextLike -Window $window -Pattern "*layout=*labels=*" -TimeoutSeconds 8
 
     $process = Get-Process -Id $app.Id -ErrorAction Stop
     $recentCrash = Get-WinEvent -FilterHashtable @{ LogName = "Application"; StartTime = $startTime } -ErrorAction SilentlyContinue |

@@ -2055,122 +2055,309 @@ namespace winrt::WinBlaze::UI::implementation
                 float bottom;
                 D2D1_COLOR_F color;
                 std::wstring label;
+                bool frame{ false };
             };
-
-            struct TileInput
-            {
-                double weight;
-                D2D1_COLOR_F color;
-                TreeCatalogEntry entry;
-            };
-
-            const D2D1_COLOR_F palette[] = {
-                D2D1::ColorF(0.10f, 0.36f, 0.67f, 1.0f),
-                D2D1::ColorF(0.13f, 0.50f, 0.35f, 1.0f),
-                D2D1::ColorF(0.43f, 0.25f, 0.62f, 1.0f),
-                D2D1::ColorF(0.70f, 0.36f, 0.11f, 1.0f),
-                D2D1::ColorF(0.60f, 0.12f, 0.16f, 1.0f),
-                D2D1::ColorF(0.28f, 0.46f, 0.52f, 1.0f),
-            };
-
-            std::vector<TileInput> tile_inputs;
-            tile_inputs.reserve(10);
-            for (auto const& entry : m_tree_catalog) {
-                if (tile_inputs.size() >= 10) {
-                    break;
-                }
-                const double weight = entry.size_bytes > 0
-                    ? static_cast<double>(entry.size_bytes)
-                    : static_cast<double>((std::max)(1, entry.progress));
-                tile_inputs.push_back(TileInput{ weight, palette[tile_inputs.size() % ARRAYSIZE(palette)], entry });
-            }
-            std::sort(tile_inputs.begin(), tile_inputs.end(), [](TileInput const& left, TileInput const& right) {
-                return left.weight > right.weight;
-            });
 
             const float surface_width = static_cast<float>(width);
             const float surface_height = static_cast<float>(height);
-            const float gap = 4.0f;
             std::vector<DrawTile> tiles;
-            tiles.reserve(tile_inputs.size());
             std::vector<TreemapTileLayout> layout;
-            layout.reserve(tile_inputs.size());
+            std::wstring layout_name;
+            size_t directories_recursed = 0;
 
-            struct LayoutNode
-            {
-                size_t begin;
-                size_t end;
-                float left;
-                float top;
-                float right;
-                float bottom;
-            };
+            if (TreeArenaActive()) {
+                // Hierarchical squarified layout over the display-tree arena:
+                // recurse into directories while their tile stays legible,
+                // color files by extension (matching the legend swatches),
+                // draw directories as thin frames around their children.
+                layout_name = L"squarified";
+                constexpr size_t kTileBudget = 20000;
+                constexpr float kMinTileDim = 6.0f;
+                constexpr float kRecurseMinDim = 28.0f;
+                const D2D1_COLOR_F folder_fill = D2D1::ColorF(0.15f, 0.18f, 0.22f, 1.0f);
+                const D2D1_COLOR_F folder_frame = D2D1::ColorF(0.05f, 0.06f, 0.08f, 1.0f);
 
-            auto range_weight = [&](size_t begin, size_t end) {
-                double total = 0.0;
-                for (size_t index = begin; index < end; ++index) {
-                    total += (std::max)(1.0, tile_inputs[index].weight);
-                }
-                return total;
-            };
+                auto to_d2d_color = [](winrt::Windows::UI::Color const& color) {
+                    return D2D1::ColorF(
+                        static_cast<float>(color.R) / 255.0f,
+                        static_cast<float>(color.G) / 255.0f,
+                        static_cast<float>(color.B) / 255.0f,
+                        1.0f);
+                };
 
-            std::vector<LayoutNode> pending_layout;
-            pending_layout.push_back(LayoutNode{ 0, tile_inputs.size(), gap, gap, surface_width - gap, surface_height - gap });
-            while (!pending_layout.empty()) {
-                const LayoutNode node = pending_layout.back();
-                pending_layout.pop_back();
-                if (node.begin >= node.end) {
-                    continue;
-                }
-
-                const float node_width = node.right - node.left;
-                const float node_height = node.bottom - node.top;
-                if (node.end - node.begin == 1 || node_width < 32.0f || node_height < 24.0f) {
-                    auto const& input = tile_inputs[node.begin];
-                    const float left = node.left;
-                    const float top = node.top;
-                    const float right = (std::max)(left + 2.0f, node.right);
-                    const float bottom = (std::max)(top + 2.0f, node.bottom);
-                    tiles.push_back(DrawTile{ left, top, right, bottom, input.color, input.entry.name });
+                auto emit_tile = [&](size_t node_index, float left, float top, float right, float bottom, bool frame, uint32_t depth) {
+                    auto const& node = m_tree_nodes[node_index];
+                    D2D1_COLOR_F color = frame ? folder_frame : folder_fill;
+                    if (!frame && !node.is_directory) {
+                        color = to_d2d_color(ExtensionSwatchColor(ExtensionKeyFromName(node.name)));
+                    }
+                    tiles.push_back(DrawTile{
+                        left,
+                        top,
+                        right,
+                        bottom,
+                        color,
+                        depth <= 1 ? node.name : std::wstring{},
+                        frame,
+                    });
                     layout.push_back(TreemapTileLayout{
                         left,
                         top,
                         right,
                         bottom,
-                        input.entry.name,
-                        input.entry.path,
-                        input.entry.kind,
-                        input.entry.size_text,
+                        node.name,
+                        TreeNodePath(node_index),
+                        node.is_directory ? std::wstring(L"Folder") : std::wstring(L"File"),
+                        FormatBytes(node.physical_bytes),
                     });
-                    continue;
-                }
+                };
 
-                const double total = range_weight(node.begin, node.end);
-                double prefix = 0.0;
-                size_t split = node.begin + 1;
-                for (; split + 1 < node.end; ++split) {
-                    prefix += (std::max)(1.0, tile_inputs[split - 1].weight);
-                    if (prefix >= total * 0.5) {
-                        break;
+                struct QueueItem
+                {
+                    size_t node;
+                    float left;
+                    float top;
+                    float right;
+                    float bottom;
+                    uint32_t depth;
+                };
+                std::vector<QueueItem> queue;
+                queue.push_back(QueueItem{ 0, 2.0f, 2.0f, surface_width - 2.0f, surface_height - 2.0f, 0 });
+
+                while (!queue.empty() && tiles.size() < kTileBudget) {
+                    const QueueItem item = queue.back();
+                    queue.pop_back();
+                    const float item_width = item.right - item.left;
+                    const float item_height = item.bottom - item.top;
+                    if (item_width < kMinTileDim || item_height < kMinTileDim) {
+                        continue;
+                    }
+
+                    // m_tree_nodes may reallocate inside
+                    // EnsureTreeChildrenLoaded — index, don't hold references.
+                    const bool is_directory =
+                        m_tree_nodes[item.node].is_directory && !m_tree_nodes[item.node].is_more_row;
+                    if (!is_directory || item_width < kRecurseMinDim || item_height < kRecurseMinDim) {
+                        emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth);
+                        continue;
+                    }
+
+                    EnsureTreeChildrenLoaded(item.node);
+                    std::vector<size_t> children;
+                    double child_total = 0.0;
+                    for (size_t child : m_tree_nodes[item.node].children) {
+                        auto const& child_node = m_tree_nodes[child];
+                        if (child_node.is_more_row || child_node.physical_bytes == 0) {
+                            continue;
+                        }
+                        children.push_back(child);
+                        child_total += static_cast<double>(child_node.physical_bytes);
+                    }
+                    if (children.empty() || child_total <= 0.0) {
+                        emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth);
+                        continue;
+                    }
+                    ++directories_recursed;
+
+                    // Frame drawn behind the children so the directory still
+                    // registers hover/tap hits along its 1px border.
+                    emit_tile(item.node, item.left, item.top, item.right, item.bottom, true, item.depth);
+
+                    // Weight-balanced binary subdivision of this directory's
+                    // rectangle (children arrive sorted largest-first).
+                    struct Slice
+                    {
+                        size_t begin;
+                        size_t end;
+                        float left;
+                        float top;
+                        float right;
+                        float bottom;
+                    };
+                    auto slice_weight = [&](size_t begin, size_t end) {
+                        double total = 0.0;
+                        for (size_t index = begin; index < end; ++index) {
+                            total += static_cast<double>(m_tree_nodes[children[index]].physical_bytes);
+                        }
+                        return total;
+                    };
+
+                    const float inset = 1.0f;
+                    std::vector<Slice> slices;
+                    slices.push_back(Slice{
+                        0,
+                        children.size(),
+                        item.left + inset,
+                        item.top + inset,
+                        item.right - inset,
+                        item.bottom - inset,
+                    });
+                    while (!slices.empty()) {
+                        const Slice slice = slices.back();
+                        slices.pop_back();
+                        if (slice.begin >= slice.end) {
+                            continue;
+                        }
+                        const float slice_width = slice.right - slice.left;
+                        const float slice_height = slice.bottom - slice.top;
+                        if (slice_width < kMinTileDim || slice_height < kMinTileDim) {
+                            continue;
+                        }
+                        if (slice.end - slice.begin == 1) {
+                            queue.push_back(QueueItem{
+                                children[slice.begin],
+                                slice.left,
+                                slice.top,
+                                slice.right,
+                                slice.bottom,
+                                item.depth + 1,
+                            });
+                            continue;
+                        }
+
+                        const double total = (std::max)(1.0, slice_weight(slice.begin, slice.end));
+                        double prefix = 0.0;
+                        size_t split = slice.begin + 1;
+                        for (; split + 1 < slice.end; ++split) {
+                            prefix += static_cast<double>(m_tree_nodes[children[split - 1]].physical_bytes);
+                            if (prefix >= total * 0.5) {
+                                break;
+                            }
+                        }
+                        const double leading = slice_weight(slice.begin, split);
+                        const float ratio = static_cast<float>(leading / total);
+                        if (slice_width >= slice_height) {
+                            const float split_x = std::clamp(
+                                slice.left + (slice_width * ratio),
+                                slice.left + 1.0f,
+                                slice.right - 1.0f);
+                            slices.push_back(Slice{ split, slice.end, split_x, slice.top, slice.right, slice.bottom });
+                            slices.push_back(Slice{ slice.begin, split, slice.left, slice.top, split_x, slice.bottom });
+                        } else {
+                            const float split_y = std::clamp(
+                                slice.top + (slice_height * ratio),
+                                slice.top + 1.0f,
+                                slice.bottom - 1.0f);
+                            slices.push_back(Slice{ split, slice.end, slice.left, split_y, slice.right, slice.bottom });
+                            slices.push_back(Slice{ slice.begin, split, slice.left, slice.top, slice.right, split_y });
+                        }
                     }
                 }
+            } else {
+                // No tree loaded yet (live scan in progress or empty index):
+                // fall back to the flat catalog sample.
+                layout_name = L"balanced";
+                struct TileInput
+                {
+                    double weight;
+                    D2D1_COLOR_F color;
+                    TreeCatalogEntry entry;
+                };
 
-                const double leading_weight = range_weight(node.begin, split);
-                const float ratio = static_cast<float>(leading_weight / (std::max)(1.0, total));
-                if (node_width >= node_height) {
-                    const float split_x = std::clamp(
-                        node.left + (node_width * ratio),
-                        node.left + gap + 2.0f,
-                        node.right - gap - 2.0f);
-                    pending_layout.push_back(LayoutNode{ split, node.end, split_x + gap, node.top, node.right, node.bottom });
-                    pending_layout.push_back(LayoutNode{ node.begin, split, node.left, node.top, split_x - gap, node.bottom });
-                } else {
-                    const float split_y = std::clamp(
-                        node.top + (node_height * ratio),
-                        node.top + gap + 2.0f,
-                        node.bottom - gap - 2.0f);
-                    pending_layout.push_back(LayoutNode{ split, node.end, node.left, split_y + gap, node.right, node.bottom });
-                    pending_layout.push_back(LayoutNode{ node.begin, split, node.left, node.top, node.right, split_y - gap });
+                const D2D1_COLOR_F palette[] = {
+                    D2D1::ColorF(0.10f, 0.36f, 0.67f, 1.0f),
+                    D2D1::ColorF(0.13f, 0.50f, 0.35f, 1.0f),
+                    D2D1::ColorF(0.43f, 0.25f, 0.62f, 1.0f),
+                    D2D1::ColorF(0.70f, 0.36f, 0.11f, 1.0f),
+                    D2D1::ColorF(0.60f, 0.12f, 0.16f, 1.0f),
+                    D2D1::ColorF(0.28f, 0.46f, 0.52f, 1.0f),
+                };
+
+                std::vector<TileInput> tile_inputs;
+                tile_inputs.reserve(10);
+                for (auto const& entry : m_tree_catalog) {
+                    if (tile_inputs.size() >= 10) {
+                        break;
+                    }
+                    const double weight = entry.size_bytes > 0
+                        ? static_cast<double>(entry.size_bytes)
+                        : static_cast<double>((std::max)(1, entry.progress));
+                    tile_inputs.push_back(TileInput{ weight, palette[tile_inputs.size() % ARRAYSIZE(palette)], entry });
+                }
+                std::sort(tile_inputs.begin(), tile_inputs.end(), [](TileInput const& left, TileInput const& right) {
+                    return left.weight > right.weight;
+                });
+
+                const float gap = 4.0f;
+                tiles.reserve(tile_inputs.size());
+                layout.reserve(tile_inputs.size());
+
+                struct LayoutNode
+                {
+                    size_t begin;
+                    size_t end;
+                    float left;
+                    float top;
+                    float right;
+                    float bottom;
+                };
+
+                auto range_weight = [&](size_t begin, size_t end) {
+                    double total = 0.0;
+                    for (size_t index = begin; index < end; ++index) {
+                        total += (std::max)(1.0, tile_inputs[index].weight);
+                    }
+                    return total;
+                };
+
+                std::vector<LayoutNode> pending_layout;
+                pending_layout.push_back(LayoutNode{ 0, tile_inputs.size(), gap, gap, surface_width - gap, surface_height - gap });
+                while (!pending_layout.empty()) {
+                    const LayoutNode node = pending_layout.back();
+                    pending_layout.pop_back();
+                    if (node.begin >= node.end) {
+                        continue;
+                    }
+
+                    const float node_width = node.right - node.left;
+                    const float node_height = node.bottom - node.top;
+                    if (node.end - node.begin == 1 || node_width < 32.0f || node_height < 24.0f) {
+                        auto const& input = tile_inputs[node.begin];
+                        const float left = node.left;
+                        const float top = node.top;
+                        const float right = (std::max)(left + 2.0f, node.right);
+                        const float bottom = (std::max)(top + 2.0f, node.bottom);
+                        tiles.push_back(DrawTile{ left, top, right, bottom, input.color, input.entry.name });
+                        layout.push_back(TreemapTileLayout{
+                            left,
+                            top,
+                            right,
+                            bottom,
+                            input.entry.name,
+                            input.entry.path,
+                            input.entry.kind,
+                            input.entry.size_text,
+                        });
+                        continue;
+                    }
+
+                    const double total = range_weight(node.begin, node.end);
+                    double prefix = 0.0;
+                    size_t split = node.begin + 1;
+                    for (; split + 1 < node.end; ++split) {
+                        prefix += (std::max)(1.0, tile_inputs[split - 1].weight);
+                        if (prefix >= total * 0.5) {
+                            break;
+                        }
+                    }
+
+                    const double leading_weight = range_weight(node.begin, split);
+                    const float ratio = static_cast<float>(leading_weight / (std::max)(1.0, total));
+                    if (node_width >= node_height) {
+                        const float split_x = std::clamp(
+                            node.left + (node_width * ratio),
+                            node.left + gap + 2.0f,
+                            node.right - gap - 2.0f);
+                        pending_layout.push_back(LayoutNode{ split, node.end, split_x + gap, node.top, node.right, node.bottom });
+                        pending_layout.push_back(LayoutNode{ node.begin, split, node.left, node.top, split_x - gap, node.bottom });
+                    } else {
+                        const float split_y = std::clamp(
+                            node.top + (node_height * ratio),
+                            node.top + gap + 2.0f,
+                            node.bottom - gap - 2.0f);
+                        pending_layout.push_back(LayoutNode{ split, node.end, node.left, split_y + gap, node.right, node.bottom });
+                        pending_layout.push_back(LayoutNode{ node.begin, split, node.left, node.top, node.right, split_y - gap });
+                    }
                 }
             }
 
@@ -2181,9 +2368,12 @@ namespace winrt::WinBlaze::UI::implementation
                     m_treemap_render_status = L"Treemap probe frame D2D brush failed: " + HresultText(result);
                     return;
                 }
-                d2d_context->FillRectangle(
-                    D2D1::RectF(tile.left, tile.top, tile.right, tile.bottom),
-                    brush.get());
+                const auto rect = D2D1::RectF(tile.left, tile.top, tile.right, tile.bottom);
+                if (tile.frame) {
+                    d2d_context->DrawRectangle(rect, brush.get(), 1.0f);
+                } else {
+                    d2d_context->FillRectangle(rect, brush.get());
+                }
             }
 
             winrt::com_ptr<ID2D1SolidColorBrush> label_brush;
@@ -2243,9 +2433,11 @@ namespace winrt::WinBlaze::UI::implementation
             }
             std::wstring first_tile = m_treemap_tile_layout.empty() ? L"none" : m_treemap_tile_layout.front().name;
             m_treemap_render_status = L"GPU treemap catalog frame rendered: " +
-                std::to_wstring(tile_inputs.size()) + L" tiles, D3D feature level " +
+                std::to_wstring(tiles.size()) + L" tiles, D3D feature level " +
                 std::to_wstring(level_major) + L"." + std::to_wstring(level_minor) +
-                L"; layout=balanced, labels=" + std::to_wstring(labels_drawn) +
+                L"; layout=" + layout_name +
+                L", directories=" + std::to_wstring(directories_recursed) +
+                L", labels=" + std::to_wstring(labels_drawn) +
                 L", first tile=\"" + first_tile + L"\".";
         }
         catch (winrt::hresult_error const& error) {
@@ -2263,7 +2455,10 @@ namespace winrt::WinBlaze::UI::implementation
         }
 
         const auto point = args.GetCurrentPoint(surface).Position();
-        for (auto const& tile : m_treemap_tile_layout) {
+        // Reverse scan: children are laid out after their ancestors'
+        // directory frames, so the innermost tile under the cursor wins.
+        for (auto it = m_treemap_tile_layout.rbegin(); it != m_treemap_tile_layout.rend(); ++it) {
+            auto const& tile = *it;
             if (point.X >= tile.left && point.X <= tile.right &&
                 point.Y >= tile.top && point.Y <= tile.bottom) {
                 m_hovered_treemap_name = tile.name;
@@ -2304,11 +2499,13 @@ namespace winrt::WinBlaze::UI::implementation
         }
 
         const auto point = args.GetPosition(surface);
-        for (auto const& tile : m_treemap_tile_layout) {
+        // Reverse scan so the innermost tile under the tap wins (children
+        // are laid out after their ancestors' frames).
+        for (auto it = m_treemap_tile_layout.rbegin(); it != m_treemap_tile_layout.rend(); ++it) {
+            auto const& tile = *it;
             if (point.X >= tile.left && point.X <= tile.right &&
                 point.Y >= tile.top && point.Y <= tile.bottom) {
                 SelectVisualizationTarget(tile.name, tile.path, tile.kind, tile.size_text);
-                NavigateToSection(ShellSection::Treemap);
                 UpdateEventText(L"Selected GPU tile: " + tile.name);
                 return;
             }
@@ -2909,6 +3106,24 @@ namespace winrt::WinBlaze::UI::implementation
                 L", last=" + m_last_scan_issue_text;
             IssueDrilldownText().Text(winrt::hstring(drilldown));
         }
+    }
+
+    // Mirrors the native bridge's extension_key(): lowercase extension, or
+    // empty for dotfiles and names without one. The treemap and legend must
+    // derive identical keys or their colors drift apart.
+    std::wstring MainWindow::ExtensionKeyFromName(std::wstring const& name)
+    {
+        const auto dot = name.rfind(L'.');
+        if (dot == std::wstring::npos || dot == 0 || dot + 1 >= name.size()) {
+            return {};
+        }
+        std::wstring extension = name.substr(dot + 1);
+        for (auto& ch : extension) {
+            if (ch >= L'A' && ch <= L'Z') {
+                ch = static_cast<wchar_t>(ch - L'A' + L'a');
+            }
+        }
+        return extension;
     }
 
     std::wstring MainWindow::Utf8ToWide(std::string_view text)
