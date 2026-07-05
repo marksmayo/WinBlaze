@@ -52,17 +52,20 @@ function Invoke-Button {
     $buttonCondition = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::NameProperty,
         $Name)
-    $button = $Window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $buttonCondition)
-    if (-not $button) {
-        if ($Required) {
-            throw "Button not found: $Name"
+    $matches = $Window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $buttonCondition)
+    foreach ($match in $matches) {
+        $invokePattern = $null
+        if ($match.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+            $invokePattern.Invoke()
+            Start-Sleep -Milliseconds 500
+            return $true
         }
-        return $false
     }
 
-    $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-    Start-Sleep -Milliseconds 500
-    return $true
+    if ($Required) {
+        throw "Button not found: $Name"
+    }
+    return $false
 }
 
 function Toggle-CheckBox {

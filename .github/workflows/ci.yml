@@ -20,7 +20,7 @@ concurrency:
 jobs:
   rust:
     name: Rust checks
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
 
     steps:
       - name: Checkout
@@ -54,7 +54,7 @@ jobs:
 
   winui:
     name: WinUI build and portable package
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
     strategy:
       fail-fast: false
       matrix:
