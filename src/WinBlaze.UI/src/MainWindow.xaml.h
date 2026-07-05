@@ -36,8 +36,6 @@ namespace winrt::WinBlaze::UI::implementation
         void OnSearchResultClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnDeveloperDiagnosticsToggled(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnOptionalPanelToggleClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
-        void OnSectionMenuSelectionChanged(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
-        void OnBreadcrumbClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnTreeItemClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnTreeSnapshotExpandClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnTreeWindowPreviousClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -102,9 +100,6 @@ namespace winrt::WinBlaze::UI::implementation
         void FocusSearchBox();
         void FocusRootPathBox();
         void NavigateToSection(ShellSection section);
-        void UpdateNavigationChips();
-        int SectionMenuIndex(ShellSection section) const;
-        ShellSection SectionFromMenuIndex(int index) const;
         Microsoft::UI::Xaml::Media::SolidColorBrush MakeBrush(Windows::UI::Color const& color) const;
         void ApplyCardStyle(Microsoft::UI::Xaml::Controls::Border const& card) const;
         void ApplyCompactCardStyle(Microsoft::UI::Xaml::Controls::Border const& card) const;
@@ -113,7 +108,6 @@ namespace winrt::WinBlaze::UI::implementation
             Windows::UI::Color const& background,
             Windows::UI::Color const& border) const;
         Microsoft::UI::Xaml::Controls::TextBlock MakeCardTitle(std::wstring_view text) const;
-        void ApplyNavigationChipStyle(Microsoft::UI::Xaml::Controls::Button const& chip, bool active) const;
 
     private:
         struct TreeCatalogEntry
@@ -174,10 +168,6 @@ namespace winrt::WinBlaze::UI::implementation
         void LoadExtensionStatsSnapshot();
 
         Microsoft::UI::Xaml::Controls::TextBlock StatusText() const { return m_status_text; }
-        Microsoft::UI::Xaml::Controls::TextBlock SectionText() const { return m_section_text; }
-        Microsoft::UI::Xaml::Controls::Button OverviewBreadcrumbButton() const { return m_overview_breadcrumb_button; }
-        Microsoft::UI::Xaml::Controls::Button ScanRootButton() const { return m_scan_root_button; }
-        Microsoft::UI::Xaml::Controls::TextBlock RootBreadcrumbText() const { return m_root_breadcrumb_text; }
         Microsoft::UI::Xaml::Controls::TextBox RootPathBox() const { return m_root_path_box; }
         Microsoft::UI::Xaml::Controls::Button StartScanButton() const { return m_start_scan_button; }
         Microsoft::UI::Xaml::Controls::Button IncrementalScanButton() const { return m_incremental_scan_button; }
@@ -192,7 +182,6 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::TextBlock EventText() const { return m_event_text; }
         Microsoft::UI::Xaml::Controls::TextBlock SummaryText() const { return m_summary_text; }
         Microsoft::UI::Xaml::Controls::TextBlock RuntimeSnapshotText() const { return m_runtime_snapshot_text; }
-        Microsoft::UI::Xaml::Controls::ComboBox SectionMenu() const { return m_section_menu; }
         Microsoft::UI::Xaml::Controls::CheckBox CurrentStateToggle() const { return m_current_state_toggle; }
         Microsoft::UI::Xaml::Controls::CheckBox FolderViewToggle() const { return m_folder_view_toggle; }
         Microsoft::UI::Xaml::Controls::CheckBox FolderTreeToggle() const { return m_folder_tree_toggle; }
@@ -243,11 +232,7 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::Border FileDetailPanel() const { return m_file_detail_panel; }
 
         Microsoft::UI::Xaml::Controls::TextBlock m_status_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_section_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::Button m_overview_breadcrumb_button{ nullptr };
-        Microsoft::UI::Xaml::Controls::Button m_scan_root_button{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBlock m_root_breadcrumb_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::StackPanel m_path_breadcrumb_panel{ nullptr };
+        Microsoft::UI::Xaml::Controls::TextBlock m_selection_status_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_root_path_box{ nullptr };
         Microsoft::UI::Xaml::Controls::Button m_start_scan_button{ nullptr };
         Microsoft::UI::Xaml::Controls::Button m_incremental_scan_button{ nullptr };
@@ -262,7 +247,6 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::TextBlock m_event_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_summary_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_runtime_snapshot_text{ nullptr };
-        Microsoft::UI::Xaml::Controls::ComboBox m_section_menu{ nullptr };
         Microsoft::UI::Xaml::Controls::CheckBox m_current_state_toggle{ nullptr };
         Microsoft::UI::Xaml::Controls::CheckBox m_folder_view_toggle{ nullptr };
         Microsoft::UI::Xaml::Controls::CheckBox m_folder_tree_toggle{ nullptr };
@@ -283,7 +267,6 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::Border m_diagnostics_card{ nullptr };
         Microsoft::UI::Xaml::Controls::Border m_treemap_card{ nullptr };
         Microsoft::UI::Xaml::Controls::Border m_detail_card{ nullptr };
-        std::vector<Microsoft::UI::Xaml::Controls::Button> m_nav_chips;
         Microsoft::UI::Xaml::Controls::ListView m_tree_list_view{ nullptr };
         Microsoft::UI::Xaml::Controls::Border m_extension_card{ nullptr };
         Microsoft::UI::Xaml::Controls::ListView m_extension_list_view{ nullptr };
@@ -330,10 +313,12 @@ namespace winrt::WinBlaze::UI::implementation
         bool m_has_results{ false };
         bool m_has_error{ false };
         bool m_show_current_state{ true };
-        bool m_show_folder_view{ true };
+        // WinDirStat-style defaults: extensions own the right pane (detail
+        // panel hidden) and search stays tucked away until revealed.
+        bool m_show_folder_view{ false };
         bool m_show_folder_tree{ true };
         bool m_show_runtime_metrics{ true };
-        bool m_section_menu_updates_suppressed{ false };
+        bool m_show_search{ false };
         ShellSection m_active_section{ ShellSection::Overview };
         std::chrono::steady_clock::time_point m_scan_started_at{};
         std::chrono::duration<double, std::milli> m_last_scan_duration{ 0.0 };

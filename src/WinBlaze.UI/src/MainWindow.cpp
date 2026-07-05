@@ -451,280 +451,87 @@ namespace winrt::WinBlaze::UI::implementation
         root.Loaded({ this, &MainWindow::OnWindowLoaded });
         TraceStartup(L"BuildShell after root grid");
 
-        // Create root grid RowDefinitions (Header, Workspace content, Footer)
-        auto header_row_def = RowDefinition();
-        header_row_def.Height(GridLengthHelper::FromValueAndType(54.0, GridUnitType::Pixel));
+        // Root rows: menu bar (auto), workspace content (star), status bar.
+        // WinDirStat-style single window: no header chips, no sidebar, no
+        // navigation tabs.
+        auto menu_row_def = RowDefinition();
+        menu_row_def.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
         auto content_row_def = RowDefinition();
         content_row_def.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star));
         auto footer_row_def = RowDefinition();
         footer_row_def.Height(GridLengthHelper::FromValueAndType(32.0, GridUnitType::Pixel));
 
-        root.RowDefinitions().Append(header_row_def);
+        root.RowDefinitions().Append(menu_row_def);
         root.RowDefinitions().Append(content_row_def);
         root.RowDefinitions().Append(footer_row_def);
 
-        // Create root grid ColumnDefinitions (Left Sidebar, Main content canvas)
-        auto sidebar_col_def = ColumnDefinition();
-        sidebar_col_def.Width(GridLengthHelper::FromValueAndType(250.0, GridUnitType::Pixel));
-        auto main_content_col_def = ColumnDefinition();
-        main_content_col_def.Width(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star));
+        // Menu bar
+        auto menu_host = Border{};
+        menu_host.Background(make_brush(theme.card_background));
+        menu_host.BorderBrush(make_brush(theme.card_border));
+        menu_host.BorderThickness(Thickness{ 0.0, 0.0, 0.0, 1.0 });
 
-        root.ColumnDefinitions().Append(sidebar_col_def);
-        root.ColumnDefinitions().Append(main_content_col_def);
+        // Flat buttons with attached MenuFlyouts rather than a MenuBar
+        // control: this app runs without XamlControlsResources (App.xaml
+        // fails to load — see failures.jsonl), so template-heavy controls
+        // like MenuBar throw a stowed exception on first layout.
+        auto menu_row = StackPanel{};
+        menu_row.Orientation(Orientation::Horizontal);
+        menu_row.Spacing(4.0);
+        menu_row.Padding(Thickness{ 8.0, 2.0, 8.0, 2.0 });
 
-        // Initialize top header components first
-        auto status_row = StackPanel{};
-        status_row.Orientation(Orientation::Horizontal);
-        status_row.Spacing(12);
-
-        auto status_chip = Border{};
-        status_chip.CornerRadius(UniformRadius(theme.chip_radius));
-        status_chip.Padding(Thickness{ 12.0, 6.0, 12.0, 6.0 });
-        status_chip.Background(make_brush(theme.chip_background));
-        m_status_text = TextBlock{};
-        m_status_text.Text(L"Idle");
-        m_status_text.Foreground(make_brush(theme.text_primary));
-        status_chip.Child(m_status_text);
-        status_row.Children().Append(status_chip);
-
-        auto section_chip = Border{};
-        section_chip.CornerRadius(UniformRadius(theme.chip_radius));
-        section_chip.Padding(Thickness{ 12.0, 6.0, 12.0, 6.0 });
-        section_chip.Background(make_brush(theme.chip_active_background));
-        m_section_text = TextBlock{};
-        m_section_text.Text(L"Overview");
-        m_section_text.Foreground(make_brush(theme.text_primary));
-        section_chip.Child(m_section_text);
-        status_row.Children().Append(section_chip);
-
-        auto breadcrumb_group = StackPanel{};
-        breadcrumb_group.Spacing(6);
-
-        auto breadcrumb_row = StackPanel{};
-        breadcrumb_row.Orientation(Orientation::Horizontal);
-        breadcrumb_row.Spacing(8);
-
-        m_overview_breadcrumb_button = Button{};
-        m_overview_breadcrumb_button.Content(box_value(L"Overview"));
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-            m_overview_breadcrumb_button,
-            L"Overview breadcrumb");
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
-            m_overview_breadcrumb_button,
-            L"Return to the overview section.");
-        m_overview_breadcrumb_button.Click({ this, &MainWindow::OnBreadcrumbClicked });
-        breadcrumb_row.Children().Append(m_overview_breadcrumb_button);
-
-        auto breadcrumb_sep1 = TextBlock{};
-        breadcrumb_sep1.Text(L">");
-        breadcrumb_sep1.VerticalAlignment(VerticalAlignment::Center);
-        breadcrumb_sep1.Opacity(0.6);
-        breadcrumb_row.Children().Append(breadcrumb_sep1);
-
-        m_scan_root_button = Button{};
-        m_scan_root_button.Content(box_value(L"Scan root"));
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-            m_scan_root_button,
-            L"Scan root breadcrumb");
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
-            m_scan_root_button,
-            L"Focus the scan root path box.");
-        m_scan_root_button.Click({ this, &MainWindow::OnBreadcrumbClicked });
-        breadcrumb_row.Children().Append(m_scan_root_button);
-
-        auto breadcrumb_sep2 = TextBlock{};
-        breadcrumb_sep2.Text(L">");
-        breadcrumb_sep2.VerticalAlignment(VerticalAlignment::Center);
-        breadcrumb_sep2.Opacity(0.6);
-        breadcrumb_row.Children().Append(breadcrumb_sep2);
-
-        m_root_breadcrumb_text = TextBlock{};
-        m_root_breadcrumb_text.Text(L"C:\\");
-        m_root_breadcrumb_text.VerticalAlignment(VerticalAlignment::Center);
-        m_root_breadcrumb_text.Opacity(0.75);
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-            m_root_breadcrumb_text,
-            L"Current scan root breadcrumb");
-        breadcrumb_row.Children().Append(m_root_breadcrumb_text);
-
-        breadcrumb_group.Children().Append(breadcrumb_row);
-
-        m_path_breadcrumb_panel = StackPanel{};
-        m_path_breadcrumb_panel.Orientation(Orientation::Horizontal);
-        m_path_breadcrumb_panel.Spacing(6);
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-            m_path_breadcrumb_panel,
-            L"Path breadcrumbs");
-        breadcrumb_group.Children().Append(m_path_breadcrumb_panel);
-
-        // Build Top Header Bar
-        auto header_bar = Border{};
-        header_bar.Background(make_brush(theme.card_background));
-        header_bar.BorderBrush(make_brush(theme.card_border));
-        header_bar.BorderThickness(Thickness{ 0.0, 0.0, 0.0, 1.0 });
-        header_bar.Height(54.0);
-        header_bar.Padding(Thickness{ 16.0, 0.0, 16.0, 0.0 });
-
-        auto header_grid = Grid{};
-        header_bar.Child(header_grid);
-
-        auto header_col1 = ColumnDefinition();
-        header_col1.Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
-        auto header_col2 = ColumnDefinition();
-        header_col2.Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Auto));
-        header_grid.ColumnDefinitions().Append(header_col1);
-        header_grid.ColumnDefinitions().Append(header_col2);
-
-        breadcrumb_group.VerticalAlignment(VerticalAlignment::Center);
-        Grid::SetColumn(breadcrumb_group, 0);
-        header_grid.Children().Append(breadcrumb_group);
-
-        m_section_menu = ComboBox{};
-        m_section_menu.Width(170.0);
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_section_menu, L"Navigate menu");
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
-            m_section_menu,
-            L"Choose the active section. Keyboard shortcuts Ctrl or Alt plus 1 through 5 still work.");
-        auto append_section_item = [&](std::wstring_view text) {
-            auto item = ComboBoxItem{};
-            item.Content(box_value(winrt::hstring(text)));
-            m_section_menu.Items().Append(item);
+        auto make_menu_button = [&](std::wstring_view title, std::wstring_view automation_name) {
+            auto button = Button{};
+            button.Content(box_value(winrt::hstring(title)));
+            button.Background(make_brush(Windows::UI::Colors::Transparent()));
+            button.BorderThickness(Thickness{ 0.0, 0.0, 0.0, 0.0 });
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                button, winrt::hstring(automation_name));
+            menu_row.Children().Append(button);
+            return button;
         };
-        append_section_item(L"Overview");
-        append_section_item(L"Folder tree");
-        append_section_item(L"Treemap");
-        append_section_item(L"Search");
-        append_section_item(L"Diagnostics");
-        m_section_menu.SelectedIndex(SectionMenuIndex(m_active_section));
-        m_section_menu.SelectionChanged({ this, &MainWindow::OnSectionMenuSelectionChanged });
-        status_row.Children().Append(m_section_menu);
 
-        status_row.VerticalAlignment(VerticalAlignment::Center);
-        Grid::SetColumn(status_row, 1);
-        header_grid.Children().Append(status_row);
+        auto file_button = make_menu_button(L"File", L"File menu");
+        auto file_flyout = MenuFlyout{};
 
-        Grid::SetRow(header_bar, 0);
-        Grid::SetColumnSpan(header_bar, 2);
-        root.Children().Append(header_bar);
-
-        // Build Left Sidebar StackPanel
-        auto sidebar = StackPanel{};
-        sidebar.Width(250.0);
-        sidebar.Padding(Thickness{ 16.0, 16.0, 16.0, 16.0 });
-        sidebar.Spacing(12.0);
-
-        auto sidebar_container = Border{};
-        sidebar_container.Background(make_brush(theme.app_background));
-        sidebar_container.BorderBrush(make_brush(theme.card_border));
-        sidebar_container.BorderThickness(Thickness{ 0.0, 0.0, 1.0, 0.0 });
-        sidebar_container.Child(sidebar);
-
-        // App logo header in Left Sidebar
-        auto app_header = TextBlock{};
-        app_header.Text(L"WinBlaze");
-        app_header.FontSize(22.0);
-        app_header.FontWeight({ 700 });
-        app_header.Foreground(make_brush(theme.chip_active_background)); // Electric Blue Accent
-        sidebar.Children().Append(app_header);
-
-        // Active Drive Card
-        auto drive_card = Border{};
-        apply_card_style(drive_card);
-
-        auto drive_stack = StackPanel{};
-        drive_stack.Spacing(6.0);
-        drive_card.Child(drive_stack);
-
-        auto drive_title = TextBlock{};
-        drive_title.Text(L"C: Local Disk");
-        drive_title.FontWeight({ 600 });
-        drive_title.Foreground(make_brush(theme.text_primary));
-        drive_stack.Children().Append(drive_title);
-
-        auto drive_size = TextBlock{};
-        drive_size.Text(L"454 GB Total");
-        drive_size.FontSize(12.0);
-        drive_size.Foreground(make_brush(theme.text_secondary));
-        drive_stack.Children().Append(drive_size);
-
-        auto switch_drive_button = Button{};
-        switch_drive_button.Content(box_value(L"Switch Drive"));
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(switch_drive_button, L"Switch Drive");
-        switch_drive_button.HorizontalAlignment(HorizontalAlignment::Stretch);
-        switch_drive_button.Click([this](auto const&, auto const&) {
+        auto select_drive_item = MenuFlyoutItem{};
+        select_drive_item.Text(L"Select drive...");
+        select_drive_item.Click([this](auto const&, auto const&) {
             FocusRootPathBox();
         });
-        drive_stack.Children().Append(switch_drive_button);
+        file_flyout.Items().Append(select_drive_item);
 
-        sidebar.Children().Append(drive_card);
+        auto rescan_item = MenuFlyoutItem{};
+        rescan_item.Text(L"Rescan");
+        rescan_item.Click([this](auto const&, auto const&) {
+            BeginScanFromCurrentRoot();
+        });
+        file_flyout.Items().Append(rescan_item);
 
-        // Sidebar navigation header
-        auto nav_label = TextBlock{};
-        nav_label.Text(L"NAVIGATION");
-        nav_label.FontSize(11.0);
-        nav_label.FontWeight({ 700 });
-        nav_label.Foreground(make_brush(theme.text_secondary));
-        nav_label.Margin(Thickness{ 0.0, 8.0, 0.0, 0.0 });
-        sidebar.Children().Append(nav_label);
+        auto exit_item = MenuFlyoutItem{};
+        exit_item.Text(L"Exit");
+        exit_item.Click([this](auto const&, auto const&) {
+            Close();
+        });
+        file_flyout.Items().Append(exit_item);
+        file_button.Flyout(file_flyout);
 
-        // Navigation links mapped to m_nav_chips for automated styling
-        m_nav_chips.clear();
-        auto make_nav_item = [&](std::wstring_view text, ShellSection section, std::wstring_view tag) {
-            auto btn = Button{};
-            btn.Content(box_value(winrt::hstring(text)));
-            btn.Tag(box_value(winrt::hstring(tag)));
-            btn.HorizontalAlignment(HorizontalAlignment::Stretch);
-            btn.HorizontalContentAlignment(HorizontalAlignment::Left);
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(btn, winrt::hstring(text));
-            btn.Click([this, section](auto const&, auto const&) {
-                NavigateToSection(section);
-            });
-            m_nav_chips.push_back(btn);
-            return btn;
-        };
+        auto help_button = make_menu_button(L"Help", L"Help menu");
+        auto help_flyout = MenuFlyout{};
+        auto about_item = MenuFlyoutItem{};
+        about_item.Text(L"About WinBlaze");
+        about_item.Click([this](auto const&, auto const&) {
+            UpdateStatus(L"WinBlaze: fast NTFS disk usage analyzer.");
+        });
+        help_flyout.Items().Append(about_item);
+        help_button.Flyout(help_flyout);
 
-        auto overview_nav = make_nav_item(L"Overview", ShellSection::Overview, L"Overview");
-        auto tree_nav = make_nav_item(L"Folder tree", ShellSection::Tree, L"Tree");
-        auto treemap_nav = make_nav_item(L"Treemap", ShellSection::Treemap, L"Treemap");
-        auto search_nav = make_nav_item(L"Search", ShellSection::Search, L"Search");
-        auto diag_nav = make_nav_item(L"Diagnostics", ShellSection::Diagnostics, L"Diagnostics");
+        menu_host.Child(menu_row);
+        Grid::SetRow(menu_host, 0);
+        root.Children().Append(menu_host);
 
-        sidebar.Children().Append(overview_nav);
-        sidebar.Children().Append(tree_nav);
-        sidebar.Children().Append(treemap_nav);
-        sidebar.Children().Append(search_nav);
-        sidebar.Children().Append(diag_nav);
-
-        // Optional View checkboxes heading
-        auto view_label = TextBlock{};
-        view_label.Text(L"VIEW PANELS");
-        view_label.FontSize(11.0);
-        view_label.FontWeight({ 700 });
-        view_label.Foreground(make_brush(theme.text_secondary));
-        view_label.Margin(Thickness{ 0.0, 16.0, 0.0, 0.0 });
-        sidebar.Children().Append(view_label);
-
-        auto make_view_toggle = [&](CheckBox& storage, std::wstring_view text, std::wstring_view help_text) {
-            auto item = CheckBox{};
-            storage = item;
-            item.Content(box_value(winrt::hstring(text)));
-            item.IsChecked(true);
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item, winrt::hstring(text));
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(item, winrt::hstring(help_text));
-            item.Click({ this, &MainWindow::OnOptionalPanelToggleClicked });
-            return item;
-        };
-
-        sidebar.Children().Append(make_view_toggle(m_current_state_toggle, L"Current state", L"Show or hide the current state panel."));
-        sidebar.Children().Append(make_view_toggle(m_folder_view_toggle, L"Folder view", L"Show or hide the folder and file detail panel."));
-        sidebar.Children().Append(make_view_toggle(m_folder_tree_toggle, L"Folder tree", L"Show or hide the virtualized folder tree panel."));
-        sidebar.Children().Append(make_view_toggle(m_runtime_metrics_toggle, L"Runtime metrics", L"Show or hide runtime metrics at the bottom of the UI."));
-
-        Grid::SetRow(sidebar_container, 1);
-        Grid::SetColumn(sidebar_container, 0);
-        root.Children().Append(sidebar_container);
-
-        // Build Bottom Footer Bar
+        // Status bar: scan status, progress with elapsed time, and the
+        // current selection summary.
         auto footer_bar = Border{};
         footer_bar.Background(make_brush(theme.app_background));
         footer_bar.BorderBrush(make_brush(theme.card_border));
@@ -738,15 +545,20 @@ namespace winrt::WinBlaze::UI::implementation
         footer_stack.VerticalAlignment(VerticalAlignment::Center);
         footer_bar.Child(footer_stack);
 
-        // Progress Text
+        m_status_text = TextBlock{};
+        m_status_text.Text(L"Idle");
+        m_status_text.FontSize(12.0);
+        m_status_text.Foreground(make_brush(theme.text_primary));
+        m_status_text.VerticalAlignment(VerticalAlignment::Center);
+        footer_stack.Children().Append(m_status_text);
+
         m_progress_text = TextBlock{};
         m_progress_text.Text(L"0% complete");
         m_progress_text.FontSize(12.0);
         m_progress_text.Foreground(make_brush(theme.text_secondary));
-        m_progress_text.TextWrapping(TextWrapping::WrapWholeWords);
+        m_progress_text.VerticalAlignment(VerticalAlignment::Center);
         footer_stack.Children().Append(m_progress_text);
 
-        // Progress Track
         auto progress_track = Border{};
         progress_track.Width(150.0);
         progress_track.Height(6.0);
@@ -763,16 +575,16 @@ namespace winrt::WinBlaze::UI::implementation
         progress_track.Child(m_scan_progress_fill);
         footer_stack.Children().Append(progress_track);
 
-        auto footer_info = TextBlock{};
-        footer_info.Text(L"System status: healthy | Engine: BlazeV3");
-        footer_info.FontSize(11.0);
-        footer_info.Opacity(0.68);
-        footer_info.Foreground(make_brush(theme.text_secondary));
-        footer_info.VerticalAlignment(VerticalAlignment::Center);
-        footer_stack.Children().Append(footer_info);
+        m_selection_status_text = TextBlock{};
+        m_selection_status_text.FontSize(12.0);
+        m_selection_status_text.Foreground(make_brush(theme.text_secondary));
+        m_selection_status_text.VerticalAlignment(VerticalAlignment::Center);
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+            m_selection_status_text,
+            L"Selection summary");
+        footer_stack.Children().Append(m_selection_status_text);
 
         Grid::SetRow(footer_bar, 2);
-        Grid::SetColumnSpan(footer_bar, 2);
         root.Children().Append(footer_bar);
 
         // Create the scrollable main content Grid
@@ -781,15 +593,19 @@ namespace winrt::WinBlaze::UI::implementation
         shell.RowSpacing(12.0);
         shell.ColumnSpacing(12.0);
 
-        // Rows inside content grid
+        // Rows inside content grid. The tree/extension row and the treemap
+        // row share the leftover height (WinDirStat proportions); everything
+        // else sizes to content.
         auto shell_r0 = RowDefinition();
         shell_r0.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
         auto shell_r1 = RowDefinition();
         shell_r1.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
         auto shell_r2 = RowDefinition();
-        shell_r2.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto)); // Folder Tree and Details side-by-side
+        shell_r2.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star)); // Folder tree | extensions
+        shell_r2.MinHeight(220.0);
         auto shell_r3 = RowDefinition();
-        shell_r3.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
+        shell_r3.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star)); // Treemap
+        shell_r3.MinHeight(200.0);
         auto shell_r4 = RowDefinition();
         shell_r4.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
         auto shell_r5 = RowDefinition();
@@ -872,6 +688,40 @@ namespace winrt::WinBlaze::UI::implementation
                 L"Cancel the active scan. Escape also cancels.");
             m_cancel_scan_button.Click({ this, &MainWindow::OnCancelClicked });
             root_row.Children().Append(m_cancel_scan_button);
+
+            // Reveal buttons for the secondary panels. Show-only (a second
+            // click does not hide) so automation scripts can invoke them
+            // idempotently; the panels' own checkboxes hide them again.
+            auto search_reveal_button = Button{};
+            search_reveal_button.Content(box_value(L"Search"));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                search_reveal_button,
+                L"Search");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
+                search_reveal_button,
+                L"Show the search panel. Ctrl+4 also opens it.");
+            search_reveal_button.Click([this](auto const&, auto const&) {
+                m_show_search = true;
+                SetSection(m_active_section);
+            });
+            root_row.Children().Append(search_reveal_button);
+
+            auto diagnostics_reveal_button = Button{};
+            diagnostics_reveal_button.Content(box_value(L"Diagnostics"));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                diagnostics_reveal_button,
+                L"Diagnostics");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
+                diagnostics_reveal_button,
+                L"Show the runtime diagnostics panel. Ctrl+5 also opens it.");
+            diagnostics_reveal_button.Click([this](auto const&, auto const&) {
+                m_show_runtime_metrics = true;
+                if (m_runtime_metrics_toggle) {
+                    m_runtime_metrics_toggle.IsChecked(true);
+                }
+                SetSection(m_active_section);
+            });
+            root_row.Children().Append(diagnostics_reveal_button);
 
             scan_stack.Children().Append(root_row);
 
@@ -1409,10 +1259,20 @@ namespace winrt::WinBlaze::UI::implementation
             theme.subtle_border);
         TraceStartup(L"BuildShell detail card end");
 
-        // Stack Detail Card and Catalog Card in Column 1 side-by-side with Folder Tree
-        auto right_content_panel = StackPanel{};
-        right_content_panel.Spacing(12.0);
+        // Right pane beside the folder tree: extension legend fills the
+        // height; the detail card (hidden by default) sits above it when
+        // enabled via its view toggle.
+        auto right_content_panel = Grid{};
+        right_content_panel.RowSpacing(12.0);
+        auto right_detail_row = RowDefinition();
+        right_detail_row.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
+        auto right_extension_row = RowDefinition();
+        right_extension_row.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star));
+        right_content_panel.RowDefinitions().Append(right_detail_row);
+        right_content_panel.RowDefinitions().Append(right_extension_row);
+        Grid::SetRow(detail_card, 0);
         right_content_panel.Children().Append(detail_card);
+        Grid::SetRow(extension_card, 1);
         right_content_panel.Children().Append(extension_card);
         Grid::SetRow(right_content_panel, 2);
         Grid::SetColumn(right_content_panel, 1);
@@ -1423,21 +1283,33 @@ namespace winrt::WinBlaze::UI::implementation
             m_treemap_card = treemap_card;
             apply_card_style(treemap_card);
 
-            auto treemap_stack = StackPanel{};
-            treemap_stack.Spacing(8);
+            // Grid instead of StackPanel so the SwapChainPanel stretches to
+            // fill the card's star-sized row.
+            auto treemap_stack = Grid{};
+            treemap_stack.RowSpacing(8);
+            auto append_treemap_row = [&](Microsoft::UI::Xaml::UIElement const& element, bool star) {
+                auto row = RowDefinition();
+                row.Height(star
+                    ? GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star)
+                    : GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
+                treemap_stack.RowDefinitions().Append(row);
+                Grid::SetRow(element.as<Microsoft::UI::Xaml::FrameworkElement>(), treemap_stack.RowDefinitions().Size() - 1);
+                treemap_stack.Children().Append(element);
+            };
             treemap_card.Child(treemap_stack);
 
-            treemap_stack.Children().Append(make_card_title(L"Treemap"));
+            append_treemap_row(make_card_title(L"Treemap"), false);
 
             auto treemap_subtitle = TextBlock{};
             treemap_subtitle.Text(L"Scan or load a cached catalog to render proportional usage tiles.");
             treemap_subtitle.Opacity(0.75);
             treemap_subtitle.TextWrapping(TextWrapping::WrapWholeWords);
-            treemap_stack.Children().Append(treemap_subtitle);
+            append_treemap_row(treemap_subtitle, false);
 
             m_treemap_surface = SwapChainPanel{};
-            m_treemap_surface.Height(520.0);
-            m_treemap_surface.MinHeight(420.0);
+            // Fills the star-sized treemap row; SizeChanged re-renders.
+            m_treemap_surface.MinHeight(160.0);
+            m_treemap_surface.VerticalAlignment(VerticalAlignment::Stretch);
             m_treemap_surface.HorizontalAlignment(HorizontalAlignment::Stretch);
             m_treemap_surface.SizeChanged({ this, &MainWindow::OnTreemapSurfaceSizeChanged });
             m_treemap_surface.PointerMoved({ this, &MainWindow::OnTreemapSurfacePointerMoved });
@@ -1449,7 +1321,7 @@ namespace winrt::WinBlaze::UI::implementation
             Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
                 m_treemap_surface,
                 L"Direct2D SwapChainPanel surface showing catalog usage tiles. Hover or tap a tile to update selection details.");
-            treemap_stack.Children().Append(m_treemap_surface);
+            append_treemap_row(m_treemap_surface, true);
 
             m_treemap_render_status = ProbeTreemapRenderStack();
             m_treemap_surface_status_text = TextBlock{};
@@ -1457,7 +1329,7 @@ namespace winrt::WinBlaze::UI::implementation
                 L"SwapChainPanel host is initialized. " + m_treemap_render_status));
             m_treemap_surface_status_text.Opacity(0.72);
             m_treemap_surface_status_text.TextWrapping(TextWrapping::WrapWholeWords);
-            treemap_stack.Children().Append(m_treemap_surface_status_text);
+            append_treemap_row(m_treemap_surface_status_text, false);
 
             m_treemap_zoom_overlay = Border{};
             m_treemap_zoom_overlay.CornerRadius(UniformRadius(theme.panel_radius));
@@ -1481,7 +1353,7 @@ namespace winrt::WinBlaze::UI::implementation
             m_treemap_zoom_description.TextWrapping(TextWrapping::WrapWholeWords);
             m_treemap_zoom_description.TextAlignment(TextAlignment::Center);
             zoom_panel.Children().Append(m_treemap_zoom_description);
-            treemap_stack.Children().Append(m_treemap_zoom_overlay);
+            append_treemap_row(m_treemap_zoom_overlay, false);
 
             Grid::SetRow(treemap_card, 3);
             Grid::SetColumn(treemap_card, 0);
@@ -1500,6 +1372,28 @@ namespace winrt::WinBlaze::UI::implementation
             runtime_card.Child(runtime_stack);
 
             runtime_stack.Children().Append(make_card_title(L"Runtime metrics"));
+
+            // View-panel toggles (moved here from the removed sidebar).
+            auto view_toggle_row = StackPanel{};
+            view_toggle_row.Orientation(Orientation::Horizontal);
+            view_toggle_row.Spacing(16.0);
+
+            auto make_view_toggle = [&](CheckBox& storage, bool checked, std::wstring_view text, std::wstring_view help_text) {
+                auto item = CheckBox{};
+                storage = item;
+                item.Content(box_value(winrt::hstring(text)));
+                item.IsChecked(checked);
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item, winrt::hstring(text));
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(item, winrt::hstring(help_text));
+                item.Click({ this, &MainWindow::OnOptionalPanelToggleClicked });
+                return item;
+            };
+
+            view_toggle_row.Children().Append(make_view_toggle(m_current_state_toggle, m_show_current_state, L"Current state", L"Show or hide the current state panel."));
+            view_toggle_row.Children().Append(make_view_toggle(m_folder_view_toggle, m_show_folder_view, L"Folder view", L"Show or hide the folder and file detail panel."));
+            view_toggle_row.Children().Append(make_view_toggle(m_folder_tree_toggle, m_show_folder_tree, L"Folder tree", L"Show or hide the virtualized folder tree panel."));
+            view_toggle_row.Children().Append(make_view_toggle(m_runtime_metrics_toggle, m_show_runtime_metrics, L"Runtime metrics", L"Show or hide runtime metrics at the bottom of the UI."));
+            runtime_stack.Children().Append(view_toggle_row);
 
             m_developer_diagnostics_toggle = CheckBox{};
             m_developer_diagnostics_toggle.Content(box_value(L"Developer diagnostics"));
@@ -1561,14 +1455,9 @@ namespace winrt::WinBlaze::UI::implementation
         TraceStartup(L"BuildShell runtime card end");
 
         {
-            auto shell_scroll = ScrollViewer{};
-            shell_scroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
-            shell_scroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
-            shell_scroll.Content(shell);
-
-            Grid::SetRow(shell_scroll, 1);
-            Grid::SetColumn(shell_scroll, 1);
-            root.Children().Append(shell_scroll);
+            // The panes size to the window now (star rows); no outer scroll.
+            Grid::SetRow(shell, 1);
+            root.Children().Append(shell);
             Content(root);
         }
         TraceStartup(L"BuildShell stable shell end");
@@ -1828,40 +1717,6 @@ namespace winrt::WinBlaze::UI::implementation
 
         SetSection(m_active_section);
         UpdateStatus(L"View options updated.");
-    }
-
-    void MainWindow::OnSectionMenuSelectionChanged(
-        winrt::Windows::Foundation::IInspectable const&,
-        Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&)
-    {
-        if (m_section_menu_updates_suppressed || !SectionMenu()) {
-            return;
-        }
-
-        NavigateToSection(SectionFromMenuIndex(SectionMenu().SelectedIndex()));
-    }
-
-    void MainWindow::OnBreadcrumbClicked(winrt::Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const&)
-    {
-        if (auto button = sender.try_as<Microsoft::UI::Xaml::Controls::Button>()) {
-            const std::wstring text = winrt::unbox_value_or<winrt::hstring>(button.Content(), winrt::hstring{}).c_str();
-            const std::wstring tag = winrt::unbox_value_or<winrt::hstring>(button.Tag(), winrt::hstring{}).c_str();
-            if (!tag.empty()) {
-                m_current_root_path = tag;
-                if (RootPathBox()) {
-                    RootPathBox().Text(winrt::hstring(tag));
-                }
-                UpdateBreadcrumbs();
-                UpdateStatus(L"Breadcrumb path updated.");
-                UpdateEventText(L"Scan root set to " + tag);
-                return;
-            }
-            if (text == L"Overview") {
-                NavigateToSection(ShellSection::Overview);
-            } else {
-                FocusRootPathBox();
-            }
-        }
     }
 
     void MainWindow::OnTreeItemClicked(winrt::Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const&)
@@ -2436,18 +2291,19 @@ namespace winrt::WinBlaze::UI::implementation
     {
         TraceStartup(L"SetSection begin");
         m_active_section = section;
-        if (!SectionText()) {
-            TraceStartup(L"SetSection skipped: section text unavailable");
-            return;
+
+        // Sections no longer switch pages — the panes are one permanent
+        // WinDirStat-style layout. Selecting Search/Diagnostics (keyboard
+        // shortcut or reveal button) just makes that panel visible.
+        if (section == ShellSection::Search) {
+            m_show_search = true;
         }
-        SectionText().Text(winrt::hstring(SectionName(section)));
-        UpdateNavigationChips();
-        if (SectionMenu()) {
-            m_section_menu_updates_suppressed = true;
-            SectionMenu().SelectedIndex(SectionMenuIndex(section));
-            m_section_menu_updates_suppressed = false;
+        if (section == ShellSection::Diagnostics) {
+            m_show_runtime_metrics = true;
+            if (m_runtime_metrics_toggle) {
+                m_runtime_metrics_toggle.IsChecked(true);
+            }
         }
-        UpdateBreadcrumbs();
         UpdateSummaryText();
 
         if (m_session_active) {
@@ -2456,66 +2312,13 @@ namespace winrt::WinBlaze::UI::implementation
             return;
         }
 
-        // The tree, extension breakdown, and treemap form a permanent
-        // WizTree-style dashboard that stays on screen regardless of which
-        // section is selected; only their own view-panel checkboxes (in the
-        // sidebar) can hide them. Search and Diagnostics remain secondary,
-        // section-gated panels.
-        SetControlVisibility(OverviewCard(), m_show_current_state && (section == ShellSection::Overview || section == ShellSection::Diagnostics));
+        SetControlVisibility(OverviewCard(), m_show_current_state);
         SetControlVisibility(TreeCard(), m_show_folder_tree);
-        SetControlVisibility(SearchCard(), section == ShellSection::Overview || section == ShellSection::Search);
-        SetControlVisibility(DiagnosticsCard(), m_show_runtime_metrics && (section == ShellSection::Overview || section == ShellSection::Diagnostics));
+        SetControlVisibility(SearchCard(), m_show_search);
+        SetControlVisibility(DiagnosticsCard(), m_show_runtime_metrics);
         SetControlVisibility(TreemapCard(), true);
         SetControlVisibility(DetailCard(), m_show_folder_view);
         TraceStartup(L"SetSection end");
-    }
-
-    void MainWindow::UpdateNavigationChips()
-    {
-        const std::wstring active = SectionName(m_active_section);
-        for (auto const& chip : m_nav_chips) {
-            if (!chip) {
-                continue;
-            }
-
-            const std::wstring section = winrt::unbox_value_or<winrt::hstring>(chip.Tag(), L"").c_str();
-            ApplyNavigationChipStyle(chip, section == active);
-        }
-    }
-
-    int MainWindow::SectionMenuIndex(ShellSection section) const
-    {
-        switch (section) {
-        case ShellSection::Overview:
-            return 0;
-        case ShellSection::Tree:
-            return 1;
-        case ShellSection::Treemap:
-            return 2;
-        case ShellSection::Search:
-            return 3;
-        case ShellSection::Diagnostics:
-            return 4;
-        default:
-            return 0;
-        }
-    }
-
-    ShellSection MainWindow::SectionFromMenuIndex(int index) const
-    {
-        switch (index) {
-        case 1:
-            return ShellSection::Tree;
-        case 2:
-            return ShellSection::Treemap;
-        case 3:
-            return ShellSection::Search;
-        case 4:
-            return ShellSection::Diagnostics;
-        case 0:
-        default:
-            return ShellSection::Overview;
-        }
     }
 
     Microsoft::UI::Xaml::Media::SolidColorBrush MainWindow::MakeBrush(Windows::UI::Color const& color) const
@@ -2566,18 +2369,6 @@ namespace winrt::WinBlaze::UI::implementation
         title.FontSize(theme.card_title_size);
         title.Foreground(MakeBrush(theme.text_primary));
         return title;
-    }
-
-    void MainWindow::ApplyNavigationChipStyle(Microsoft::UI::Xaml::Controls::Button const& chip, bool active) const
-    {
-        auto const& theme = ActiveShellTheme();
-        chip.CornerRadius(UniformRadius(theme.chip_radius));
-        chip.Padding(Microsoft::UI::Xaml::Thickness{ 12.0, 6.0, 12.0, 6.0 });
-        chip.Background(MakeBrush(active ? theme.chip_active_background : theme.chip_inactive_background));
-        chip.BorderBrush(MakeBrush(active ? theme.chip_active_border : Windows::UI::Colors::Transparent()));
-        chip.BorderThickness(active
-            ? UniformThickness(1.0)
-            : UniformThickness(0.0));
     }
 
     void MainWindow::ApplyShellState()
@@ -3355,72 +3146,21 @@ namespace winrt::WinBlaze::UI::implementation
         }
     }
 
+    // Refreshes every control that mirrors the current selection: the detail
+    // card labels and the status-bar summary. (The breadcrumb trail this
+    // method used to build was removed with the header bar.)
     void MainWindow::UpdateBreadcrumbs()
     {
-        if (!RootBreadcrumbText() || !SelectionText() || !SelectionSizeText()) {
-            return;
-        }
-        RootBreadcrumbText().Text(winrt::hstring(m_current_root_path));
-        SelectionText().Text(winrt::hstring(
-            L"Selection: " + m_current_selection_name + L" (" + m_current_selection_kind + L")"));
-        SelectionSizeText().Text(winrt::hstring(L"Size: " + m_current_selection_size));
-
-        if (!m_path_breadcrumb_panel) {
-            return;
+        if (SelectionText() && SelectionSizeText()) {
+            SelectionText().Text(winrt::hstring(
+                L"Selection: " + m_current_selection_name + L" (" + m_current_selection_kind + L")"));
+            SelectionSizeText().Text(winrt::hstring(L"Size: " + m_current_selection_size));
         }
 
-        using namespace Microsoft::UI::Xaml;
-        using namespace Microsoft::UI::Xaml::Controls;
-
-        m_path_breadcrumb_panel.Children().Clear();
-
-        auto add_breadcrumb = [&](std::wstring const& label, std::wstring const& path, bool active) {
-            auto button = Button{};
-            button.Content(box_value(winrt::hstring(label)));
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-                button,
-                winrt::hstring(L"Path breadcrumb " + label));
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
-                button,
-                winrt::hstring(path.empty() ? L"Current breadcrumb" : L"Set scan root to " + path));
-            if (!path.empty()) {
-                button.Tag(box_value(winrt::hstring(path)));
-                button.Click({ this, &MainWindow::OnBreadcrumbClicked });
-            }
-            button.Padding(Thickness{ 10.0, 4.0, 10.0, 4.0 });
-            button.CornerRadius(CornerRadius{ 999.0, 999.0, 999.0, 999.0 });
-            auto background = Microsoft::UI::Xaml::Media::SolidColorBrush{};
-            background.Color(active ? ActiveShellTheme().chip_active_background : ActiveShellTheme().subtle_background);
-            button.Background(background);
-            auto foreground = Microsoft::UI::Xaml::Media::SolidColorBrush{};
-            foreground.Color(ActiveShellTheme().text_primary);
-            button.Foreground(foreground);
-            m_path_breadcrumb_panel.Children().Append(button);
-        };
-
-        const std::wstring path = m_current_root_path.empty() ? L"C:\\" : m_current_root_path;
-        std::wstring accumulated;
-        size_t start = 0;
-        if (path.size() >= 3 && path[1] == L':' && (path[2] == L'\\' || path[2] == L'/')) {
-            accumulated = path.substr(0, 3);
-            add_breadcrumb(accumulated, accumulated, path == accumulated);
-            start = 3;
-        }
-
-        while (start < path.size()) {
-            const auto next = path.find_first_of(L"\\/", start);
-            const auto part = path.substr(start, next == std::wstring::npos ? std::wstring::npos : next - start);
-            if (!part.empty()) {
-                if (!accumulated.empty() && accumulated.back() != L'\\') {
-                    accumulated += L'\\';
-                }
-                accumulated += part;
-                add_breadcrumb(part, accumulated, accumulated == path);
-            }
-            if (next == std::wstring::npos) {
-                break;
-            }
-            start = next + 1;
+        if (m_selection_status_text) {
+            m_selection_status_text.Text(winrt::hstring(
+                m_current_selection_name + L" (" + m_current_selection_kind + L") · " +
+                m_current_selection_size));
         }
     }
 
