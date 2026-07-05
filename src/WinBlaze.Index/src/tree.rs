@@ -317,11 +317,14 @@ impl TreeIndex {
     }
 
     /// Streams the direct children of `directory_id` in descending physical
-    /// size, stopping after `limit` entries. Returns the number emitted, or
-    /// None if the directory is unknown.
+    /// size, skipping the first `offset` entries and stopping after `limit`
+    /// emissions. Returns the number emitted, or None if the directory is
+    /// unknown. The offset lets callers page through directories larger
+    /// than their per-call cap.
     pub fn for_each_child(
         &self,
         directory_id: u64,
+        offset: usize,
         limit: usize,
         mut visit: impl FnMut(TreeEntry<'_>),
     ) -> Option<u64> {
@@ -333,6 +336,7 @@ impl TreeIndex {
         let dir_end = node.dir_children.1 as usize;
         let mut file_cursor = node.file_children.0 as usize;
         let file_end = node.file_children.1 as usize;
+        let mut skipped = 0u64;
         let mut emitted = 0u64;
 
         while emitted < limit as u64 && (dir_cursor < dir_end || file_cursor < file_end) {
@@ -351,15 +355,23 @@ impl TreeIndex {
 
             if take_dir {
                 let child = self.dir_children[dir_cursor] as usize;
+                dir_cursor += 1;
+                if skipped < offset as u64 {
+                    skipped += 1;
+                    continue;
+                }
                 visit(TreeEntry::Directory {
                     record: &self.directories[child],
                     rollup: &self.nodes[child].rollup,
                 });
-                dir_cursor += 1;
             } else {
                 let child = self.file_children[file_cursor] as usize;
-                visit(TreeEntry::File(&self.files[child]));
                 file_cursor += 1;
+                if skipped < offset as u64 {
+                    skipped += 1;
+                    continue;
+                }
+                visit(TreeEntry::File(&self.files[child]));
             }
             emitted += 1;
         }
@@ -503,7 +515,7 @@ mod tests {
 
         let mut seen = Vec::new();
         let emitted = tree
-            .for_each_child(5, 3, |entry| {
+            .for_each_child(5, 0, 3, |entry| {
                 seen.push(match entry {
                     TreeEntry::Directory { record, rollup } => {
                         (record.name.clone(), rollup.physical_bytes)
@@ -524,6 +536,18 @@ mod tests {
         );
         // The 0-byte "small" directory ranks fourth, past the limit.
         assert_eq!(tree.child_count(5), Some(4));
+
+        // Paging: offset 3 returns exactly the remaining entry.
+        let mut paged = Vec::new();
+        let emitted = tree
+            .for_each_child(5, 3, 3, |entry| {
+                if let TreeEntry::Directory { record, .. } = entry {
+                    paged.push(record.name.clone());
+                }
+            })
+            .expect("paged children");
+        assert_eq!(emitted, 1);
+        assert_eq!(paged, vec!["small".to_string()]);
     }
 
     #[test]
@@ -547,7 +571,7 @@ mod tests {
         let tree = build(Vec::new(), Vec::new());
         assert!(tree.root().is_none());
         assert!(tree.rollup_for(5).is_none());
-        assert!(tree.for_each_child(5, 10, |_| {}).is_none());
+        assert!(tree.for_each_child(5, 0, 10, |_| {}).is_none());
     }
 
     #[test]

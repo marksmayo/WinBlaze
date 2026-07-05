@@ -143,6 +143,7 @@ fn walk_tree_api() {
     let mut children: Vec<CapturedNode> = Vec::new();
     let result = wb_tree_children(
         root.id,
+        0,
         Some(capture_node),
         (&mut children as *mut Vec<CapturedNode>).cast(),
     );

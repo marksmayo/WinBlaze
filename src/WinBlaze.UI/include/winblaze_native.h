@@ -184,8 +184,9 @@ void wb_index_snapshot_extension_stats(WbExtensionStatCallback callback, void* u
    index. The root node's name is its full mount-point path. */
 uint8_t wb_tree_root(WbTreeNodeCallback callback, void* user_data);
 /* Emits direct children of directory parent_id, largest physical size first,
-   capped at 4096; total lets callers render a "+N more" row. */
-WbTreeChildrenResult wb_tree_children(uint64_t parent_id, WbTreeNodeCallback callback, void* user_data);
+   capped at 4096 starting at offset; total lets callers page and render a
+   "+N more" row. */
+WbTreeChildrenResult wb_tree_children(uint64_t parent_id, uint64_t offset, WbTreeNodeCallback callback, void* user_data);
 
 #ifdef __cplusplus
 }

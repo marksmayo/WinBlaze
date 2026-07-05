@@ -1239,17 +1239,16 @@ namespace winrt::WinBlaze::UI::implementation
                 label.Foreground(make_brush(theme.text_primary));
                 return label;
             };
-            tree_list_header.Children().Append(make_tree_header_label(L"Name", 226.0));
-            tree_list_header.Children().Append(make_tree_header_label(L"Usage", 220.0));
-            tree_list_header.Children().Append(make_tree_header_label(L"%", 44.0));
-            tree_list_header.Children().Append(make_tree_header_label(L"Size", 72.0));
-            tree_list_header.Children().Append(make_tree_header_label(L"Physical", 72.0));
-            tree_list_header.Children().Append(make_tree_header_label(L"Items", 56.0));
+            // Widths mirror CreateTreeNodeListItem's row cells: expander
+            // glyph (14) + spacing + name block (300) collapse into one Name
+            // column; the remaining columns match the row cell min-widths.
+            tree_list_header.Children().Append(make_tree_header_label(L"Name", 326.0));
+            tree_list_header.Children().Append(make_tree_header_label(L"Usage", 150.0));
+            tree_list_header.Children().Append(make_tree_header_label(L"%", 52.0));
+            tree_list_header.Children().Append(make_tree_header_label(L"Physical", 84.0));
+            tree_list_header.Children().Append(make_tree_header_label(L"Logical", 84.0));
+            tree_list_header.Children().Append(make_tree_header_label(L"Files", 64.0));
             tree_list_header.Children().Append(make_tree_header_label(L"Last Change", 120.0));
-            tree_list_header.Children().Append(make_tree_header_label(L"Kind", 82.0));
-            tree_list_header.Children().Append(make_tree_header_label(L"Level", 64.0));
-            tree_list_header.Children().Append(make_tree_header_label(L"Parent", 180.0));
-            tree_list_header.Children().Append(make_tree_header_label(L"Path", 360.0));
             tree_stack.Children().Append(tree_list_header);
 
             m_tree_list_view = ListView{};
@@ -4654,6 +4653,7 @@ namespace winrt::WinBlaze::UI::implementation
 
         const auto result = ::WinBlaze::UI::NativeBridge::TreeChildren(
             parent_id,
+            0,
             [this, node_index, child_depth, &children](WbTreeNode const& node) {
                 TreeNodeUi child;
                 child.id = node.id;
@@ -4727,6 +4727,69 @@ namespace winrt::WinBlaze::UI::implementation
         m_tree_nodes[node_index].expanded = !m_tree_nodes[node_index].expanded;
         RebuildTreeVisibleRows();
         RefreshTreeListView();
+    }
+
+    // Pages the next chunk of children into a directory whose "+N more" row
+    // was activated: fetches from the native tree at the loaded offset,
+    // splices before the more-row, and updates or retires the more-row.
+    void MainWindow::LoadMoreTreeChildren(size_t more_index)
+    {
+        if (more_index >= m_tree_nodes.size() || !m_tree_nodes[more_index].is_more_row) {
+            return;
+        }
+        const size_t parent_index = m_tree_nodes[more_index].parent;
+        if (parent_index == SIZE_MAX || parent_index >= m_tree_nodes.size()) {
+            return;
+        }
+
+        const uint64_t parent_id = m_tree_nodes[parent_index].id;
+        const uint32_t child_depth = m_tree_nodes[parent_index].depth + 1;
+        // Children before the trailing more-row are the already-loaded set.
+        const size_t loaded = m_tree_nodes[parent_index].children.empty()
+            ? 0
+            : m_tree_nodes[parent_index].children.size() - 1;
+
+        std::vector<size_t> fetched;
+        const auto result = ::WinBlaze::UI::NativeBridge::TreeChildren(
+            parent_id,
+            static_cast<uint64_t>(loaded),
+            [this, parent_index, child_depth, &fetched](WbTreeNode const& node) {
+                TreeNodeUi child;
+                child.id = node.id;
+                child.is_directory = node.is_directory != 0;
+                child.name = node.name.ptr == nullptr
+                    ? std::wstring{}
+                    : Utf8ToWide(std::string_view{ node.name.ptr, node.name.len });
+                child.logical_bytes = node.logical_bytes;
+                child.physical_bytes = node.physical_bytes;
+                child.file_count = node.file_count;
+                child.item_count = node.item_count;
+                child.modified_utc = node.modified_utc;
+                child.has_modified_utc = node.has_modified_utc != 0;
+                child.depth = child_depth;
+                child.parent = parent_index;
+                fetched.push_back(m_tree_nodes.size());
+                m_tree_nodes.push_back(std::move(child));
+            });
+        if (fetched.empty()) {
+            return;
+        }
+
+        auto& siblings = m_tree_nodes[parent_index].children;
+        siblings.pop_back(); // detach the more-row
+        siblings.insert(siblings.end(), fetched.begin(), fetched.end());
+
+        const uint64_t now_loaded = loaded + result.emitted;
+        if (now_loaded < result.total) {
+            m_tree_nodes[more_index].name =
+                L"+ " + std::to_wstring(result.total - now_loaded) +
+                L" more items (largest are shown)";
+            siblings.push_back(more_index); // reattach at the end
+        }
+
+        RebuildTreeVisibleRows();
+        RefreshTreeListView();
+        UpdateStatus(L"Loaded " + std::to_wstring(result.emitted) + L" more rows.");
     }
 
     std::wstring MainWindow::TreeNodePath(size_t node_index) const
@@ -4816,6 +4879,15 @@ namespace winrt::WinBlaze::UI::implementation
 
         auto item = ListViewItem{};
         item.Tag(box_value(static_cast<uint64_t>(node_index)));
+        if (node.is_more_row) {
+            // Single tap pages in the next chunk of this directory's
+            // children. Deferred: the refresh replaces the ListView items.
+            item.Tapped([this, node_index](auto const&, auto const&) {
+                DispatcherQueue().TryEnqueue([this, node_index]() {
+                    LoadMoreTreeChildren(node_index);
+                });
+            });
+        }
         if (node.is_directory && !node.is_more_row) {
             // Tap a folder row to expand/collapse. Deferred through the
             // dispatcher: the refresh replaces the ListView items, and doing

@@ -14,7 +14,7 @@ namespace
     using LoadCatalogSnapshotWithStatsFn = WbIndexSnapshotStats(__stdcall *)(WbCatalogCallback, void*);
     using LoadExtensionStatsFn = void(__stdcall *)(WbExtensionStatCallback, void*);
     using TreeRootFn = uint8_t(__stdcall *)(WbTreeNodeCallback, void*);
-    using TreeChildrenFn = WbTreeChildrenResult(__stdcall *)(uint64_t, WbTreeNodeCallback, void*);
+    using TreeChildrenFn = WbTreeChildrenResult(__stdcall *)(uint64_t, uint64_t, WbTreeNodeCallback, void*);
 
     struct DllApi
     {
@@ -232,11 +232,11 @@ namespace WinBlaze::UI::NativeBridge
         return Api().tree_root(&OnTreeNodeWithContext, context.get()) != 0;
     }
 
-    WbTreeChildrenResult TreeChildren(uint64_t parentId, TreeNodeHandler handler)
+    WbTreeChildrenResult TreeChildren(uint64_t parentId, uint64_t offset, TreeNodeHandler handler)
     {
         EnsureLoaded();
         auto context = std::make_shared<TreeNodeCallbackContext>();
         context->handler = std::move(handler);
-        return Api().tree_children(parentId, &OnTreeNodeWithContext, context.get());
+        return Api().tree_children(parentId, offset, &OnTreeNodeWithContext, context.get());
     }
 }

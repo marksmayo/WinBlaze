@@ -197,6 +197,7 @@ namespace winrt::WinBlaze::UI::implementation
         void RebuildTreeVisibleRows();
         void RefreshTreeListView();
         void ToggleTreeNodeExpansion(size_t node_index);
+        void LoadMoreTreeChildren(size_t more_index);
         std::wstring TreeNodePath(size_t node_index) const;
         Microsoft::UI::Xaml::Controls::ListViewItem CreateTreeNodeListItem(size_t node_index);
         bool TreeArenaActive() const { return !m_tree_nodes.empty(); }

@@ -1466,11 +1466,13 @@ pub extern "C" fn wb_tree_root(
 }
 
 /// Emits the direct children of directory `parent_id` (largest physical size
-/// first, at most `TREE_CHILDREN_LIMIT`), returning how many were emitted and
-/// how many exist in total so callers can render a "+N more" row.
+/// first, at most `TREE_CHILDREN_LIMIT` starting at `offset`), returning how
+/// many were emitted and how many exist in total so callers can page and
+/// render a "+N more" row.
 #[no_mangle]
 pub extern "C" fn wb_tree_children(
     parent_id: u64,
+    offset: u64,
     callback: WbTreeNodeCallback,
     user_data: *mut core::ffi::c_void,
 ) -> WbTreeChildrenResult {
@@ -1481,7 +1483,7 @@ pub extern "C" fn wb_tree_children(
     let total = model.tree.child_count(parent_id).unwrap_or(0);
     let emitted = model
         .tree
-        .for_each_child(parent_id, TREE_CHILDREN_LIMIT, |entry| {
+        .for_each_child(parent_id, offset as usize, TREE_CHILDREN_LIMIT, |entry| {
             let mut strings = Vec::new();
             let node = match entry {
                 TreeEntry::Directory { record, rollup } => WbTreeNode {

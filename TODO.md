@@ -28,7 +28,7 @@ Open items queued from this cycle:
 - [ ] TODO: Batch file records end-to-end through the scan pipeline (scanner -> index without one channel event per record); this is the shared floor (~17 s warm drain on 2.2M files) for both backends and the path to WizTree-class times, and it should also let the elevated MFT backend beat the walk.
 - [x] DONE-DONE: `App.xaml` repaired: the WPF-only `DropShadowEffect` resource is removed and `App::InitializeComponent` now succeeds, so application resources load. Follow-up (optional): adopt a real `MenuBar` and `/utf-8` compilation now that templates can resolve.
 - [ ] TODO: Adopt the remaining High Velocity screen elements: donut used-space gauge, Explorer file-table styling (NAME/SIZE/TYPE/DATE MODIFIED columns with type badges), breadcrumb path bar, and a Cleanup center (currently a placeholder sidebar item).
-- [ ] TODO: Align tree-pane column headers with the new row layout and support expanding the `+N more` row in place.
+- [x] DONE-DONE: Tree-pane column headers now mirror the row layout (Name/Usage/%/Physical/Logical/Files/Last Change with matching widths), and the `+N more` row pages the next 4,096 children in place via offset paging added to `wb_tree_children`.
 - [x] DONE-DONE: `cargo audit` 0.22.2 run clean (5 dependencies, zero advisories); recorded in `docs\RELEASE_NOTES.md`.
 - [ ] TODO: Re-record Release benchmark medians and budgets on the new engine (current baselines predate the tree model, path removal, and event batching).
 

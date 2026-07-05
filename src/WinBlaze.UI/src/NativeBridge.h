@@ -28,7 +28,8 @@ namespace WinBlaze::UI::NativeBridge
     void LoadExtensionStatsSnapshot(ExtensionStatHandler handler);
     // Emits the display-tree root; returns false when no index is loaded.
     bool TreeRoot(TreeNodeHandler handler);
-    // Emits direct children of a directory (largest physical first, capped);
-    // `total` reports how many exist so callers can show a "+N more" row.
-    WbTreeChildrenResult TreeChildren(uint64_t parentId, TreeNodeHandler handler);
+    // Emits direct children of a directory (largest physical first, capped,
+    // starting at `offset`); `total` reports how many exist so callers can
+    // page and show a "+N more" row.
+    WbTreeChildrenResult TreeChildren(uint64_t parentId, uint64_t offset, TreeNodeHandler handler);
 }
