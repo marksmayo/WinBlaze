@@ -14,12 +14,116 @@ use crate::{
         BufferedIndexTransaction, IndexBackend, IndexRepository, IndexTransaction,
         SqliteIndexRepository,
     },
+    tree::TreeIndex,
 };
 
 #[test]
 fn schema_version_is_stable() {
     assert_eq!(SCHEMA_VERSION, 1);
     assert!(CREATE_FILE_TABLE.contains("CREATE TABLE IF NOT EXISTS files"));
+}
+
+#[test]
+fn deferred_sorted_persist_matches_transaction_persist() {
+    // The post-scan deferred write serializes from TreeIndex's sorted record
+    // vectors; it must produce a byte-identical snapshot to the transaction
+    // writer or reload behavior could silently diverge.
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time")
+        .as_nanos();
+    let root_a = std::env::temp_dir().join(format!("winblaze-persist-a-{unique}"));
+    let root_b = std::env::temp_dir().join(format!("winblaze-persist-b-{unique}"));
+
+    let mut tx = BufferedIndexTransaction::default();
+    tx.upsert_volume(&VolumeRecord {
+        id: VolumeId(0),
+        mount_point: String::from("C:\\"),
+        label: None,
+        file_system: FileSystemKind::Ntfs,
+        total_bytes: 4096,
+        free_bytes: 1024,
+        root_directory_id: DirectoryId(5),
+    });
+    tx.upsert_session(&ScanSession {
+        session_id: 3,
+        volume_id: VolumeId(0),
+        root_path: String::from("C:\\"),
+        state: ScanState::Completed,
+        progress: ScanProgress::default(),
+    });
+    tx.upsert_directory(&DirectoryRecord {
+        id: DirectoryId(5),
+        parent_directory_id: None,
+        name: String::from("C:\\"),
+        full_path: String::from("C:\\"),
+        direct_bytes: 0,
+        total_bytes: 0,
+        direct_entries: 0,
+        total_entries: 0,
+    });
+    // Deliberately out of id order to exercise the sort parity.
+    for id in [30_u64, 12, 25] {
+        tx.upsert_directory(&DirectoryRecord {
+            id: DirectoryId(id),
+            parent_directory_id: Some(DirectoryId(5)),
+            name: format!("dir-{id}"),
+            full_path: format!("C:\\dir-{id}"),
+            direct_bytes: 0,
+            total_bytes: 0,
+            direct_entries: 0,
+            total_entries: 0,
+        });
+        tx.upsert_file(&FileRecord {
+            id: FileId(id + 100),
+            parent_directory_id: DirectoryId(id),
+            name: format!("file-{id}.bin"),
+            full_path: String::new(),
+            size_bytes: id * 10,
+            allocation_bytes: id * 10,
+            attributes: FileAttributes::ARCHIVE,
+            created_utc: Some(1),
+            modified_utc: Some(2),
+            accessed_utc: None,
+        });
+    }
+
+    let repo_a = SqliteIndexRepository::open_empty(&root_a, IndexBackend::BinaryCache);
+    repo_a
+        .persist_transaction(&tx)
+        .expect("transaction persist");
+
+    let (sessions, lineages, changes) = tx.auxiliary_parts();
+    let tree = TreeIndex::build(tx);
+    let repo_b = SqliteIndexRepository::open_empty(&root_b, IndexBackend::BinaryCache);
+    repo_b
+        .persist_sorted_records(
+            tree.volumes(),
+            &sessions,
+            tree.directories(),
+            tree.files(),
+            &lineages,
+            &changes,
+        )
+        .expect("sorted persist");
+
+    let find_snapshot = |root: &std::path::Path| {
+        let mut candidates: Vec<_> = std::fs::read_dir(root)
+            .expect("read snapshot dir")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().is_file())
+            .collect();
+        candidates.sort_by_key(|entry| entry.file_name());
+        assert!(!candidates.is_empty(), "no snapshot written in {root:?}");
+        candidates
+            .into_iter()
+            .map(|entry| std::fs::read(entry.path()).expect("read snapshot"))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(find_snapshot(&root_a), find_snapshot(&root_b));
+
+    let _ = std::fs::remove_dir_all(&root_a);
+    let _ = std::fs::remove_dir_all(&root_b);
 }
 
 #[test]

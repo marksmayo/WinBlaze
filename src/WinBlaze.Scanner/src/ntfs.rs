@@ -3,6 +3,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{FromRawHandle, RawHandle};
 use std::path::Path;
+use std::sync::mpsc;
 use std::thread;
 use std::{
     ffi::c_void,
@@ -99,45 +100,105 @@ fn stream_ntfs_entries(
     let total_records = (file.total_bytes / NTFS_RECORD_SIZE as u64).max(1);
     let workers = worker_count.max(1);
     let records_per_read = workers.saturating_mul(1024).clamp(1024, 65_536);
-    let mut buffer = vec![0u8; NTFS_RECORD_SIZE * records_per_read];
-    let mut carry: Vec<u8> = Vec::new();
+    let block_len = NTFS_RECORD_SIZE * records_per_read;
     let mut state = NtfsStreamState::new(root.display().to_string());
     let mut processed_records = 0u64;
+    let mut carry: Vec<u8> = Vec::new();
 
     state.emit_root(on_event);
 
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-
-        carry.extend_from_slice(&buffer[..read]);
-        let full_records = carry.len() / NTFS_RECORD_SIZE;
-        let full_bytes = full_records * NTFS_RECORD_SIZE;
-
-        // Restore the sector-tail bytes the on-disk update sequence array
-        // displaced; raw MFT data is unusable without this.
-        apply_mft_fixups(&mut carry[..full_bytes], bytes_per_sector);
-        let (parsed, extensions) = parse_batch(&carry[..full_bytes], full_records, workers)?;
-        processed_records = processed_records.saturating_add(full_records as u64);
-
-        for entry in parsed {
-            state.ingest_entry(entry, on_event);
-        }
-        for extension in extensions {
-            state.ingest_extension(extension, on_event);
-        }
-
-        carry.drain(..full_bytes);
-        let progress = ScanProgress {
-            completed_items: processed_records,
-            total_items: total_records,
-            completed_bytes: processed_records.saturating_mul(NTFS_RECORD_SIZE as u64),
-            total_bytes: total_records.saturating_mul(NTFS_RECORD_SIZE as u64),
-        };
-        on_event(ScanEvent::Progress(progress));
+    // Read-ahead: a dedicated thread keeps the volume busy while this
+    // thread runs fixups + parse + emit on the previous block. Serial, the
+    // read alone is ~45% of the wall clock; overlapped it hides almost
+    // entirely behind parsing. Three pooled buffers: one being filled, one
+    // in flight, one being parsed.
+    let (block_tx, block_rx) = mpsc::sync_channel::<io::Result<(Vec<u8>, usize)>>(2);
+    let (pool_tx, pool_rx) = mpsc::channel::<Vec<u8>>();
+    for _ in 0..3 {
+        let _ = pool_tx.send(vec![0u8; block_len]);
     }
+    let reader = thread::spawn(move || {
+        while let Ok(mut buffer) = pool_rx.recv() {
+            let mut filled = 0usize;
+            // Fill the block completely (reads can return one extent tail
+            // at a time) so parse batches stay large.
+            let result = loop {
+                match file.read(&mut buffer[filled..]) {
+                    Ok(0) => break Ok((buffer, filled)),
+                    Ok(read) => {
+                        filled += read;
+                        if filled == block_len {
+                            break Ok((buffer, filled));
+                        }
+                    }
+                    Err(error) => break Err(error),
+                }
+            };
+            let is_error = result.is_err();
+            let is_final = matches!(&result, Ok((_, filled)) if *filled < block_len);
+            if block_tx.send(result).is_err() || is_error || is_final {
+                return;
+            }
+        }
+    });
+
+    let stream_result = (|| -> Result<(), NtfsEnumerationError> {
+        while let Ok(block) = block_rx.recv() {
+            let (block, filled) = block.map_err(NtfsEnumerationError::Io)?;
+            if filled == 0 {
+                break;
+            }
+
+            // Records split across block boundaries are rare (blocks are
+            // record multiples except across odd extent tails); stitch them
+            // through the carry path.
+            let (batch_ptr, full_records) = if carry.is_empty() && filled % NTFS_RECORD_SIZE == 0 {
+                (None, filled / NTFS_RECORD_SIZE)
+            } else {
+                carry.extend_from_slice(&block[..filled]);
+                let full_records = carry.len() / NTFS_RECORD_SIZE;
+                (Some(full_records * NTFS_RECORD_SIZE), full_records)
+            };
+
+            let mut owned_block = block;
+            let batch: &mut [u8] = match batch_ptr {
+                None => &mut owned_block[..filled],
+                Some(full_bytes) => &mut carry[..full_bytes],
+            };
+
+            // Restore the sector-tail bytes the on-disk update sequence
+            // array displaced; raw MFT data is unusable without this.
+            apply_mft_fixups(batch, bytes_per_sector);
+            let (parsed, extensions) = parse_batch(batch, full_records, workers)?;
+            if batch_ptr.is_some() {
+                let full_bytes = full_records * NTFS_RECORD_SIZE;
+                carry.drain(..full_bytes);
+            }
+            let _ = pool_tx.send(owned_block);
+            processed_records = processed_records.saturating_add(full_records as u64);
+
+            for entry in parsed {
+                state.ingest_entry(entry, on_event);
+            }
+            for extension in extensions {
+                state.ingest_extension(extension, on_event);
+            }
+
+            let progress = ScanProgress {
+                completed_items: processed_records,
+                total_items: total_records,
+                completed_bytes: processed_records.saturating_mul(NTFS_RECORD_SIZE as u64),
+                total_bytes: total_records.saturating_mul(NTFS_RECORD_SIZE as u64),
+            };
+            on_event(ScanEvent::Progress(progress));
+        }
+        Ok(())
+    })();
+
+    drop(pool_tx);
+    drop(block_rx);
+    let _ = reader.join();
+    stream_result?;
 
     state.finish(on_event);
     Ok(state.into_summary())
@@ -468,6 +529,7 @@ pub struct VolumeMftReader {
     extents: Vec<(u64, u64)>,
     extent_index: usize,
     consumed_in_extent: u64,
+    bytes_per_sector: usize,
     chunk: Vec<u8>,
     chunk_pos: usize,
     chunk_len: usize,
@@ -510,17 +572,49 @@ impl VolumeMftReader {
 
 impl Read for VolumeMftReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.chunk_pos >= self.chunk_len {
+        // Serve any buffered remainder first so bytes stay in order.
+        if self.chunk_pos < self.chunk_len {
+            let available = self.chunk_len - self.chunk_pos;
+            let count = available.min(buf.len());
+            buf[..count].copy_from_slice(&self.chunk[self.chunk_pos..self.chunk_pos + count]);
+            self.chunk_pos += count;
+            return Ok(count);
+        }
+
+        // Large sector-aligned requests read straight from the volume into
+        // the caller's buffer: the bounce-chunk copy cost ~0.7s per full
+        // C:\ MFT (4.8 GB memcpy'd twice).
+        while self.extent_index < self.extents.len() {
+            let (start, length) = self.extents[self.extent_index];
+            let remaining = length - self.consumed_in_extent;
+            if remaining == 0 {
+                self.extent_index += 1;
+                self.consumed_in_extent = 0;
+                continue;
+            }
+
+            let sector = self.bytes_per_sector.max(512);
+            let direct = (buf.len().min(remaining as usize) / sector) * sector;
+            if direct >= VOLUME_READ_CHUNK {
+                self.volume
+                    .seek(SeekFrom::Start(start + self.consumed_in_extent))?;
+                self.volume.read_exact(&mut buf[..direct])?;
+                self.consumed_in_extent += direct as u64;
+                return Ok(direct);
+            }
+
+            // Small or unaligned tail: use the aligned bounce chunk.
             self.fill_chunk()?;
             if self.chunk_len == 0 {
                 return Ok(0);
             }
+            let available = self.chunk_len - self.chunk_pos;
+            let count = available.min(buf.len());
+            buf[..count].copy_from_slice(&self.chunk[self.chunk_pos..self.chunk_pos + count]);
+            self.chunk_pos += count;
+            return Ok(count);
         }
-        let available = self.chunk_len - self.chunk_pos;
-        let count = available.min(buf.len());
-        buf[..count].copy_from_slice(&self.chunk[self.chunk_pos..self.chunk_pos + count]);
-        self.chunk_pos += count;
-        Ok(count)
+        Ok(0)
     }
 }
 
@@ -804,6 +898,153 @@ pub(crate) fn apply_mft_fixups(batch: &mut [u8], bytes_per_sector: usize) {
 /// Opens the MFT byte stream: raw volume access first (the only method that
 /// works on modern Windows; requires Administrator), then the legacy
 /// metadata-file open as a fallback.
+/// Phase-decomposition profiler for the raw-MFT scan: times each layer of
+/// the pipeline in isolation on the live volume so optimization work chases
+/// the real bottleneck. Dev tooling only (mft_phase_bench example).
+#[doc(hidden)]
+pub fn profile_mft_phases(
+    root: &Path,
+    worker_count: usize,
+) -> Result<String, NtfsEnumerationError> {
+    use std::time::Instant;
+    let workers = worker_count.max(1);
+    let buffer_len = NTFS_RECORD_SIZE * 65_536;
+
+    // Phase 0: direct volume reads of the MFT extents, no chunk layer -
+    // the floor set by the device/page cache.
+    let mut volume = open_volume_handle(root).map_err(NtfsEnumerationError::Io)?;
+    let geometry = read_volume_geometry(&mut volume).map_err(NtfsEnumerationError::Io)?;
+    let extents = read_mft_extents(&mut volume, &geometry).map_err(NtfsEnumerationError::Io)?;
+    let mut buffer = vec![0u8; buffer_len];
+    let started = Instant::now();
+    let mut direct_bytes = 0u64;
+    for &(start, length) in &extents {
+        let mut offset = 0u64;
+        while offset < length {
+            let to_read = ((length - offset) as usize).min(buffer_len);
+            volume
+                .seek(SeekFrom::Start(start + offset))
+                .map_err(NtfsEnumerationError::Io)?;
+            volume
+                .read_exact(&mut buffer[..to_read])
+                .map_err(NtfsEnumerationError::Io)?;
+            offset += to_read as u64;
+            direct_bytes += to_read as u64;
+        }
+    }
+    let direct_read_ms = started.elapsed().as_millis();
+    drop(volume);
+
+    // Phase 0b: the same direct reads split across 4 reader threads, each
+    // with its own volume handle - measures how much NVMe queue depth buys.
+    let started = Instant::now();
+    let read_threads = 4usize;
+    let total: u64 = extents.iter().map(|extent| extent.1).sum();
+    // Share aligned to 1 MiB so every partition boundary stays a sector
+    // (and cluster) multiple - raw volume reads require aligned offsets.
+    let share = ((total / read_threads as u64) >> 20).max(1) << 20;
+    let mut partitions: Vec<Vec<(u64, u64)>> = vec![Vec::new(); read_threads];
+    {
+        let mut cursor = 0u64;
+        for &(start, length) in &extents {
+            let mut offset = 0u64;
+            while offset < length {
+                let slot = ((cursor / share) as usize).min(read_threads - 1);
+                let slot_end = if slot + 1 == read_threads {
+                    u64::MAX
+                } else {
+                    (slot as u64 + 1) * share
+                };
+                let take = (length - offset).min(slot_end.saturating_sub(cursor));
+                partitions[slot].push((start + offset, take));
+                offset += take;
+                cursor += take;
+            }
+        }
+    }
+    let parallel_bytes: u64 = thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for partition in &partitions {
+            let root = root.to_path_buf();
+            handles.push(scope.spawn(move || -> io::Result<u64> {
+                let mut volume = open_volume_handle(&root)?;
+                let mut buffer = vec![0u8; buffer_len];
+                let mut bytes = 0u64;
+                for &(start, length) in partition {
+                    let mut offset = 0u64;
+                    while offset < length {
+                        let to_read = ((length - offset) as usize).min(buffer_len);
+                        volume.seek(SeekFrom::Start(start + offset))?;
+                        volume.read_exact(&mut buffer[..to_read])?;
+                        offset += to_read as u64;
+                        bytes += to_read as u64;
+                    }
+                }
+                Ok(bytes)
+            }));
+        }
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap_or(Ok(0)).unwrap_or(0))
+            .sum()
+    });
+    let parallel_read_ms = started.elapsed().as_millis();
+
+    // Phase 1: reads through the production VolumeMftReader chunk layer.
+    let mut stream = open_mft_stream(root)?;
+    let bytes_per_sector = stream.bytes_per_sector as usize;
+    let started = Instant::now();
+    let mut stream_bytes = 0u64;
+    loop {
+        let read = stream.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        stream_bytes += read as u64;
+    }
+    let stream_read_ms = started.elapsed().as_millis();
+
+    // Phase 2: + sector fixups.
+    let mut stream = open_mft_stream(root)?;
+    let started = Instant::now();
+    loop {
+        let read = stream.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        let full_bytes = (read / NTFS_RECORD_SIZE) * NTFS_RECORD_SIZE;
+        apply_mft_fixups(&mut buffer[..full_bytes], bytes_per_sector);
+    }
+    let fixup_ms = started.elapsed().as_millis();
+
+    // Phase 3: + parallel record parse, results dropped.
+    let mut stream = open_mft_stream(root)?;
+    let started = Instant::now();
+    let mut parsed_entries = 0u64;
+    loop {
+        let read = stream.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        let full_records = read / NTFS_RECORD_SIZE;
+        let full_bytes = full_records * NTFS_RECORD_SIZE;
+        apply_mft_fixups(&mut buffer[..full_bytes], bytes_per_sector);
+        let (parsed, _extensions) = parse_batch(&buffer[..full_bytes], full_records, workers)?;
+        parsed_entries += parsed.len() as u64;
+    }
+    let parse_ms = started.elapsed().as_millis();
+
+    // Phase 4: the full streaming pipeline with a null event sink.
+    let started = Instant::now();
+    let summary = enumerate_ntfs_volume_parallel_streaming_summary(root, workers, |_| {})?;
+    let full_ms = started.elapsed().as_millis();
+
+    Ok(format!(
+        "{{\"direct_read_ms\":{direct_read_ms},\"parallel_read_ms\":{parallel_read_ms},\"parallel_bytes\":{parallel_bytes},\"stream_read_ms\":{stream_read_ms},\"fixup_ms\":{fixup_ms},\"parse_ms\":{parse_ms},\"full_ms\":{full_ms},\"mft_bytes\":{direct_bytes},\"stream_bytes\":{stream_bytes},\"parsed_entries\":{parsed_entries},\"files\":{},\"directories\":{}}}",
+        summary.files_seen, summary.directories_seen
+    ))
+}
+
 fn open_mft_stream(root: &Path) -> Result<MftStream, NtfsEnumerationError> {
     let volume_error = match open_volume_handle(root) {
         Ok(mut volume) => match read_volume_geometry(&mut volume) {
@@ -824,6 +1065,7 @@ fn open_mft_stream(root: &Path) -> Result<MftStream, NtfsEnumerationError> {
                                 extents,
                                 extent_index: 0,
                                 consumed_in_extent: 0,
+                                bytes_per_sector: geometry.bytes_per_sector as usize,
                                 chunk: Vec::new(),
                                 chunk_pos: 0,
                                 chunk_len: 0,

@@ -11,8 +11,8 @@ use std::{
 };
 
 use winblaze_core::{
-    DirectoryRecord, FileChangeKind, FileChangeSet, FileRecord, ScanEvent, ScanProgress,
-    ScanSession, ScanState, VolumeRecord,
+    DirectoryRecord, FileChangeKind, FileChangeSet, FileLineageRecord, FileRecord, ScanEvent,
+    ScanProgress, ScanSession, ScanState, VolumeRecord,
 };
 use winblaze_index::{
     BufferedIndexTransaction, IndexBackend, IndexRepository, IndexTransaction,
@@ -53,6 +53,18 @@ struct IndexModel {
 
 static INDEX_MODEL: Mutex<Option<Arc<IndexModel>>> = Mutex::new(None);
 
+/// Serializes the deferred post-Completed snapshot write against the next
+/// session's repository open (an immediate incremental rescan reads the
+/// snapshot back from disk).
+static PERSIST_GATE: Mutex<()> = Mutex::new(());
+
+fn persist_gate_lock() -> std::sync::MutexGuard<'static, ()> {
+    match PERSIST_GATE.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
 fn build_index_model(
     transaction: BufferedIndexTransaction,
     cache_stats: Option<(u64, u64, u64, bool)>,
@@ -61,7 +73,21 @@ fn build_index_model(
 
     let mut totals: HashMap<String, (u64, u64)> = HashMap::new();
     for file in tree.files() {
-        let entry = totals.entry(extension_key(&file.name)).or_insert((0, 0));
+        // Borrowed fast path: extensions are usually already lowercase, so
+        // look the key up without materializing a String per file (2.3M
+        // allocations on a full-drive model build otherwise).
+        let raw = match file.name.rsplit_once('.') {
+            Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => ext,
+            _ => "",
+        };
+        let entry = if !raw.contains(|ch: char| ch.is_ascii_uppercase()) {
+            match totals.get_mut(raw) {
+                Some(entry) => entry,
+                None => totals.entry(raw.to_string()).or_insert((0, 0)),
+            }
+        } else {
+            totals.entry(raw.to_ascii_lowercase()).or_insert((0, 0))
+        };
         entry.0 = entry.0.saturating_add(file.size_bytes);
         entry.1 = entry.1.saturating_add(1);
     }
@@ -83,11 +109,15 @@ fn build_index_model(
 }
 
 fn set_index_model(model: IndexModel) {
+    set_index_model_arc(Arc::new(model));
+}
+
+fn set_index_model_arc(model: Arc<IndexModel>) {
     let mut guard = match INDEX_MODEL.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
     };
-    *guard = Some(Arc::new(model));
+    *guard = Some(model);
 }
 
 fn invalidate_index_model() {
@@ -480,12 +510,15 @@ fn forward_events(
     index_root: PathBuf,
     persistence_mode: ScanPersistenceMode,
 ) {
-    let mut repository = match persistence_mode {
-        ScanPersistenceMode::ReplaceSnapshot => {
-            SqliteIndexRepository::open_empty(&index_root, IndexBackend::BinaryCache)
-        }
-        ScanPersistenceMode::IncrementalRescan => {
-            SqliteIndexRepository::open(&index_root, IndexBackend::BinaryCache)
+    let mut repository = {
+        let _gate = persist_gate_lock();
+        match persistence_mode {
+            ScanPersistenceMode::ReplaceSnapshot => {
+                SqliteIndexRepository::open_empty(&index_root, IndexBackend::BinaryCache)
+            }
+            ScanPersistenceMode::IncrementalRescan => {
+                SqliteIndexRepository::open(&index_root, IndexBackend::BinaryCache)
+            }
         }
     };
     let mut transaction = BufferedIndexTransaction::default();
@@ -498,6 +531,14 @@ fn forward_events(
     // C:\ scan) just to record that the session finished.
     let mut records_dirty = false;
     let mut model_published = false;
+    // Full-scan snapshots write AFTER Completed reaches the UI: the write is
+    // ~1.6s for a full C:\ index and the UI only needs the in-memory model.
+    let mut deferred_persist: Option<(
+        Arc<IndexModel>,
+        Vec<ScanSession>,
+        Vec<FileLineageRecord>,
+        Vec<FileChangeSet>,
+    )> = None;
     let mut ui_forwarder = UiEventForwarder::new(callback, user_data);
 
     for event in rx.into_iter().flatten() {
@@ -505,23 +546,27 @@ fn forward_events(
 
         // Publish the read model BEFORE the UI learns the scan ended: its
         // snapshot reload then finds a hot cache instead of re-reading the
-        // multi-hundred-MB snapshot from disk on the UI thread. Safe only
-        // once the Summary flush succeeded with nothing dirty since.
-        if !model_published
-            && matches!(event, ScanEvent::Completed | ScanEvent::Cancelled)
-            && flushed
-            && !records_dirty
-        {
-            let model = match persistence_mode {
+        // multi-hundred-MB snapshot from disk on the UI thread. Full scans
+        // additionally defer the snapshot write until after Completed is
+        // forwarded - the UI only needs the in-memory model, and the disk
+        // write was the last ~1.6s of perceived scan time.
+        if !model_published && matches!(event, ScanEvent::Completed | ScanEvent::Cancelled) {
+            match persistence_mode {
                 ScanPersistenceMode::ReplaceSnapshot => {
-                    build_index_model(std::mem::take(&mut transaction), None)
+                    let (sessions, lineages, changes) = transaction.auxiliary_parts();
+                    let model = Arc::new(build_index_model(std::mem::take(&mut transaction), None));
+                    set_index_model_arc(Arc::clone(&model));
+                    deferred_persist = Some((model, sessions, lineages, changes));
+                    records_dirty = false;
+                    model_published = true;
                 }
                 ScanPersistenceMode::IncrementalRescan => {
-                    build_index_model(repository.take_state(), None)
+                    if flushed && !records_dirty {
+                        set_index_model(build_index_model(repository.take_state(), None));
+                        model_published = true;
+                    }
                 }
-            };
-            set_index_model(model);
-            model_published = true;
+            }
         }
 
         ui_forwarder.forward(&event);
@@ -541,6 +586,20 @@ fn forward_events(
             }
             log.append_flush(flush_trigger, result.is_ok());
         }
+    }
+
+    if let Some((model, sessions, lineages, changes)) = deferred_persist {
+        let _gate = persist_gate_lock();
+        let result = repository.persist_sorted_records(
+            model.tree.volumes(),
+            &sessions,
+            model.tree.directories(),
+            model.tree.files(),
+            &lineages,
+            &changes,
+        );
+        log.append_flush("deferred", result.is_ok());
+        return;
     }
 
     if !model_published {
@@ -566,14 +625,12 @@ fn forward_events(
 
 fn should_flush_index(event: &ScanEvent, persistence_mode: ScanPersistenceMode) -> bool {
     match persistence_mode {
+        // Summary/Completed/Cancelled deliberately absent: full-scan
+        // snapshots write once, deferred until after Completed reaches the
+        // UI. Failed still lands partial data immediately.
         ScanPersistenceMode::ReplaceSnapshot => matches!(
             event,
-            ScanEvent::SessionStarted(_)
-                | ScanEvent::VolumeDiscovered(_)
-                | ScanEvent::Summary(_)
-                | ScanEvent::Completed
-                | ScanEvent::Cancelled
-                | ScanEvent::Failed(_)
+            ScanEvent::SessionStarted(_) | ScanEvent::VolumeDiscovered(_) | ScanEvent::Failed(_)
         ),
         ScanPersistenceMode::IncrementalRescan => {
             matches!(event, ScanEvent::Summary(_))
@@ -635,6 +692,10 @@ fn incremental_change_summary(change_set: &FileChangeSet) -> WbIncrementalChange
 
 /// Lowercased extension without the leading dot, or an empty string for
 /// files with no extension (e.g. `README`, `Makefile`).
+/// Reference implementation of the extension-key normalization; the model
+/// build inlines a borrowed fast path of this. Kept for the unit tests that
+/// pin the normalization rules.
+#[cfg(test)]
 fn extension_key(file_name: &str) -> String {
     match file_name.rsplit_once('.') {
         Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => ext.to_ascii_lowercase(),

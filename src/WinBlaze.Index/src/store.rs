@@ -150,6 +150,33 @@ impl SqliteIndexRepository {
         persist_index_state(&self.storage_path, transaction)
     }
 
+    /// Persists a snapshot from record slices already sorted by id (the
+    /// shape `TreeIndex` holds after a scan). Lets the caller publish the
+    /// in-memory model first and write the snapshot off the critical path
+    /// without cloning millions of records back into a transaction.
+    #[allow(clippy::too_many_arguments)]
+    pub fn persist_sorted_records(
+        &self,
+        volumes: &[VolumeRecord],
+        sessions: &[ScanSession],
+        directories: &[DirectoryRecord],
+        files: &[FileRecord],
+        lineages: &[FileLineageRecord],
+        file_changes: &[FileChangeSet],
+    ) -> Result<(), IndexStorageError> {
+        persist_snapshot_with(&self.storage_path, |writer| {
+            write_sorted_records(
+                writer,
+                volumes,
+                sessions,
+                directories,
+                files,
+                lineages,
+                file_changes,
+            )
+        })
+    }
+
     pub fn apply_incremental_transaction(
         &mut self,
         transaction: &BufferedIndexTransaction,
@@ -287,6 +314,17 @@ impl IndexTransaction for BufferedIndexTransaction {
 impl BufferedIndexTransaction {
     /// Consumes the transaction into plain record vectors (unsorted), so
     /// derived read models can take ownership without cloning.
+    /// Clones the small non-record parts (sessions, lineage, change sets):
+    /// callers that feed the records to `TreeIndex::build` still need these
+    /// for a full snapshot write.
+    pub fn auxiliary_parts(
+        &self,
+    ) -> (Vec<ScanSession>, Vec<FileLineageRecord>, Vec<FileChangeSet>) {
+        let mut sessions: Vec<ScanSession> = self.sessions.values().cloned().collect();
+        sessions.sort_unstable_by_key(|session| session.session_id);
+        (sessions, self.lineages.clone(), self.file_changes.clone())
+    }
+
     pub fn into_record_vecs(self) -> (Vec<VolumeRecord>, Vec<DirectoryRecord>, Vec<FileRecord>) {
         (
             self.volumes.into_values().collect(),
@@ -469,6 +507,13 @@ fn persist_index_state(
     storage_path: &Path,
     state: &BufferedIndexTransaction,
 ) -> Result<(), IndexStorageError> {
+    persist_snapshot_with(storage_path, |writer| write_state(writer, state))
+}
+
+fn persist_snapshot_with<F>(storage_path: &Path, write: F) -> Result<(), IndexStorageError>
+where
+    F: FnOnce(&mut io::BufWriter<fs::File>) -> Result<(), IndexStorageError>,
+{
     if let Some(parent) = storage_path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -479,7 +524,7 @@ fn persist_index_state(
     {
         let file = fs::File::create(&temp_path)?;
         let mut writer = io::BufWriter::with_capacity(1 << 20, file);
-        write_state(&mut writer, state)?;
+        write(&mut writer)?;
         writer.flush()?;
     }
 
@@ -560,6 +605,27 @@ fn write_state<W: Write>(
 
     write_lineage_records(writer, state.lineages.as_slice())?;
     write_change_sets(writer, state.file_changes.as_slice())?;
+    Ok(())
+}
+
+/// `write_state` twin over slices that are already sorted by record id.
+fn write_sorted_records<W: Write>(
+    writer: &mut W,
+    volumes: &[VolumeRecord],
+    sessions: &[ScanSession],
+    directories: &[DirectoryRecord],
+    files: &[FileRecord],
+    lineages: &[FileLineageRecord],
+    file_changes: &[FileChangeSet],
+) -> Result<(), IndexStorageError> {
+    writer.write_all(INDEX_MAGIC)?;
+    write_u32(writer, INDEX_FORMAT_VERSION)?;
+    write_volume_records(writer, &volumes.iter().collect::<Vec<_>>())?;
+    write_session_records(writer, &sessions.iter().collect::<Vec<_>>())?;
+    write_directory_records(writer, &directories.iter().collect::<Vec<_>>())?;
+    write_file_records(writer, &files.iter().collect::<Vec<_>>())?;
+    write_lineage_records(writer, lineages)?;
+    write_change_sets(writer, file_changes)?;
     Ok(())
 }
 

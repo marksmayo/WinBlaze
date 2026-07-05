@@ -66,3 +66,32 @@ size corrections re-emit after the base file already streamed.
 Release UI medians re-recorded 2026-07-06 (`winblaze-release-medians.json`):
 tiny 6 ms / fanout 11 ms / scale 36 ms median scan duration, peak frames
 <=37 ms, working sets 157-184 MB.
+
+## Round 2 (2026-07-06, same day): pipeline overlap + deferred persist
+
+Phase decomposition (`mft_phase_bench` example) showed the producer fully
+serial: 2.5 s raw volume read (the device/cache floor; 4-thread parallel
+reads only gained 9%, so queue depth does not help this path), +0.7 s
+bounce-chunk memcpy, +1.9 s parse, +0.7 s emit = 5.8 s.
+
+Changes:
+- VolumeMftReader serves large sector-aligned reads directly into the
+  caller's buffer (bounce chunk only for small/unaligned tails).
+- stream_ntfs_entries overlaps I/O with compute: a read-ahead thread fills
+  pooled 64 MB blocks while the main thread runs fixups + parse + emit.
+- Full-scan snapshots persist AFTER Completed reaches the UI, serialized
+  from the already-built tree model (byte-identical format, parity test),
+  gated so an immediate incremental rescan waits for the write.
+- Model build aggregates extensions via borrowed keys (no per-file String).
+
+| Scenario | Round 1 | Round 2 |
+| --- | --- | --- |
+| MFT producer, null sink (`full_ms`) | 5.8 s | **2.7-3.0 s** (= read floor) |
+| Controller + channel (`mft_scan_repro`) | 8.3-9.0 s | **3.1 s** |
+| FFI end-to-end to Completed | 10.0-12.0 s | **4.7-5.2 s** |
+| In-app Release UI C:\ scan, idle to idle | 11.3 s | **5.2 s** |
+
+Remaining structure at ~5 s end-to-end: ~3 s producer (I/O-bound), ~0.9 s
+consumer lag (event log + UI forwarding + transaction inserts), ~1.1 s tree
+model build at Completed. The snapshot write (~1.5 s) now lands after the
+UI shows done.

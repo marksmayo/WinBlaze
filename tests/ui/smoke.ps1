@@ -141,7 +141,9 @@ try {
 
     Find-TextLike -Window $window -Pattern "*virtualized ListView containers*" -TimeoutSeconds 8 | Out-Null
     Invoke-Button -Window $window -Name "Treemap" -Required $false | Out-Null
-    $treemapStatus = Find-TextLike -Window $window -Pattern "*layout=*labels=*" -TimeoutSeconds 10
+    # First treemap paint decodes whatever catalog snapshot is on disk; a
+    # full-drive index (2.8M entries) takes well over 10s on the Debug UI.
+    $treemapStatus = Find-TextLike -Window $window -Pattern "*layout=*labels=*" -TimeoutSeconds 45
 
     Invoke-Button -Window $window -Name "Overview" -Required $false | Out-Null
     $editCondition = New-Object System.Windows.Automation.PropertyCondition(
