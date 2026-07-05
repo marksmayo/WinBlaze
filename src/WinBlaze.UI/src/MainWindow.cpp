@@ -1603,6 +1603,10 @@ namespace winrt::WinBlaze::UI::implementation
         m_current_root_path = root_path;
         m_has_results = false;
         m_has_error = false;
+        // Drop the previous scan's tree so live catalog previews render
+        // during the scan; the tree reloads when the scan completes.
+        m_tree_nodes.clear();
+        m_tree_visible_rows.clear();
         {
             std::lock_guard guard(m_pending_ui_mutex);
             m_scan_started_at = std::chrono::steady_clock::now();
@@ -1782,7 +1786,11 @@ namespace winrt::WinBlaze::UI::implementation
             m_tree_window_offset = 0;
         }
 
-        UpdateTreeSnapshotPreview(FilterTreeCatalog());
+        if (TreeArenaActive()) {
+            RefreshTreeListView();
+        } else {
+            UpdateTreeSnapshotPreview(FilterTreeCatalog());
+        }
         UpdateStatus(L"Tree list moved to the previous row window.");
     }
 
@@ -1790,12 +1798,18 @@ namespace winrt::WinBlaze::UI::implementation
         winrt::Windows::Foundation::IInspectable const&,
         Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
-        const auto entries = FilterTreeCatalog();
-        if (m_tree_window_offset + kTreeListVirtualizedWindowLimit < entries.size()) {
-            m_tree_window_offset += kTreeListVirtualizedWindowLimit;
+        if (TreeArenaActive()) {
+            if (m_tree_window_offset + kTreeListVirtualizedWindowLimit < m_tree_visible_rows.size()) {
+                m_tree_window_offset += kTreeListVirtualizedWindowLimit;
+            }
+            RefreshTreeListView();
+        } else {
+            const auto entries = FilterTreeCatalog();
+            if (m_tree_window_offset + kTreeListVirtualizedWindowLimit < entries.size()) {
+                m_tree_window_offset += kTreeListVirtualizedWindowLimit;
+            }
+            UpdateTreeSnapshotPreview(entries);
         }
-
-        UpdateTreeSnapshotPreview(entries);
         UpdateStatus(L"Tree list moved to the next row window.");
     }
 
@@ -1808,6 +1822,20 @@ namespace winrt::WinBlaze::UI::implementation
         }
         if (auto list_view = sender.try_as<Microsoft::UI::Xaml::Controls::ListView>()) {
             if (auto item = list_view.SelectedItem().try_as<Microsoft::UI::Xaml::Controls::ListViewItem>()) {
+            // Arena-backed tree rows tag with their node index.
+            if (auto node_index_ref = item.Tag().try_as<winrt::Windows::Foundation::IReference<uint64_t>>()) {
+                const auto node_index = static_cast<size_t>(node_index_ref.Value());
+                if (node_index < m_tree_nodes.size() && !m_tree_nodes[node_index].is_more_row) {
+                    auto const& node = m_tree_nodes[node_index];
+                    SelectVisualizationTarget(
+                        node.name,
+                        TreeNodePath(node_index),
+                        node.is_directory ? L"Folder" : L"File",
+                        FormatBytes(node.physical_bytes));
+                }
+                return;
+            }
+
             std::wstring name = FirstTextBlockText(item.Content());
             if (name.empty()) {
                 name = winrt::unbox_value_or<winrt::hstring>(item.Content(), winrt::hstring{}).c_str();
@@ -3341,6 +3369,9 @@ namespace winrt::WinBlaze::UI::implementation
         UpdateSummaryText();
         UpdateRuntimeSnapshot();
         LoadExtensionStatsSnapshot();
+        // Replace the flat preview in the tree pane with the real expandable
+        // folder tree served by the native tree index.
+        LoadTreeSnapshot();
         TraceStartup(L"LoadPersistedCatalogSnapshot end");
     }
 
@@ -3884,6 +3915,12 @@ namespace winrt::WinBlaze::UI::implementation
         if (!TreeListView() || !m_tree_updates_ready) {
             return;
         }
+        // Once the real folder tree is loaded, flat catalog refreshes (live
+        // scan previews, search filters) must not clobber it; search results
+        // render in the search card instead.
+        if (TreeArenaActive()) {
+            return;
+        }
 
         if (entries.empty()) {
             m_tree_window_offset = 0;
@@ -3945,6 +3982,315 @@ namespace winrt::WinBlaze::UI::implementation
             }
             TreeListStatusText().Text(winrt::hstring(status));
         }
+    }
+
+    void MainWindow::LoadTreeSnapshot()
+    {
+        TraceStartup(L"LoadTreeSnapshot begin");
+        m_tree_nodes.clear();
+        m_tree_visible_rows.clear();
+        m_tree_window_offset = 0;
+
+        ::WinBlaze::UI::NativeBridge::Initialize();
+        const bool has_root = ::WinBlaze::UI::NativeBridge::TreeRoot([this](WbTreeNode const& node) {
+            TreeNodeUi root;
+            root.id = node.id;
+            root.is_directory = node.is_directory != 0;
+            root.name = node.name.ptr == nullptr
+                ? std::wstring{}
+                : Utf8ToWide(std::string_view{ node.name.ptr, node.name.len });
+            root.logical_bytes = node.logical_bytes;
+            root.physical_bytes = node.physical_bytes;
+            root.file_count = node.file_count;
+            root.item_count = node.item_count;
+            root.modified_utc = node.modified_utc;
+            root.has_modified_utc = node.has_modified_utc != 0;
+            m_tree_nodes.push_back(std::move(root));
+        });
+
+        if (!has_root || m_tree_nodes.empty()) {
+            m_tree_nodes.clear();
+            TraceStartup(L"LoadTreeSnapshot: no tree root available");
+            return;
+        }
+
+        EnsureTreeChildrenLoaded(0);
+        m_tree_nodes[0].expanded = true;
+        RebuildTreeVisibleRows();
+        RefreshTreeListView();
+        TraceStartup(L"LoadTreeSnapshot end");
+    }
+
+    void MainWindow::EnsureTreeChildrenLoaded(size_t node_index)
+    {
+        if (node_index >= m_tree_nodes.size()) {
+            return;
+        }
+        if (m_tree_nodes[node_index].children_loaded ||
+            !m_tree_nodes[node_index].is_directory ||
+            m_tree_nodes[node_index].is_more_row) {
+            return;
+        }
+
+        const uint64_t parent_id = m_tree_nodes[node_index].id;
+        const uint32_t child_depth = m_tree_nodes[node_index].depth + 1;
+        std::vector<size_t> children;
+
+        const auto result = ::WinBlaze::UI::NativeBridge::TreeChildren(
+            parent_id,
+            [this, node_index, child_depth, &children](WbTreeNode const& node) {
+                TreeNodeUi child;
+                child.id = node.id;
+                child.is_directory = node.is_directory != 0;
+                child.name = node.name.ptr == nullptr
+                    ? std::wstring{}
+                    : Utf8ToWide(std::string_view{ node.name.ptr, node.name.len });
+                child.logical_bytes = node.logical_bytes;
+                child.physical_bytes = node.physical_bytes;
+                child.file_count = node.file_count;
+                child.item_count = node.item_count;
+                child.modified_utc = node.modified_utc;
+                child.has_modified_utc = node.has_modified_utc != 0;
+                child.depth = child_depth;
+                child.parent = node_index;
+                children.push_back(m_tree_nodes.size());
+                m_tree_nodes.push_back(std::move(child));
+            });
+
+        if (result.total > result.emitted) {
+            TreeNodeUi more;
+            more.is_more_row = true;
+            more.name = L"+ " + std::to_wstring(result.total - result.emitted) +
+                L" more items (largest are shown)";
+            more.depth = child_depth;
+            more.parent = node_index;
+            children.push_back(m_tree_nodes.size());
+            m_tree_nodes.push_back(std::move(more));
+        }
+
+        m_tree_nodes[node_index].children = std::move(children);
+        m_tree_nodes[node_index].children_loaded = true;
+    }
+
+    void MainWindow::RebuildTreeVisibleRows()
+    {
+        m_tree_visible_rows.clear();
+        if (m_tree_nodes.empty()) {
+            return;
+        }
+
+        std::vector<size_t> stack;
+        stack.push_back(0);
+        while (!stack.empty()) {
+            const size_t index = stack.back();
+            stack.pop_back();
+            m_tree_visible_rows.push_back(index);
+            auto const& node = m_tree_nodes[index];
+            if (node.is_directory && node.expanded) {
+                for (auto child = node.children.rbegin(); child != node.children.rend(); ++child) {
+                    stack.push_back(*child);
+                }
+            }
+        }
+    }
+
+    void MainWindow::ToggleTreeNodeExpansion(size_t node_index)
+    {
+        if (node_index >= m_tree_nodes.size()) {
+            return;
+        }
+        if (!m_tree_nodes[node_index].is_directory || m_tree_nodes[node_index].is_more_row) {
+            return;
+        }
+
+        // EnsureTreeChildrenLoaded grows m_tree_nodes (invalidating
+        // references), so re-index rather than holding a reference.
+        if (!m_tree_nodes[node_index].expanded) {
+            EnsureTreeChildrenLoaded(node_index);
+        }
+        m_tree_nodes[node_index].expanded = !m_tree_nodes[node_index].expanded;
+        RebuildTreeVisibleRows();
+        RefreshTreeListView();
+    }
+
+    std::wstring MainWindow::TreeNodePath(size_t node_index) const
+    {
+        std::vector<size_t> chain;
+        size_t current = node_index;
+        while (current != SIZE_MAX && current < m_tree_nodes.size()) {
+            chain.push_back(current);
+            current = m_tree_nodes[current].parent;
+        }
+
+        std::wstring path;
+        for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+            auto const& segment = m_tree_nodes[*it].name;
+            if (path.empty()) {
+                path = segment;
+            } else {
+                if (!path.empty() && path.back() != L'\\') {
+                    path += L'\\';
+                }
+                path += segment;
+            }
+        }
+        return path;
+    }
+
+    void MainWindow::RefreshTreeListView()
+    {
+        if (!TreeListView() || !m_tree_updates_ready) {
+            return;
+        }
+
+        auto const& rows = m_tree_visible_rows;
+        if (rows.empty()) {
+            m_tree_window_offset = 0;
+        } else if (m_tree_window_offset >= rows.size()) {
+            m_tree_window_offset =
+                ((rows.size() - 1) / kTreeListVirtualizedWindowLimit) * kTreeListVirtualizedWindowLimit;
+        }
+
+        const auto window_start = (std::min)(m_tree_window_offset, rows.size());
+        const auto window_end = (std::min)(window_start + kTreeListVirtualizedWindowLimit, rows.size());
+
+        m_tree_selection_updates_suppressed = true;
+        TreeListView().Items().Clear();
+        for (size_t index = window_start; index < window_end; ++index) {
+            TreeListView().Items().Append(CreateTreeNodeListItem(rows[index]));
+        }
+        m_tree_selection_updates_suppressed = false;
+
+        if (TreeWindowPreviousButton()) {
+            TreeWindowPreviousButton().IsEnabled(window_start > 0);
+        }
+        if (TreeWindowNextButton()) {
+            TreeWindowNextButton().IsEnabled(window_end < rows.size());
+        }
+
+        if (TreeListStatusText()) {
+            std::wstring status;
+            if (rows.empty()) {
+                status = L"Showing 0 of 0 folder tree rows with virtualized ListView containers.";
+            } else {
+                status = L"Showing rows " + std::to_wstring(window_start + 1) +
+                    L"-" + std::to_wstring(window_end) +
+                    L" of " + std::to_wstring(rows.size()) +
+                    L" folder tree rows with virtualized ListView containers; expand folders to load more";
+                if (rows.size() > kTreeListVirtualizedWindowLimit) {
+                    status += L"; page size is " +
+                        std::to_wstring(kTreeListVirtualizedWindowLimit) +
+                        L" rows to keep redraws responsive";
+                }
+                status += L".";
+            }
+            TreeListStatusText().Text(winrt::hstring(status));
+        }
+    }
+
+    Microsoft::UI::Xaml::Controls::ListViewItem MainWindow::CreateTreeNodeListItem(size_t node_index)
+    {
+        using namespace Microsoft::UI::Xaml;
+        using namespace Microsoft::UI::Xaml::Controls;
+
+        auto const& node = m_tree_nodes[node_index];
+
+        auto item = ListViewItem{};
+        item.Tag(box_value(static_cast<uint64_t>(node_index)));
+        if (node.is_directory && !node.is_more_row) {
+            // Tap a folder row to expand/collapse. Deferred through the
+            // dispatcher: the refresh replaces the ListView items, and doing
+            // that synchronously inside the tapped item's own event is
+            // re-entrant.
+            item.DoubleTapped([this, node_index](auto const&, auto const&) {
+                DispatcherQueue().TryEnqueue([this, node_index]() {
+                    ToggleTreeNodeExpansion(node_index);
+                });
+            });
+        }
+
+        auto row = StackPanel{};
+        row.Orientation(Orientation::Horizontal);
+        row.Spacing(12);
+
+        // Indent + expander glyph + name.
+        const double indent_width = (std::min)(240.0, static_cast<double>(node.depth) * 16.0);
+        auto glyph = TextBlock{};
+        glyph.Text(winrt::hstring(
+            node.is_directory && !node.is_more_row ? (node.expanded ? L"▾" : L"▸") : L" "));
+        glyph.Width(14.0);
+        glyph.Margin(Thickness{ indent_width, 0.0, 0.0, 0.0 });
+        glyph.VerticalAlignment(VerticalAlignment::Center);
+        row.Children().Append(glyph);
+
+        auto label = TextBlock{};
+        label.Text(winrt::hstring(node.name));
+        label.Width((std::max)(80.0, 300.0 - indent_width));
+        label.TextTrimming(TextTrimming::CharacterEllipsis);
+        label.VerticalAlignment(VerticalAlignment::Center);
+        row.Children().Append(label);
+
+        if (node.is_more_row) {
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                item, winrt::hstring(node.name));
+            item.Content(row);
+            return item;
+        }
+
+        // Size-proportion bar and percentage relative to the parent.
+        double percent = 100.0;
+        if (node.parent != SIZE_MAX && node.parent < m_tree_nodes.size()) {
+            const auto parent_physical = m_tree_nodes[node.parent].physical_bytes;
+            percent = parent_physical > 0
+                ? (static_cast<double>(node.physical_bytes) / static_cast<double>(parent_physical)) * 100.0
+                : 0.0;
+        }
+        percent = std::clamp(percent, 0.0, 100.0);
+
+        auto track = Border{};
+        track.Width(150.0);
+        track.Height(8.0);
+        track.CornerRadius(CornerRadius{ 4.0, 4.0, 4.0, 4.0 });
+        track.Background(MakeBrush(ActiveShellTheme().progress_track));
+        track.VerticalAlignment(VerticalAlignment::Center);
+
+        auto fill = Border{};
+        fill.Width(1.5 * percent);
+        fill.Height(8.0);
+        fill.CornerRadius(CornerRadius{ 4.0, 4.0, 4.0, 4.0 });
+        fill.Background(MakeBrush(ActiveShellTheme().progress_fill));
+        fill.HorizontalAlignment(HorizontalAlignment::Left);
+        track.Child(fill);
+        row.Children().Append(track);
+
+        auto append_cell = [&](std::wstring const& text, double min_width, double opacity) {
+            auto cell = TextBlock{};
+            cell.Text(winrt::hstring(text));
+            cell.MinWidth(min_width);
+            cell.Opacity(opacity);
+            cell.VerticalAlignment(VerticalAlignment::Center);
+            row.Children().Append(cell);
+        };
+
+        wchar_t percent_text[16]{};
+        swprintf_s(percent_text, L"%.1f%%", percent);
+        append_cell(percent_text, 52.0, 0.8);
+        append_cell(FormatBytes(node.physical_bytes), 84.0, 0.8);
+        append_cell(FormatBytes(node.logical_bytes), 84.0, 0.8);
+        append_cell(node.is_directory ? std::to_wstring(node.file_count) : std::wstring(L"-"), 64.0, 0.72);
+        append_cell(
+            node.has_modified_utc ? FormatFileTimeUtc(node.modified_utc) : std::wstring(L"-"),
+            120.0,
+            0.72);
+
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+            item,
+            winrt::hstring(
+                node.name + L", " + (node.is_directory ? L"Folder" : L"File") +
+                L", " + FormatBytes(node.physical_bytes)));
+
+        item.Content(row);
+        return item;
     }
 
     MainWindow::ExtensionStatEntry MainWindow::ExtensionStatFromNative(WbExtensionStat const& entry)

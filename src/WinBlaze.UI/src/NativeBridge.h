@@ -11,6 +11,7 @@ namespace WinBlaze::UI::NativeBridge
     using EventHandler = std::function<void(const WbEvent&)>;
     using CatalogHandler = std::function<void(const WbCatalogEntry&)>;
     using ExtensionStatHandler = std::function<void(const WbExtensionStat&)>;
+    using TreeNodeHandler = std::function<void(const WbTreeNode&)>;
 
     struct SessionHandle
     {
@@ -25,4 +26,9 @@ namespace WinBlaze::UI::NativeBridge
     void DestroyScan(SessionHandle handle);
     WbIndexSnapshotStats LoadCatalogSnapshotWithStats(CatalogHandler handler);
     void LoadExtensionStatsSnapshot(ExtensionStatHandler handler);
+    // Emits the display-tree root; returns false when no index is loaded.
+    bool TreeRoot(TreeNodeHandler handler);
+    // Emits direct children of a directory (largest physical first, capped);
+    // `total` reports how many exist so callers can show a "+N more" row.
+    WbTreeChildrenResult TreeChildren(uint64_t parentId, TreeNodeHandler handler);
 }

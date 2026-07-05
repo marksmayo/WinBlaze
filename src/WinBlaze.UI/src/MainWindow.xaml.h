@@ -137,6 +137,29 @@ namespace winrt::WinBlaze::UI::implementation
             uint64_t files{};
         };
 
+        // One node in the lazily-loaded display tree (arena-indexed; parent
+        // and children reference positions in m_tree_nodes).
+        struct TreeNodeUi
+        {
+            uint64_t id{ 0 };
+            bool is_directory{ false };
+            // Synthetic trailing row shown when a directory has more
+            // children than the native per-directory cap emits.
+            bool is_more_row{ false };
+            std::wstring name;
+            uint64_t logical_bytes{ 0 };
+            uint64_t physical_bytes{ 0 };
+            uint64_t file_count{ 0 };
+            uint64_t item_count{ 0 };
+            int64_t modified_utc{ 0 };
+            bool has_modified_utc{ false };
+            uint32_t depth{ 0 };
+            bool expanded{ false };
+            bool children_loaded{ false };
+            size_t parent{ SIZE_MAX };
+            std::vector<size_t> children;
+        };
+
         struct TreemapTileLayout
         {
             float left{};
@@ -155,6 +178,14 @@ namespace winrt::WinBlaze::UI::implementation
         void BuildShell();
         Microsoft::UI::Xaml::Controls::ListViewItem CreateTreeListItem(TreeCatalogEntry const& entry) const;
         void PopulateTreeList(std::vector<TreeCatalogEntry> const& entries);
+        void LoadTreeSnapshot();
+        void EnsureTreeChildrenLoaded(size_t node_index);
+        void RebuildTreeVisibleRows();
+        void RefreshTreeListView();
+        void ToggleTreeNodeExpansion(size_t node_index);
+        std::wstring TreeNodePath(size_t node_index) const;
+        Microsoft::UI::Xaml::Controls::ListViewItem CreateTreeNodeListItem(size_t node_index);
+        bool TreeArenaActive() const { return !m_tree_nodes.empty(); }
         std::vector<TreeCatalogEntry> FilterTreeCatalog() const;
         bool MatchesInstantSearch(TreeCatalogEntry const& entry) const;
         std::wstring TreeCatalogKey(TreeCatalogEntry const& entry) const;
@@ -299,6 +330,8 @@ namespace winrt::WinBlaze::UI::implementation
         std::vector<TreeCatalogEntry> m_tree_catalog;
         std::unordered_set<std::wstring> m_tree_catalog_keys;
         std::vector<TreeCatalogEntry> m_instant_search_hits;
+        std::vector<TreeNodeUi> m_tree_nodes;
+        std::vector<size_t> m_tree_visible_rows;
         size_t m_tree_window_offset{ 0 };
         bool m_tree_updates_ready{ false };
         bool m_tree_selection_updates_suppressed{ false };

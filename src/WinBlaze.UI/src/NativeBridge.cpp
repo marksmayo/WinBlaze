@@ -13,6 +13,8 @@ namespace
     using DestroyScanFn = void(__stdcall *)(WbScanSessionHandle);
     using LoadCatalogSnapshotWithStatsFn = WbIndexSnapshotStats(__stdcall *)(WbCatalogCallback, void*);
     using LoadExtensionStatsFn = void(__stdcall *)(WbExtensionStatCallback, void*);
+    using TreeRootFn = uint8_t(__stdcall *)(WbTreeNodeCallback, void*);
+    using TreeChildrenFn = WbTreeChildrenResult(__stdcall *)(uint64_t, WbTreeNodeCallback, void*);
 
     struct DllApi
     {
@@ -23,6 +25,8 @@ namespace
         DestroyScanFn destroy_scan{ nullptr };
         LoadCatalogSnapshotWithStatsFn load_catalog_snapshot_with_stats{ nullptr };
         LoadExtensionStatsFn load_extension_stats{ nullptr };
+        TreeRootFn tree_root{ nullptr };
+        TreeChildrenFn tree_children{ nullptr };
     };
 
     DllApi& Api()
@@ -58,6 +62,11 @@ namespace
         WinBlaze::UI::NativeBridge::ExtensionStatHandler handler;
     };
 
+    struct TreeNodeCallbackContext
+    {
+        WinBlaze::UI::NativeBridge::TreeNodeHandler handler;
+    };
+
     void EnsureLoaded()
     {
         auto& api = Api();
@@ -77,8 +86,10 @@ namespace
         api.destroy_scan = reinterpret_cast<DestroyScanFn>(GetProcAddress(api.module, "wb_scan_session_destroy"));
         api.load_catalog_snapshot_with_stats = reinterpret_cast<LoadCatalogSnapshotWithStatsFn>(GetProcAddress(api.module, "wb_index_snapshot_load_with_stats"));
         api.load_extension_stats = reinterpret_cast<LoadExtensionStatsFn>(GetProcAddress(api.module, "wb_index_snapshot_extension_stats"));
+        api.tree_root = reinterpret_cast<TreeRootFn>(GetProcAddress(api.module, "wb_tree_root"));
+        api.tree_children = reinterpret_cast<TreeChildrenFn>(GetProcAddress(api.module, "wb_tree_children"));
 
-        if (api.start_scan == nullptr || api.start_incremental_scan == nullptr || api.cancel_scan == nullptr || api.destroy_scan == nullptr || api.load_catalog_snapshot_with_stats == nullptr || api.load_extension_stats == nullptr) {
+        if (api.start_scan == nullptr || api.start_incremental_scan == nullptr || api.cancel_scan == nullptr || api.destroy_scan == nullptr || api.load_catalog_snapshot_with_stats == nullptr || api.load_extension_stats == nullptr || api.tree_root == nullptr || api.tree_children == nullptr) {
             throw std::runtime_error("Failed to resolve winblaze_native exports");
         }
     }
@@ -116,6 +127,18 @@ namespace
         auto* context = static_cast<ExtensionStatCallbackContext*>(user_data);
         if (context->handler) {
             context->handler(*entry);
+        }
+    }
+
+    extern "C" void __stdcall OnTreeNodeWithContext(const WbTreeNode* node, void* user_data)
+    {
+        if (node == nullptr || user_data == nullptr) {
+            return;
+        }
+
+        auto* context = static_cast<TreeNodeCallbackContext*>(user_data);
+        if (context->handler) {
+            context->handler(*node);
         }
     }
 
@@ -199,5 +222,21 @@ namespace WinBlaze::UI::NativeBridge
         auto context = std::make_shared<ExtensionStatCallbackContext>();
         context->handler = std::move(handler);
         Api().load_extension_stats(&OnExtensionStatWithContext, context.get());
+    }
+
+    bool TreeRoot(TreeNodeHandler handler)
+    {
+        EnsureLoaded();
+        auto context = std::make_shared<TreeNodeCallbackContext>();
+        context->handler = std::move(handler);
+        return Api().tree_root(&OnTreeNodeWithContext, context.get()) != 0;
+    }
+
+    WbTreeChildrenResult TreeChildren(uint64_t parentId, TreeNodeHandler handler)
+    {
+        EnsureLoaded();
+        auto context = std::make_shared<TreeNodeCallbackContext>();
+        context->handler = std::move(handler);
+        return Api().tree_children(parentId, &OnTreeNodeWithContext, context.get());
     }
 }
