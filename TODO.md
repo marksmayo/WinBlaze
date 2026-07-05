@@ -25,12 +25,12 @@ Completed this cycle:
 
 Open items queued from this cycle:
 
-- [ ] TODO: Batch file records end-to-end through the scan pipeline (scanner -> index without one channel event per record); this is the shared floor (~17 s warm drain on 2.2M files) for both backends and the path to WizTree-class times, and it should also let the elevated MFT backend beat the walk.
+- [x] DONE-DONE: Scan performance overhaul (2026-07-06): channel batching (`Sender<Vec<ScanEvent>>`, 512-record batches), identity hashing + pre-sizing for id-keyed maps, MFT emit rewrite (files never stored, parent-keyed orphan buckets, running summary), walk allocation cuts + raw `FindFirstFileExW` large-fetch enumeration. Raw MFT C:\ scan 143.7 s -> ~8.5 s, FFI end-to-end 125.6 s -> ~10 s, in-app Debug scan ~40 s idle-to-idle; MFT backend now beats the walk and runs unelevated when volume read access allows. Also fixed: explicit `DirectoryWalk` hints were silently overridden, MFT models mis-rooted at `$Extend` (root record 5 never emitted), and DOS 8.3 aliases surfaced instead of Win32 names.
 - [x] DONE-DONE: `App.xaml` repaired: the WPF-only `DropShadowEffect` resource is removed and `App::InitializeComponent` now succeeds, so application resources load. Follow-up (optional): adopt a real `MenuBar` and `/utf-8` compilation now that templates can resolve.
 - [x] DONE-DONE: Sidebar views implemented per the High Velocity mockups: Dashboard (capacity/used/free stat cards, disk-usage meter, content-distribution bar with legend, recent activity), Insights (top directories with proportion bars, extension breakdown table), Cleanup center (temp/log potential gain, largest files via new wb_tree_largest_files FFI with Open-in-Explorer actions), Settings (theme/policy/data locations with open buttons), and Support (GitHub links); Help > About opens the repository. Remaining polish: donut-style gauge and file-type badges.
 - [x] DONE-DONE: Tree-pane column headers now mirror the row layout (Name/Usage/%/Physical/Logical/Files/Last Change with matching widths), and the `+N more` row pages the next 4,096 children in place via offset paging added to `wb_tree_children`.
 - [x] DONE-DONE: `cargo audit` 0.22.2 run clean (5 dependencies, zero advisories); recorded in `docs\RELEASE_NOTES.md`.
-- [ ] TODO: Re-record Release benchmark medians and budgets on the new engine (current baselines predate the tree model, path removal, and event batching).
+- [x] DONE-DONE: Release benchmark medians re-recorded on the new engine (2026-07-06, `benchmarks\winblaze-release-medians.json`): tiny scan 6 ms / fanout 11 ms / scale 36 ms medians, peak frames <=37 ms, all inside checked-in budgets.
 
 ## Productionisation Backlog: Release Candidate Gates
 

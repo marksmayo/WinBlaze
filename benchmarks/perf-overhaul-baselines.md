@@ -33,3 +33,36 @@ Walk `first_event_ms` = 12; `summary_ms` == `completed_ms` (in-process drain kee
 
 - Walk: < 8 s warm (Steps 1, 2, 5)
 - MFT: read-bound ~15–25 s and beating the walk (Step 3), correct root
+
+## Results (after Steps 1-3 and 5; Step 4 skipped, gate not met)
+
+| Scenario | Baseline | Final |
+| --- | --- | --- |
+| Raw MFT producer | 143.7 s | 8.3-9.0 s |
+| FFI end-to-end (auto - MFT) | 125.6 s | 10.0-12.0 s |
+| Directory walk (forced) | 13.9-14.4 s | 13.9 s best (noise-bound) |
+| In-app C:\ scan (Debug UI, idle to idle) | 90-130 s | 39.7 s |
+
+Step contributions to the MFT path: identity hashing + pre-sizing 143.7 s ->
+58.3 s; emit rewrite (orphan buckets, files never stored, running summary)
+58.3 s -> 8.3 s. Channel batching cut ~2.9M sends/allocs per scan but the
+in-process drain was already keeping pace, so its wall-clock effect is
+mostly on the FFI drain. Walk-side allocation cuts and the raw
+FindFirstFileExW large-fetch enumerator were verified count-identical
+against fs::read_dir; wall-clock deltas sat inside this machine's noise
+band (desktop load varies runs by +/-40%).
+
+Step 4 (persist Vec fast path) was skipped per its gate: after Steps 1-3
+the FFI summary lands at ~7.5 s vs ~9 s for the producer alone, so persist
+inserts fully overlap the producer, and the ~2.3 s summary-to-completed gap
+is the final snapshot flush, which a Vec-backed transaction would not
+touch.
+
+Correctness fixes that fell out of the work: explicit DirectoryWalk backend
+hints are honored; MFT-derived trees root at record 5 (was `$Extend`);
+Win32 names win over DOS 8.3 aliases (was `PROGRA~1`); extension-record
+size corrections re-emit after the base file already streamed.
+
+Release UI medians re-recorded 2026-07-06 (`winblaze-release-medians.json`):
+tiny 6 ms / fanout 11 ms / scale 36 ms median scan duration, peak frames
+<=37 ms, working sets 157-184 MB.

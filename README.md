@@ -17,33 +17,35 @@ WinBlaze combines a Rust scanning engine (raw NTFS MFT access with a parallel di
 
 ## Performance
 
-Measured on the live `C:\` system volume — **2,258,536 files / 543,404 directories / 464 GB** — Windows 11, NVMe, warm cache (see [docs/REAL_WORLD_CALIBRATION.md](docs/REAL_WORLD_CALIBRATION.md) for methodology and the elevated-MFT numbers):
+Measured on the live `C:\` system volume — **~2.3M files / ~546k directories / 464 GB** — Windows 11, NVMe, warm cache (see [docs/REAL_WORLD_CALIBRATION.md](docs/REAL_WORLD_CALIBRATION.md) for methodology and [benchmarks/perf-overhaul-baselines.md](benchmarks/perf-overhaul-baselines.md) for the step-by-step numbers):
 
 ```mermaid
 xychart-beta
-    title "Folder tree ready after Start scan (C:\\, 2.2M files, seconds — lower is better)"
-    x-axis ["start of cycle", "event trimming", "dir batching", "stall fixes (now)"]
-    y-axis "seconds" 0 --> 60
-    bar [52, 30, 22, 22]
+    title "Raw-MFT full C:\\ scan across the perf overhaul (seconds — lower is better)"
+    x-axis ["baseline", "+ identity hashing", "+ emit rewrite (now)"]
+    y-axis "seconds" 0 --> 150
+    bar [143.7, 58.3, 8.5]
 ```
 
 ```mermaid
 xychart-beta
-    title "Engine internals across the optimization cycle (lower is better)"
-    x-axis ["pipeline drain (s)", "post-scan flush (s)", "snapshot (100 MB)", "working set (100 MB)", "worst UI stall (s)"]
-    y-axis "before -> after" 0 --> 36
-    bar "before" [34.8, 28.0, 5.62, 14.0, 26.0]
-    bar "after" [17.1, 0.9, 3.23, 10.3, 0.9]
+    title "Engine internals across the optimization cycles (lower is better)"
+    x-axis ["end-to-end scan+persist (s)", "post-scan flush (s)", "snapshot (100 MB)", "working set (100 MB)", "worst UI stall (s)"]
+    y-axis "before -> after" 0 --> 130
+    bar "before" [125.6, 28.0, 5.62, 14.0, 26.0]
+    bar "after" [10.0, 0.9, 3.23, 10.0, 1.0]
 ```
 
 | Metric (C:\ scan, warm) | Before | After |
 |---|---|---|
-| Folder tree ready | ~52 s | **~22 s** |
-| Event-pipeline drain | 34.8 s | **17.1 s** |
-| Post-scan index flush | 28 s (duplicated) | **0.9 s** |
+| Raw-MFT backend, session → summary | 143.7 s | **~8.5 s** |
+| End-to-end scan + persist + tree (FFI) | 125.6 s | **~10 s** |
+| Directory-walk backend (fallback) | ~35 s drain | **~14 s** |
+| In-app scan, idle to idle (Debug UI) | 90–130 s | **~40 s** |
+| Post-scan index flush | 28 s (duplicated) | **&lt;1 s** |
 | Snapshot on disk | 562 MB | **323 MB** |
-| Working set (full model) | ~1.4 GB | **~1.03 GB** |
-| Worst single UI-thread stall | 26 s | **0.9 s** |
+| Working set (full model) | ~1.4 GB | **~1.0 GB** |
+| Worst single UI-thread stall | 26 s | **&lt;1 s** |
 | Live tree first folders visible | — | **~2 s** |
 
 Generated-dataset budgets (tiny/fanout/fanout-large/scale) are enforced in CI and locally via `benchmarks\performance-budgets*.json`; competitor methodology notes live in `docs\BENCHMARK_METHODOLOGY.md` and `benchmarks\competitor-report.md`.
@@ -57,7 +59,7 @@ Generated-dataset budgets (tiny/fanout/fanout-large/scale) are enforced in CI an
 | C++/WinRT | 7,072 lines across 17 files |
 | PowerShell automation | 2,768 lines across 28 scripts |
 | Documentation | 2,544 lines across 38 markdown files |
-| Rust unit/integration tests | 69 (`cargo test`), plus scripted UI smoke, negative smoke, and budgeted benchmarks |
+| Rust unit/integration tests | 84 (`cargo test`), plus scripted UI smoke, negative smoke, and budgeted benchmarks |
 
 ## Installation
 

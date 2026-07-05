@@ -233,7 +233,10 @@ impl UiEventForwarder {
         // UI (their handlers snapshot and reload).
         if matches!(
             event,
-            ScanEvent::Summary(_) | ScanEvent::Completed | ScanEvent::Cancelled | ScanEvent::Failed(_)
+            ScanEvent::Summary(_)
+                | ScanEvent::Completed
+                | ScanEvent::Cancelled
+                | ScanEvent::Failed(_)
         ) {
             self.flush_directory_batch();
         }
@@ -243,8 +246,7 @@ impl UiEventForwarder {
                 let native_event = match event {
                     ScanEvent::FileFound(file) if file.full_path.is_empty() => {
                         let mut file = file.clone();
-                        if let Some(parent) =
-                            self.directory_paths.get(&file.parent_directory_id.0)
+                        if let Some(parent) = self.directory_paths.get(&file.parent_directory_id.0)
                         {
                             file.full_path = winblaze_core::join_path(parent, &file.name);
                         }
@@ -1283,7 +1285,10 @@ fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntr
             &mut strings,
         ),
         id: directory.id.0,
-        parent_id: directory.parent_directory_id.map(|parent| parent.0).unwrap_or(0),
+        parent_id: directory
+            .parent_directory_id
+            .map(|parent| parent.0)
+            .unwrap_or(0),
         has_parent: u8::from(directory.parent_directory_id.is_some()),
         is_directory: 1,
         size_bytes: directory.total_bytes,
@@ -1528,25 +1533,23 @@ pub extern "C" fn wb_tree_largest_files(
         return;
     };
     let model = get_or_load_index_model();
-    model
-        .tree
-        .for_each_largest_file(limit as usize, |file| {
-            let mut strings = Vec::new();
-            let node = WbTreeNode {
-                id: file.id.0,
-                is_directory: 0,
-                // Full display path rather than the bare name: cleanup rows
-                // need to show and open the actual location.
-                name: c_view(model.tree.file_display_path(file), &mut strings),
-                logical_bytes: file.size_bytes,
-                physical_bytes: file.allocation_bytes,
-                file_count: 0,
-                item_count: 0,
-                modified_utc: file.modified_utc.unwrap_or_default(),
-                has_modified_utc: u8::from(file.modified_utc.is_some()),
-            };
-            cb(&node as *const WbTreeNode, user_data);
-        });
+    model.tree.for_each_largest_file(limit as usize, |file| {
+        let mut strings = Vec::new();
+        let node = WbTreeNode {
+            id: file.id.0,
+            is_directory: 0,
+            // Full display path rather than the bare name: cleanup rows
+            // need to show and open the actual location.
+            name: c_view(model.tree.file_display_path(file), &mut strings),
+            logical_bytes: file.size_bytes,
+            physical_bytes: file.allocation_bytes,
+            file_count: 0,
+            item_count: 0,
+            modified_utc: file.modified_utc.unwrap_or_default(),
+            has_modified_utc: u8::from(file.modified_utc.is_some()),
+        };
+        cb(&node as *const WbTreeNode, user_data);
+    });
 }
 
 #[no_mangle]

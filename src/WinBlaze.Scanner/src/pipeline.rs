@@ -187,8 +187,14 @@ mod tests {
         pipeline.flush();
 
         let mut events = rx.try_iter().flatten();
-        assert!(matches!(events.next().expect("first"), ScanEvent::Progress(_)));
-        assert!(matches!(events.next().expect("second"), ScanEvent::Completed));
+        assert!(matches!(
+            events.next().expect("first"),
+            ScanEvent::Progress(_)
+        ));
+        assert!(matches!(
+            events.next().expect("second"),
+            ScanEvent::Completed
+        ));
         assert!(events.next().is_none());
     }
 
@@ -207,7 +213,10 @@ mod tests {
         for _ in 0..2 {
             pipeline.emit_file(FileRecord::default());
         }
-        assert!(rx.try_recv().is_err(), "records below batch size stay buffered");
+        assert!(
+            rx.try_recv().is_err(),
+            "records below batch size stay buffered"
+        );
 
         pipeline.emit_file(FileRecord::default());
         assert_eq!(rx.try_recv().expect("batch at batch_size").len(), 3);

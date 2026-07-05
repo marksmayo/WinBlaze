@@ -62,7 +62,9 @@ extern "C" fn on_event(event: *const WbEvent, user_data: *mut c_void) {
 }
 
 fn main() {
-    let root = std::env::args().nth(1).unwrap_or_else(|| r"C:\".to_string());
+    let root = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| r"C:\".to_string());
     let counters = Box::new(Counters::default());
     let counters_ptr = Box::into_raw(counters);
 
@@ -131,7 +133,8 @@ extern "C" fn capture_node(node: *const WbTreeNode, user_data: *mut c_void) {
     let name = if node.name.ptr.is_null() {
         String::new()
     } else {
-        let bytes = unsafe { std::slice::from_raw_parts(node.name.ptr.cast::<u8>(), node.name.len) };
+        let bytes =
+            unsafe { std::slice::from_raw_parts(node.name.ptr.cast::<u8>(), node.name.len) };
         String::from_utf8_lossy(bytes).to_string()
     };
     nodes.push(CapturedNode {
@@ -150,7 +153,10 @@ extern "C" fn capture_node(node: *const WbTreeNode, user_data: *mut c_void) {
 /// total equals the sum of its direct children (rollup consistency).
 fn walk_tree_api() {
     let mut roots: Vec<CapturedNode> = Vec::new();
-    let has_root = wb_tree_root(Some(capture_node), (&mut roots as *mut Vec<CapturedNode>).cast());
+    let has_root = wb_tree_root(
+        Some(capture_node),
+        (&mut roots as *mut Vec<CapturedNode>).cast(),
+    );
     if has_root == 0 || roots.is_empty() {
         println!("tree: no root (empty index)");
         return;
@@ -168,7 +174,10 @@ fn walk_tree_api() {
         Some(capture_node),
         (&mut children as *mut Vec<CapturedNode>).cast(),
     );
-    println!("tree children: emitted={} total={}", result.emitted, result.total);
+    println!(
+        "tree children: emitted={} total={}",
+        result.emitted, result.total
+    );
     for child in children.iter().take(10) {
         println!(
             "  {} \"{}\" physical={} files={}",

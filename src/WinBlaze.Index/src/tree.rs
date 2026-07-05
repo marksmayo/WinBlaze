@@ -528,7 +528,11 @@ mod tests {
     #[test]
     fn children_stream_merged_physical_desc_with_limit() {
         let tree = build(
-            vec![dir(5, None, ""), dir(10, Some(5), "big"), dir(11, Some(5), "small")],
+            vec![
+                dir(5, None, ""),
+                dir(10, Some(5), "big"),
+                dir(11, Some(5), "small"),
+            ],
             vec![
                 file(1, 10, "inner.bin", 500, 500),
                 file(2, 5, "mid.bin", 300, 300),

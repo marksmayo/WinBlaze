@@ -141,13 +141,16 @@ try {
     Assert-True ($null -ne $edit) "Root path edit not found"
     $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($datasetPath)
 
+    # Diagnostics are hidden by default in the High Velocity layout; reveal
+    # them before the scan so the correctness text is in the UIA tree.
+    Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
+
     $scanStarted = Get-Date
     Invoke-Button -Window $window -Name "Start scan" | Out-Null
     $expectedPattern = "Correctness:*files=$($manifest.files)*directories=$($manifest.directories)*"
     $correctness = Find-TextLike -Window $window -Pattern $expectedPattern -TimeoutSeconds $TimeoutSeconds
     $scanEnded = Get-Date
 
-    Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
     $frameStatus = Find-TextLike -Window $window -Pattern "*frames=*last frame=*peak frame=*" -TimeoutSeconds 8
     Invoke-Button -Window $window -Name "Treemap" -Required $false | Out-Null
     $treemapStatus = Find-TextLike -Window $window -Pattern "*layout=*labels=*" -TimeoutSeconds 8

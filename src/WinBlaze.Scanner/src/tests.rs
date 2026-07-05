@@ -430,8 +430,11 @@ fn directory_walk_parallel_matches_sequential_totals() {
         let nested = root.join(format!("bucket-{bucket}")).join("nested");
         fs::create_dir_all(&nested).expect("create parallel fixture directories");
         for index in 0..16 {
-            fs::write(nested.join(format!("file-{index:02}.bin")), [bucket as u8; 8])
-                .expect("write parallel fixture file");
+            fs::write(
+                nested.join(format!("file-{index:02}.bin")),
+                [bucket as u8; 8],
+            )
+            .expect("write parallel fixture file");
         }
     }
 

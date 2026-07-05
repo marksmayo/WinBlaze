@@ -493,7 +493,10 @@ mod tests {
         // Stored paths win (older snapshots still carry them).
         let mut stored = file.clone();
         stored.full_path = String::from(r"D:\elsewhere\file.txt");
-        assert_eq!(derive_file_path(&directories, &stored), r"D:\elsewhere\file.txt");
+        assert_eq!(
+            derive_file_path(&directories, &stored),
+            r"D:\elsewhere\file.txt"
+        );
 
         // Unknown parent falls back to the bare name.
         let mut orphan = file.clone();

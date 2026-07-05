@@ -15,12 +15,12 @@ use winblaze_core::{FileAttributes, ScanEvent, ScanIssueKind, ScanIssueRecord};
 
 use crate::errors::{classify_io_error, ScanErrorKind};
 use crate::filesystem::build_scan_access_plan;
-use crate::winfind;
 use crate::ntfs::{enumerate_ntfs_volume_parallel_streaming_summary, NtfsEnumerationError};
 use crate::performance::ScanPipelineConfig;
 use crate::pipeline::ScanEventPipeline;
 use crate::policy::{should_descend_into_reparse_target, ReparseTraversalPolicy};
 use crate::types::ScanRuntimeConfig;
+use crate::winfind;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScanRequest {
@@ -554,7 +554,13 @@ fn walk_directory_tree(
                 ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
             }
         } else {
-            emit_file_record(pipeline, walk_state, parent_directory_id, entry_name, &metadata);
+            emit_file_record(
+                pipeline,
+                walk_state,
+                parent_directory_id,
+                entry_name,
+                &metadata,
+            );
         }
     }
 }
@@ -947,8 +953,9 @@ fn process_fallback_directory(
                 &task.ancestors,
             );
 
-            let directory_id =
-                winblaze_core::DirectoryId(shared.next_directory_id.fetch_add(1, Ordering::Relaxed));
+            let directory_id = winblaze_core::DirectoryId(
+                shared.next_directory_id.fetch_add(1, Ordering::Relaxed),
+            );
             emit_directory_record_shared(
                 pipeline,
                 shared,
@@ -967,7 +974,11 @@ fn process_fallback_directory(
                     });
                 }
                 ReparseDecision::SkippedCycle => {
-                    emit_deduplicated_issue_shared(pipeline, shared, reparse_cycle_issue(&entry_path));
+                    emit_deduplicated_issue_shared(
+                        pipeline,
+                        shared,
+                        reparse_cycle_issue(&entry_path),
+                    );
                 }
                 ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
             }
@@ -1017,8 +1028,9 @@ fn process_fallback_entries_fast(
                 &task.ancestors,
             );
 
-            let directory_id =
-                winblaze_core::DirectoryId(shared.next_directory_id.fetch_add(1, Ordering::Relaxed));
+            let directory_id = winblaze_core::DirectoryId(
+                shared.next_directory_id.fetch_add(1, Ordering::Relaxed),
+            );
             emit_directory_record_shared(
                 pipeline,
                 shared,
@@ -1037,14 +1049,20 @@ fn process_fallback_entries_fast(
                     });
                 }
                 ReparseDecision::SkippedCycle => {
-                    emit_deduplicated_issue_shared(pipeline, shared, reparse_cycle_issue(&entry_path));
+                    emit_deduplicated_issue_shared(
+                        pipeline,
+                        shared,
+                        reparse_cycle_issue(&entry_path),
+                    );
                 }
                 ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
             }
         } else {
             let size_bytes = entry.size_bytes;
             shared.files_seen.fetch_add(1, Ordering::Relaxed);
-            shared.total_size_bytes.fetch_add(size_bytes, Ordering::Relaxed);
+            shared
+                .total_size_bytes
+                .fetch_add(size_bytes, Ordering::Relaxed);
             shared
                 .total_allocation_bytes
                 .fetch_add(size_bytes, Ordering::Relaxed);
@@ -1099,7 +1117,9 @@ fn emit_file_record_shared(
 ) {
     let size_bytes = metadata.len();
     shared.files_seen.fetch_add(1, Ordering::Relaxed);
-    shared.total_size_bytes.fetch_add(size_bytes, Ordering::Relaxed);
+    shared
+        .total_size_bytes
+        .fetch_add(size_bytes, Ordering::Relaxed);
     shared
         .total_allocation_bytes
         .fetch_add(size_bytes, Ordering::Relaxed);

@@ -1,4 +1,3 @@
-use winblaze_core::{IdHashMap, IdHashSet};
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::os::windows::ffi::OsStrExt;
@@ -9,6 +8,7 @@ use std::{
     ffi::c_void,
     ptr::{null, null_mut},
 };
+use winblaze_core::{IdHashMap, IdHashSet};
 
 use winblaze_core::{
     aggregate_directory_records, DirectoryId, DirectoryRecord, FileAttributes, FileId, FileRecord,
@@ -240,9 +240,7 @@ impl NtfsStreamState {
         };
         on_event(ScanEvent::FileFound(FileRecord {
             id: entry.file_id,
-            parent_directory_id: DirectoryId(
-                entry.parent_directory_id.unwrap_or(NTFS_ROOT_RECORD),
-            ),
+            parent_directory_id: DirectoryId(entry.parent_directory_id.unwrap_or(NTFS_ROOT_RECORD)),
             name,
             full_path: String::new(),
             size_bytes: entry.size_bytes,
@@ -262,11 +260,7 @@ impl NtfsStreamState {
     /// $ATTRIBUTE_LIST, so a file base is always in `retained_files` when its
     /// extension arrives after it; before it, the sizes park in
     /// `pending_extensions`. Directory bases ignore sizes entirely.
-    fn ingest_extension(
-        &mut self,
-        extension: ExtensionSizes,
-        on_event: &mut dyn FnMut(ScanEvent),
-    ) {
+    fn ingest_extension(&mut self, extension: ExtensionSizes, on_event: &mut dyn FnMut(ScanEvent)) {
         if let Some(entry) = self.retained_files.get_mut(&extension.base_record) {
             let size = entry.size_bytes.max(extension.size_bytes);
             let allocation = entry.allocation_bytes.max(extension.allocation_bytes);
@@ -307,8 +301,7 @@ impl NtfsStreamState {
             .entry(extension.base_record)
             .and_modify(|sizes| {
                 sizes.size_bytes = sizes.size_bytes.max(extension.size_bytes);
-                sizes.allocation_bytes =
-                    sizes.allocation_bytes.max(extension.allocation_bytes);
+                sizes.allocation_bytes = sizes.allocation_bytes.max(extension.allocation_bytes);
             })
             .or_insert(extension);
     }
@@ -800,8 +793,7 @@ pub(crate) fn apply_mft_fixups(batch: &mut [u8], bytes_per_sector: usize) {
     let mut offset = 0usize;
     while offset + NTFS_RECORD_SIZE <= batch.len() {
         let record = &mut batch[offset..offset + NTFS_RECORD_SIZE];
-        if &record[0..4] == FILE_RECORD_SIGNATURE
-            && !apply_record_fixups(record, bytes_per_sector)
+        if &record[0..4] == FILE_RECORD_SIGNATURE && !apply_record_fixups(record, bytes_per_sector)
         {
             record[0..4].copy_from_slice(b"BAAD");
         }
@@ -1325,11 +1317,9 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
                             // Records carry one $FILE_NAME per namespace;
                             // last-parsed used to win, surfacing DOS 8.3
                             // names like PROGRA~1 when that one sat last.
-                            let replace = file_name
-                                .as_ref()
-                                .is_none_or(|current| {
-                                    name.namespace_rank() >= current.namespace_rank()
-                                });
+                            let replace = file_name.as_ref().is_none_or(|current| {
+                                name.namespace_rank() >= current.namespace_rank()
+                            });
                             if replace {
                                 file_name = Some(name);
                             }
@@ -1905,7 +1895,6 @@ mod tests {
         record
     }
 
-
     fn parsed_entry(
         id: u64,
         parent: u64,
@@ -1968,7 +1957,10 @@ mod tests {
     fn streaming_root_record_is_emitted_first() {
         let (summary, events) = collect_stream(vec![parsed_entry(10, 5, "Users", true, 0)], vec![]);
         let directories = directory_paths(&events);
-        assert_eq!(directories[0].0, 5, "root record must be the first directory out");
+        assert_eq!(
+            directories[0].0, 5,
+            "root record must be the first directory out"
+        );
         assert_eq!(directories[0].1, r"C:\");
         assert_eq!(summary.directories_seen, 2);
     }
@@ -1986,8 +1978,14 @@ mod tests {
             vec![],
         );
         let directories = directory_paths(&events);
-        let deep = directories.iter().find(|(id, _)| *id == 12).expect("dir 12");
-        assert_eq!(deep.1, r"C:\top\mid\deep", "orphan cascade must bake real paths");
+        let deep = directories
+            .iter()
+            .find(|(id, _)| *id == 12)
+            .expect("dir 12");
+        assert_eq!(
+            deep.1, r"C:\top\mid\deep",
+            "orphan cascade must bake real paths"
+        );
         assert_eq!(summary.directories_seen, 4);
         assert_eq!(summary.files_seen, 1);
         assert_eq!(summary.total_size_bytes, 64);
@@ -1996,10 +1994,12 @@ mod tests {
     #[test]
     fn streaming_orphans_without_parents_fall_back_to_root() {
         // Parent record 99 never appears; 40 still emits, rooted at C:\.
-        let (summary, events) =
-            collect_stream(vec![parsed_entry(40, 99, "lost", true, 0)], vec![]);
+        let (summary, events) = collect_stream(vec![parsed_entry(40, 99, "lost", true, 0)], vec![]);
         let directories = directory_paths(&events);
-        let lost = directories.iter().find(|(id, _)| *id == 40).expect("dir 40");
+        let lost = directories
+            .iter()
+            .find(|(id, _)| *id == 40)
+            .expect("dir 40");
         assert_eq!(lost.1, r"C:\lost");
         assert_eq!(summary.directories_seen, 2);
     }
@@ -2038,7 +2038,11 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(file_sizes, vec![100, 5_000], "corrected record must re-emit");
+        assert_eq!(
+            file_sizes,
+            vec![100, 5_000],
+            "corrected record must re-emit"
+        );
         assert_eq!(summary.files_seen, 1, "re-emit must not double count");
         assert_eq!(summary.total_size_bytes, 5_000);
     }
