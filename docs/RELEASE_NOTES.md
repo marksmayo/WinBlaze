@@ -34,3 +34,10 @@ package version `0.1.0.0`.
 - Larger machine-calibrated performance comparisons beyond generated benchmark
   profiles should be recorded before claiming release-scale parity.
 - Release signing requires external certificate and secret provisioning.
+
+## Dependency Security Audit (2026-07-05)
+
+`cargo audit` 0.22.2 against RustSec advisory-db (1,156 advisories loaded):
+5 crate dependencies scanned, **no vulnerabilities or warnings reported**.
+The Rust workspace is intentionally near-dependency-free; re-run
+`cargo audit` before each release.

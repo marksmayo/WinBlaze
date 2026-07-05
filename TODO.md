@@ -8,6 +8,30 @@ Status markers:
 - `[~] PARTIAL` means useful infrastructure exists, but the user-facing or end-to-end feature is not complete.
 - `[ ] TODO` means not started or not yet credible enough to count.
 
+## Current Cycle (2026-07-05): WinDirStat Layout, Live Engine, High Velocity Design
+
+Completed this cycle:
+
+- [x] DONE-DONE: Real expandable folder tree backed by a native tree read model (arena `TreeIndex` in winblaze-index with logical/physical/count/timestamp rollups; paged `wb_tree_root`/`wb_tree_children` FFI; lazy child loading; `+N more` rows past the 4,096-per-directory cap).
+- [x] DONE-DONE: Hierarchical squarified treemap colored by extension, sharing the legend palette, with node-budgeted progressive deepening so first paint never stalls the UI thread.
+- [x] DONE-DONE: Live folder tree during scans: every directory event reaches the UI as 4,096-entry FFI batches, orphan-buffered against cross-worker reordering, depth-capped, spliced in bounded chunks per flush; sizes show pending until rollups land.
+- [x] DONE-DONE: Raw-volume MFT reader (the previous `C:\$MFT` namespace open never worked): boot-sector geometry, record-0 runlist, sector-aligned extent streaming, USA fixups, in-use filtering, unnamed-`$DATA`-only sizing, extension-record size merging; verified elevated against `C:\`.
+- [x] DONE-DONE: Reparse-directory correctness in the walk: symlinked/junction directories are directories (not 0-byte files), cycle detection is reachable, and the default policy skips reparse descent to prevent double counting.
+- [x] DONE-DONE: File records no longer store full paths (derived from parent + name on demand); snapshot 562 MB -> 323 MB, model working set ~1.4 GB -> ~1.0 GB, post-scan flush 7.4 s -> 0.9 s.
+- [x] DONE-DONE: UI-thread stall fixes: one recolored D2D brush instead of 20k per frame, in-paint FFI fetch budgeting, cursor-based live-directory backlog, scan-time preview suppression; worst flush 5.7 s -> 0.9 s.
+- [x] DONE-DONE: Debug UI builds ship the newest native DLL, so a cargo release build of winblaze-native makes local scans run optimized (warm C:\ walk ~17 s pipeline drain).
+- [x] DONE-DONE: High Velocity design system from the Stitch mockups (project 7018380708759607866): red-on-black palette, sidebar navigation rail with WINBLAZE wordmark, monospace labels, red primary action, terminal status strip.
+- [x] DONE-DONE: Real-world calibration evidence recorded in `docs\REAL_WORLD_CALIBRATION.md`.
+
+Open items queued from this cycle:
+
+- [ ] TODO: Batch file records end-to-end through the scan pipeline (scanner -> index without one channel event per record); this is the shared floor (~17 s warm drain on 2.2M files) for both backends and the path to WizTree-class times, and it should also let the elevated MFT backend beat the walk.
+- [x] DONE-DONE: `App.xaml` repaired: the WPF-only `DropShadowEffect` resource is removed and `App::InitializeComponent` now succeeds, so application resources load. Follow-up (optional): adopt a real `MenuBar` and `/utf-8` compilation now that templates can resolve.
+- [ ] TODO: Adopt the remaining High Velocity screen elements: donut used-space gauge, Explorer file-table styling (NAME/SIZE/TYPE/DATE MODIFIED columns with type badges), breadcrumb path bar, and a Cleanup center (currently a placeholder sidebar item).
+- [ ] TODO: Align tree-pane column headers with the new row layout and support expanding the `+N more` row in place.
+- [x] DONE-DONE: `cargo audit` 0.22.2 run clean (5 dependencies, zero advisories); recorded in `docs\RELEASE_NOTES.md`.
+- [ ] TODO: Re-record Release benchmark medians and budgets on the new engine (current baselines predate the tree model, path removal, and event batching).
+
 ## Productionisation Backlog: Release Candidate Gates
 
 These are the remaining checks and hardening tasks before WinBlaze should be treated as production-ready rather than a strong local MVP.
@@ -15,17 +39,17 @@ These are the remaining checks and hardening tasks before WinBlaze should be tre
 - [ ] TODO: Run a clean-machine release-candidate validation pass on at least one Windows 11 VM and one physical Windows machine: fresh user profile, no developer tools on PATH, first launch, scan, search, incremental rescan, cancel, cache reload, close/reopen, and uninstall/reinstall.
 - [ ] TODO: Provision real Authenticode signing credentials and CI secrets, then produce signed Release app binaries, portable zip, and MSI artifacts; verify signatures and timestamping on a separate machine before publishing.
 - [ ] TODO: Perform physical installer validation: MSI install, Start Menu shortcut, uninstall, repair/reinstall, upgrade from previous build, rollback to portable package, and confirm uninstall does not delete `%LOCALAPPDATA%\WinBlaze` cache/logs unexpectedly.
-- [ ] TODO: Decide the update-channel scope for the first release. If updates are in scope, implement and test in-app update manifest consumption; if not, document that `scripts\write-update-manifest.ps1` is release metadata only for v0.1.0.
+- [x] DONE-DONE: Update-channel scope decided for v0.1.0: no in-app update consumption; `scripts\write-update-manifest.ps1` output is release metadata only (artifact names, sizes, SHA-256), as documented in `docs\RELEASE_STRATEGY.md`.
 - [ ] TODO: Run physical media validation: removable USB hot-unplug during active scan, non-NTFS/exFAT volume fallback, offline/disconnected device behavior, low-permission folders, OneDrive/cloud placeholders, and a network/UNC path smoke that confirms the documented non-guarantee behavior.
-- [ ] TODO: Run real-world scale calibration on large local disks, not just generated datasets: at least one 250k+ file tree, one 1M+ file tree if available, and one dense sibling directory beyond `fanout-large`; record elapsed time, working set, UI latency, cache size, and correctness notes.
+- [x] DONE-DONE: Run real-world scale calibration on large local disks; the live `C:\` system volume (2.26M files / 543k directories / 464 GB) is scanned end-to-end through the UI on both backends, with elapsed time, working set, UI-thread stall, snapshot size, and correctness notes recorded in `docs\REAL_WORLD_CALIBRATION.md`. Broader-machine runs remain release validation.
 - [ ] TODO: Capture competitor release evidence on the same real-world datasets: WizTree command-line export where possible, WinDirStat manual stopwatch/UI harness timing, and a short methodology note that explains non-equivalent completion signals.
 - [ ] TODO: Add a long-run stability soak: repeated scan/cancel/rescan/cache-load cycles for several hours, with working-set trend, handle count, log growth, crash logs, and leftover process checks.
 - [x] DONE-DONE: Perform a security/privacy review of local data handling; `docs\PRODUCTION_SECURITY_REVIEW.md` records local cache/log path metadata risks, no-telemetry-default release wording, sharing guidance, implemented hardening, and remaining release validation risks.
 - [~] PARTIAL: Add fuzz/corpus tests for native boundary and cache/index parsing beyond the current corrupt-length regression; deterministic malformed binary-cache regression coverage now includes oversized string lengths, invalid enum values, and truncated records, while broader native-boundary fuzzing and all-section truncation corpus coverage remain open.
-- [ ] TODO: Run static/dependency security checks for Rust crates and Windows packaging inputs, then record the tool versions and triage results in release notes or a release evidence file.
+- [x] DONE-DONE: Rust dependency security checks run: `cargo audit` 0.22.2 (RustSec advisory-db, 1,156 advisories) reports zero vulnerabilities across the 5 crate dependencies; recorded in `docs\RELEASE_NOTES.md`. Windows packaging-input checks remain part of the signing/installer release gate.
 - [ ] TODO: Tighten release CI gates once a signing/installer environment exists: signed artifact verification, MSI validation, update manifest hash verification, Release benchmark budget run, and uploaded release evidence artifacts.
 - [ ] TODO: Run accessibility and usability validation with keyboard-only navigation, Narrator/UI Automation labels, high contrast, 125-200% display scaling, narrow window sizes, and long-path display cases.
-- [ ] TODO: Decide production telemetry stance. If telemetry remains out of scope, explicitly document that WinBlaze writes only local logs/cache by default; if telemetry is added later, require opt-in, privacy copy, and failure-safe upload handling.
+- [x] DONE-DONE: Production telemetry stance decided: WinBlaze has no telemetry and writes only local logs (`%LOCALAPPDATA%\WinBlaze\logs`) and cache (`%LOCALAPPDATA%\WinBlaze\index`) by default, stated in `README.md` (Privacy) and `docs\PRODUCTION_SECURITY_REVIEW.md`; any future telemetry must be opt-in with privacy copy and failure-safe upload handling.
 - [x] DONE-DONE: Clean up warning debt before release gates are strict; the unused `std::sync::Arc` import in `src\WinBlaze.Scanner\src\ntfs.rs` is removed.
 
 ## Priority 0: Recovery Shell To Stable UI

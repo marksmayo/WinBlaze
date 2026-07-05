@@ -45,3 +45,12 @@
 - Do not publish an update manifest whose hashes were generated from different
   artifacts than the files being uploaded.
 - Keep release notes short, factual, and scoped to the shipped version.
+
+## Update Channel Scope (v0.1.0)
+
+Decided 2026-07-05: v0.1.0 ships without in-app update consumption. The
+output of `scripts\write-update-manifest.ps1` is release metadata only —
+artifact names, sizes, and SHA-256 hashes for humans and external tooling.
+No code in the app reads the manifest. If an update channel is added later,
+manifest consumption must ship with signature verification and a rollback
+path.

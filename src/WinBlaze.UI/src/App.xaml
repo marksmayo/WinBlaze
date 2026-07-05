@@ -68,13 +68,6 @@
                       TintOpacity="0.8" 
                       FallbackColor="#FF131313" />
         
-        <!-- Shadows and Elevations -->
-        <DropShadowEffect x:Key="WinBlazeCardShadow" 
-                          BlurRadius="20" 
-                          ShadowDepth="0" 
-                          Color="#000000" 
-                          Opacity="0.3"/>
-        
         <!-- Corner Radius -->
         <CornerRadius x:Key="WinBlazeCornerRadius">8</CornerRadius>
         <CornerRadius x:Key="WinBlazeSmallCornerRadius">6</CornerRadius>

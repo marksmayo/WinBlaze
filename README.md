@@ -1,31 +1,63 @@
 # WinBlaze
 
-A blazingly fast disk usage analyzer for Windows that leverages NTFS internals for unmatched performance.
+A blazingly fast disk usage analyzer for Windows that leverages NTFS internals for real-time insight into where your space went.
 
 ## Overview
 
-WinBlaze is a high-performance disk usage analyzer designed specifically for Windows systems. It combines the speed of low-level NTFS MFT (Master File Table) access with a modern, GPU-accelerated visualization interface to deliver instant insights into your disk usage.
+WinBlaze combines a Rust scanning engine (raw NTFS MFT access with a parallel directory-walk fallback) with a C++/WinRT WinUI 3 frontend: a live expandable folder tree, a GPU-accelerated squarified treemap colored by extension, and instant search over a persistent index — wrapped in the **High Velocity** design system.
 
 ### Key Features
 
-- **Lightning-Fast Scanning**: Direct NTFS MFT enumeration for speeds that rival and often beat WizTree
-- **Real-Time Visualization**: Live treemap updates during scanning with GPU-accelerated Direct2D rendering
-- **Persistent Indexing**: Save and reload scan results instantly, with incremental rescan capabilities
-- **Instant Search**: Find files and folders across millions of entries in milliseconds
-- **Memory Efficient**: Optimized to handle tens of millions of files while maintaining low memory footprint
-- **Modern UI**: Native WinUI 3 interface with smooth animations and responsive controls
+- **Live folder tree**: directories appear in the tree *as the scan discovers them*, with full size rollups landing the moment the scan completes
+- **Real NTFS MFT scanning**: raw-volume Master File Table reader (boot-sector geometry, runlist extents, USA fixups) with correct handling of deleted records, named streams, extension records, and hardlinks
+- **Hierarchical treemap**: squarified, extension-colored Direct2D tiles with progressive deepening that never stalls the UI thread
+- **Persistent indexing**: compact binary snapshots reload instantly; incremental rescans diff against the previous state
+- **Memory disciplined**: file paths are derived (not stored) per record — a 2.2M-file index fits in ~1 GB working set and a 323 MB snapshot
+- **Responsive by measurement**: the UI ships its own frame/flush latency counters, and scan-time work is budgeted per frame
 
 ## Performance
 
-WinBlaze consistently matches or outperforms leading disk analyzers:
+Measured on the live `C:\` system volume — **2,258,536 files / 543,404 directories / 464 GB** — Windows 11, NVMe, warm cache (see [docs/REAL_WORLD_CALIBRATION.md](docs/REAL_WORLD_CALIBRATION.md) for methodology and the elevated-MFT numbers):
 
-| Dataset Size | Files | WinBlaze | WizTree | Speed Advantage |
-|-------------|-------|----------|---------|-----------------|
-| Small | 1,536 | 571ms | 754ms | **1.32x faster** |
-| Large | 16,384 | 456ms | 820ms | **1.80x faster** |
-| Dense | 8,192 | 505ms | 545ms | **1.08x faster** |
+```mermaid
+xychart-beta
+    title "Folder tree ready after Start scan (C:\\, 2.2M files, seconds — lower is better)"
+    x-axis ["start of cycle", "event trimming", "dir batching", "stall fixes (now)"]
+    y-axis "seconds" 0 --> 60
+    bar [52, 30, 22, 22]
+```
 
-*Benchmarks performed on Windows 11 with NVMe storage. Results show median elapsed time from 3 runs.*
+```mermaid
+xychart-beta
+    title "Engine internals across the optimization cycle (lower is better)"
+    x-axis ["pipeline drain (s)", "post-scan flush (s)", "snapshot (100 MB)", "working set (100 MB)", "worst UI stall (s)"]
+    y-axis "before -> after" 0 --> 36
+    bar "before" [34.8, 28.0, 5.62, 14.0, 26.0]
+    bar "after" [17.1, 0.9, 3.23, 10.3, 0.9]
+```
+
+| Metric (C:\ scan, warm) | Before | After |
+|---|---|---|
+| Folder tree ready | ~52 s | **~22 s** |
+| Event-pipeline drain | 34.8 s | **17.1 s** |
+| Post-scan index flush | 28 s (duplicated) | **0.9 s** |
+| Snapshot on disk | 562 MB | **323 MB** |
+| Working set (full model) | ~1.4 GB | **~1.03 GB** |
+| Worst single UI-thread stall | 26 s | **0.9 s** |
+| Live tree first folders visible | — | **~2 s** |
+
+Generated-dataset budgets (tiny/fanout/fanout-large/scale) are enforced in CI and locally via `benchmarks\performance-budgets*.json`; competitor methodology notes live in `docs\BENCHMARK_METHODOLOGY.md` and `benchmarks\competitor-report.md`.
+
+## Project Stats
+
+| | |
+|---|---|
+| Tracked files | 147 |
+| Rust | 10,300 lines across 32 files (5 crates) |
+| C++/WinRT | 7,072 lines across 17 files |
+| PowerShell automation | 2,768 lines across 28 scripts |
+| Documentation | 2,544 lines across 38 markdown files |
+| Rust unit/integration tests | 69 (`cargo test`), plus scripted UI smoke, negative smoke, and budgeted benchmarks |
 
 ## Installation
 
@@ -33,58 +65,46 @@ WinBlaze consistently matches or outperforms leading disk analyzers:
 
 - Windows 10 version 1903 or later (Windows 11 recommended)
 - x64 architecture
-- Administrator privileges (for NTFS MFT access)
+- Administrator privileges for the NTFS MFT fast path (the directory-walk fallback runs unelevated)
 - Visual C++ Runtime 2022
 
 ### Quick Start
 
 1. Download the latest release from [Releases](https://github.com/marksmayo/WinBlaze/releases)
 2. Run the MSI installer or extract the portable ZIP
-3. Launch WinBlaze with administrator privileges for optimal performance
+3. Launch WinBlaze — run as Administrator to enable raw MFT scanning
 
 ## Usage
 
-### Basic Scanning
-
-1. Select a drive or folder to scan from the dropdown
-2. Click "Start Scan" to begin analysis
-3. View results in real-time as the scan progresses
-4. Navigate the treemap to explore space usage visually
-
-### Search and Filter
-
-- **Instant Search**: Type in the search box to find files/folders instantly
-- **Size Filters**: Filter by minimum file size to focus on space hogs
-- **Type Filters**: Filter by file extension or type
+1. The root path defaults to `C:\` — adjust it, then click **Start scan**
+2. Watch folders stream into the tree live; sizes fill in at completion
+3. Double-click folders to expand them; children load on demand
+4. Click treemap tiles to select; colors match the extension legend
+5. Use **Incremental rescan** to refresh only what changed
 
 ### Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+S` | Start/Stop scan |
 | `Ctrl+F` | Focus search box |
-| `Ctrl+R` | Incremental rescan |
-| `Escape` | Cancel current operation |
+| `Ctrl+4` | Reveal search panel |
+| `Ctrl+5` | Reveal diagnostics panel |
+| `Escape` | Cancel current scan |
 
 ## Technical Architecture
 
-WinBlaze achieves its performance through a carefully designed multi-layer architecture:
+- **src/WinBlaze.Core** — domain models, rollup aggregation, change/lineage detection
+- **src/WinBlaze.Scanner** — raw-MFT reader (volume handle, runlist extents, fixups) and parallel directory-walk fallback with reparse-cycle protection
+- **src/WinBlaze.Index** — binary snapshot persistence, incremental diffing, search, and the arena tree read model that serves the UI's paged children queries
+- **src/WinBlaze.Native** — C ABI bridge: batched scan events, cached index model, paged `wb_tree_*` APIs
+- **src/WinBlaze.UI** — C++/WinRT WinUI 3 shell: live tree arena, Direct2D squarified treemap, High Velocity design system
 
-### Core Technologies
+### Performance Design
 
-- **Scanner Backend**: Pure Rust for memory safety and zero-allocation hot paths
-- **NTFS Integration**: Direct MFT enumeration bypassing traditional filesystem APIs
-- **UI Frontend**: C++/WinRT with WinUI 3 for native Windows integration
-- **GPU Rendering**: Direct2D/DirectWrite for hardware-accelerated visualization
-- **Data Persistence**: Compact binary snapshots for instant save/load
-
-### Performance Optimizations
-
-- Streaming scan architecture with batched UI updates
-- Lock-free data structures for concurrent access
-- Virtualized UI controls (256-row pages, 8,192-entry catalog cap)
-- Coalesced GPU surface redraws
-- Frame-time and input-latency instrumentation
+- Directory events cross the FFI in 4,096-entry batches; UTF-8→UTF-16 conversion happens off the event pipeline
+- The read model is published before the UI hears "Completed", so post-scan reloads hit a hot cache
+- Treemap paints budget node materialization per frame and refine progressively
+- Debug UI builds automatically ship the newest (typically release-profile) native DLL
 
 ## Building from Source
 
@@ -97,24 +117,21 @@ WinBlaze achieves its performance through a carefully designed multi-layer archi
 ### Build Steps
 
 ```powershell
-# Clone the repository
 git clone https://github.com/marksmayo/WinBlaze.git
 cd WinBlaze
 
-# Build Rust components
-cargo build --release
+# Optimized scanner engine (Debug UI builds pick this up automatically)
+cargo build --release -p winblaze-native
 
-# Build UI (Debug)
+# UI (Debug)
 & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\amd64\MSBuild.exe" `
   src\WinBlaze.UI\WinBlaze.UI.vcxproj /p:Configuration=Debug /p:Platform=x64
 
-# Run tests and smoke checks
+# Full local gate: tests, build, UI smoke, packaging
 powershell -ExecutionPolicy Bypass -File scripts\check-local.ps1 -Configuration Debug
 ```
 
 ## Benchmarking
-
-WinBlaze includes comprehensive benchmarking tools to measure and validate performance:
 
 ```powershell
 # Generate test datasets
@@ -123,64 +140,33 @@ powershell -ExecutionPolicy Bypass -File benchmarks\make-datasets.ps1 -Size tiny
 # Run performance benchmarks
 powershell -ExecutionPolicy Bypass -File benchmarks\run-ui-benchmark.ps1 -Size tiny
 
-# Compare with competitors
+# Record competitor inventory / manual timings
 powershell -ExecutionPolicy Bypass -File benchmarks\record-competitor-baselines.ps1
 ```
 
+## Privacy
+
+WinBlaze has **no telemetry**. It writes only local files: structured logs at `%LOCALAPPDATA%\WinBlaze\logs` and the scan index at `%LOCALAPPDATA%\WinBlaze\index`. See `docs\PRODUCTION_SECURITY_REVIEW.md`.
+
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
-
-### Development Setup
-
-1. Fork and clone the repository
-2. Install prerequisites (VS2022, Rust, Windows SDK)
-3. Run `scripts\check-local.ps1` to verify setup
-4. Make changes and ensure tests pass
-5. Submit a pull request
-
-## Comparison with Alternatives
-
-| Feature | WinBlaze | WizTree | WinDirStat | Everything |
-|---------|----------|---------|------------|------------|
-| NTFS MFT Scanning | ✅ | ✅ | ❌ | ✅ |
-| Real-time Updates | ✅ | ❌ | ✅ | N/A |
-| GPU Acceleration | ✅ | ❌ | ❌ | ❌ |
-| Persistent Index | ✅ | ❌ | ❌ | ✅ |
-| Incremental Rescan | ✅ | ❌ | ❌ | ✅ |
-| Memory Efficiency | ✅ | ✅ | ❌ | ✅ |
-| Open Source | ✅ | ❌ | ✅ | ❌ |
+See [CONTRIBUTING.md](CONTRIBUTING.md). Run `scripts\check-local.ps1` before submitting changes; performance budgets are enforced.
 
 ## License
 
-WinBlaze is open source software released under the MIT License. See [LICENSE](LICENSE) for details.
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/marksmayo/WinBlaze/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/marksmayo/WinBlaze/discussions)
-- **Documentation**: [Project Docs](docs/)
+MIT — see [LICENSE](LICENSE).
 
 ## Roadmap
 
-### Current (v1.0)
-- ✅ NTFS MFT scanning
-- ✅ Real-time treemap visualization
-- ✅ Persistent indexing
-- ✅ Search and filtering
-- ✅ Incremental rescanning
+### Done
+- ✅ Raw NTFS MFT scanning (elevated) with directory-walk fallback
+- ✅ Live expandable folder tree with per-folder rollups
+- ✅ Squarified extension-colored GPU treemap
+- ✅ Persistent index, instant search, incremental rescan
+- ✅ High Velocity design system
 
-### Planned
-- 🔄 Network drive support
-- 🔄 Cloud storage integration
+### Next
+- 🔄 End-to-end record batching through the scan pipeline (WizTree-class times for both backends)
+- 🔄 Donut used-space gauge, Explorer file table, and Cleanup center from the design mockups
 - 🔄 Duplicate file detection
-- 🔄 Scheduled scanning
 - 🔄 Export to various formats
-
-## Acknowledgments
-
-Special thanks to the Rust and Windows development communities for their excellent tools and libraries that made this project possible.
-
----
-
-**Ready to reclaim your disk space at blazing speed?** [Download WinBlaze](https://github.com/marksmayo/WinBlaze/releases) today!
