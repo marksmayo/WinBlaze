@@ -129,12 +129,57 @@ impl SqliteIndexRepository {
         self.state.snapshot_files()
     }
 
+    pub fn volume_count(&self) -> usize {
+        self.state.volume_count()
+    }
+
+    pub fn directory_count(&self) -> usize {
+        self.state.directory_count()
+    }
+
+    pub fn file_count(&self) -> usize {
+        self.state.file_count()
+    }
+
+    /// Like `snapshot_volumes`, but clones only the first `limit` records
+    /// (by id) instead of the whole table. Use this for UI display paths
+    /// that only ever show a bounded number of rows — cloning every record
+    /// (including its strings) in a multi-million-row index just to display
+    /// the first few thousand is expensive enough to stall the caller.
+    pub fn snapshot_volumes_limited(&self, limit: usize) -> Vec<VolumeRecord> {
+        self.state.snapshot_volumes_limited(limit)
+    }
+
+    pub fn snapshot_directories_limited(&self, limit: usize) -> Vec<DirectoryRecord> {
+        self.state.snapshot_directories_limited(limit)
+    }
+
+    pub fn snapshot_files_limited(&self, limit: usize) -> Vec<FileRecord> {
+        self.state.snapshot_files_limited(limit)
+    }
+
+    pub fn for_each_file(&self, f: impl FnMut(&FileRecord)) {
+        self.state.for_each_file(f);
+    }
+
     pub fn apply_transaction(
         &mut self,
         transaction: &BufferedIndexTransaction,
     ) -> Result<(), IndexStorageError> {
         self.state = transaction.clone();
         persist_index_state(&self.storage_path, &self.state)
+    }
+
+    /// Persists `transaction` to disk without adopting it as this
+    /// repository's in-memory state. Scan-session flushes only ever write —
+    /// nothing reads back through the same repository instance — and
+    /// `apply_transaction`'s clone doubles a multi-GB working set just to
+    /// populate state that is thrown away when the session ends.
+    pub fn persist_transaction(
+        &self,
+        transaction: &BufferedIndexTransaction,
+    ) -> Result<(), IndexStorageError> {
+        persist_index_state(&self.storage_path, transaction)
     }
 
     pub fn apply_incremental_transaction(
@@ -255,6 +300,21 @@ impl IndexTransaction for BufferedIndexTransaction {
 }
 
 impl BufferedIndexTransaction {
+    /// By-value counterparts to the trait's `upsert_*` methods, for callers
+    /// that own the record: skips the per-record clone, which matters when a
+    /// scan session inserts millions of records.
+    pub fn insert_volume(&mut self, volume: VolumeRecord) {
+        self.volumes.insert(volume.id, volume);
+    }
+
+    pub fn insert_directory(&mut self, directory: DirectoryRecord) {
+        self.directories.insert(directory.id, directory);
+    }
+
+    pub fn insert_file(&mut self, file: FileRecord) {
+        self.files.insert(file.id, file);
+    }
+
     pub fn snapshot_volumes(&self) -> Vec<VolumeRecord> {
         let mut volumes = Vec::from_iter(self.volumes.values().cloned());
         volumes.sort_by_key(|volume| volume.id.0);
@@ -277,6 +337,51 @@ impl BufferedIndexTransaction {
         let mut files = Vec::from_iter(self.files.values().cloned());
         files.sort_by_key(|file| file.id.0);
         files
+    }
+
+    pub fn volume_count(&self) -> usize {
+        self.volumes.len()
+    }
+
+    pub fn directory_count(&self) -> usize {
+        self.directories.len()
+    }
+
+    pub fn file_count(&self) -> usize {
+        self.files.len()
+    }
+
+    pub fn snapshot_volumes_limited(&self, limit: usize) -> Vec<VolumeRecord> {
+        let mut ids: Vec<VolumeId> = self.volumes.keys().copied().collect();
+        ids.sort_unstable_by_key(|id| id.0);
+        ids.truncate(limit);
+        ids.into_iter()
+            .filter_map(|id| self.volumes.get(&id).cloned())
+            .collect()
+    }
+
+    pub fn snapshot_directories_limited(&self, limit: usize) -> Vec<DirectoryRecord> {
+        let mut ids: Vec<DirectoryId> = self.directories.keys().copied().collect();
+        ids.sort_unstable_by_key(|id| id.0);
+        ids.truncate(limit);
+        ids.into_iter()
+            .filter_map(|id| self.directories.get(&id).cloned())
+            .collect()
+    }
+
+    pub fn snapshot_files_limited(&self, limit: usize) -> Vec<FileRecord> {
+        let mut ids: Vec<FileId> = self.files.keys().copied().collect();
+        ids.sort_unstable_by_key(|id| id.0);
+        ids.truncate(limit);
+        ids.into_iter()
+            .filter_map(|id| self.files.get(&id).cloned())
+            .collect()
+    }
+
+    pub fn for_each_file(&self, mut f: impl FnMut(&FileRecord)) {
+        for file in self.files.values() {
+            f(file);
+        }
     }
 
     pub fn lineage_records(&self) -> &[FileLineageRecord] {
@@ -406,12 +511,12 @@ fn persist_index_state(
 
     let temp_path = temp_storage_path(storage_path);
     let backup_path = backup_storage_path(storage_path);
-    let bytes = serialize_state(state)?;
 
     {
-        let mut file = fs::File::create(&temp_path)?;
-        file.write_all(&bytes)?;
-        file.flush()?;
+        let file = fs::File::create(&temp_path)?;
+        let mut writer = io::BufWriter::with_capacity(1 << 20, file);
+        write_state(&mut writer, state)?;
+        writer.flush()?;
     }
 
     if storage_path.exists() {
@@ -461,22 +566,37 @@ fn remove_auxiliary_snapshot_files(storage_path: &Path) -> Result<(), IndexStora
     Ok(())
 }
 
-fn serialize_state(state: &BufferedIndexTransaction) -> Result<Vec<u8>, IndexStorageError> {
-    // Pre-size the byte buffer with a heuristic estimate to avoid repeated reallocation.
-    // Each file record is roughly 8+8+2*path_avg bytes; 128 bytes/entry is conservative
-    // and still avoids most reallocation events for typical catalogs.
-    let estimated_bytes =
-        state.files.len().saturating_mul(128) + state.directories.len().saturating_mul(64) + 64; // header
-    let mut bytes = Vec::with_capacity(estimated_bytes);
-    bytes.extend_from_slice(INDEX_MAGIC);
-    write_u32(&mut bytes, INDEX_FORMAT_VERSION);
-    write_volume_records(&mut bytes, &state.snapshot_volumes())?;
-    write_session_records(&mut bytes, &state.snapshot_sessions())?;
-    write_directory_records(&mut bytes, &state.snapshot_directories())?;
-    write_file_records(&mut bytes, &state.snapshot_files())?;
-    write_lineage_records(&mut bytes, state.lineages.as_slice())?;
-    write_change_sets(&mut bytes, state.file_changes.as_slice())?;
-    Ok(bytes)
+/// Serializes `state` directly into `writer`, borrowing every record instead
+/// of cloning it. The old approach cloned all records twice per flush (once
+/// into sorted `Vec`s, once transitively via string copies) and built the
+/// whole snapshot in one contiguous in-memory buffer — several hundred MB and
+/// multiple seconds of pure copying for a full-drive index.
+fn write_state<W: Write>(
+    writer: &mut W,
+    state: &BufferedIndexTransaction,
+) -> Result<(), IndexStorageError> {
+    writer.write_all(INDEX_MAGIC)?;
+    write_u32(writer, INDEX_FORMAT_VERSION)?;
+
+    let mut volumes: Vec<&VolumeRecord> = state.volumes.values().collect();
+    volumes.sort_unstable_by_key(|volume| volume.id.0);
+    write_volume_records(writer, &volumes)?;
+
+    let mut sessions: Vec<&ScanSession> = state.sessions.values().collect();
+    sessions.sort_unstable_by_key(|session| session.session_id);
+    write_session_records(writer, &sessions)?;
+
+    let mut directories: Vec<&DirectoryRecord> = state.directories.values().collect();
+    directories.sort_unstable_by_key(|directory| directory.id.0);
+    write_directory_records(writer, &directories)?;
+
+    let mut files: Vec<&FileRecord> = state.files.values().collect();
+    files.sort_unstable_by_key(|file| file.id.0);
+    write_file_records(writer, &files)?;
+
+    write_lineage_records(writer, state.lineages.as_slice())?;
+    write_change_sets(writer, state.file_changes.as_slice())?;
+    Ok(())
 }
 
 fn deserialize_state(bytes: &[u8]) -> Result<BufferedIndexTransaction, IndexStorageError> {
@@ -531,111 +651,114 @@ fn deserialize_state(bytes: &[u8]) -> Result<BufferedIndexTransaction, IndexStor
     })
 }
 
-fn write_volume_records(
-    bytes: &mut Vec<u8>,
-    volumes: &[VolumeRecord],
+fn write_volume_records<W: Write>(
+    writer: &mut W,
+    volumes: &[&VolumeRecord],
 ) -> Result<(), IndexStorageError> {
-    write_len(bytes, volumes.len())?;
+    write_len(writer, volumes.len())?;
     for volume in volumes {
-        write_u64(bytes, volume.id.0);
-        write_string(bytes, &volume.mount_point)?;
-        write_option_string(bytes, volume.label.as_deref())?;
-        write_u8(bytes, encode_file_system_kind(volume.file_system));
-        write_u64(bytes, volume.total_bytes);
-        write_u64(bytes, volume.free_bytes);
-        write_u64(bytes, volume.root_directory_id.0);
+        write_u64(writer, volume.id.0)?;
+        write_string(writer, &volume.mount_point)?;
+        write_option_string(writer, volume.label.as_deref())?;
+        write_u8(writer, encode_file_system_kind(volume.file_system))?;
+        write_u64(writer, volume.total_bytes)?;
+        write_u64(writer, volume.free_bytes)?;
+        write_u64(writer, volume.root_directory_id.0)?;
     }
     Ok(())
 }
 
-fn write_session_records(
-    bytes: &mut Vec<u8>,
-    sessions: &[ScanSession],
+fn write_session_records<W: Write>(
+    writer: &mut W,
+    sessions: &[&ScanSession],
 ) -> Result<(), IndexStorageError> {
-    write_len(bytes, sessions.len())?;
+    write_len(writer, sessions.len())?;
     for session in sessions {
-        write_u64(bytes, session.session_id);
-        write_u64(bytes, session.volume_id.0);
-        write_string(bytes, &session.root_path)?;
-        write_u8(bytes, encode_scan_state(session.state));
-        write_u64(bytes, session.progress.completed_items);
-        write_u64(bytes, session.progress.total_items);
-        write_u64(bytes, session.progress.completed_bytes);
-        write_u64(bytes, session.progress.total_bytes);
+        write_u64(writer, session.session_id)?;
+        write_u64(writer, session.volume_id.0)?;
+        write_string(writer, &session.root_path)?;
+        write_u8(writer, encode_scan_state(session.state))?;
+        write_u64(writer, session.progress.completed_items)?;
+        write_u64(writer, session.progress.total_items)?;
+        write_u64(writer, session.progress.completed_bytes)?;
+        write_u64(writer, session.progress.total_bytes)?;
     }
     Ok(())
 }
 
-fn write_directory_records(
-    bytes: &mut Vec<u8>,
-    directories: &[DirectoryRecord],
+fn write_directory_records<W: Write>(
+    writer: &mut W,
+    directories: &[&DirectoryRecord],
 ) -> Result<(), IndexStorageError> {
-    write_len(bytes, directories.len())?;
+    write_len(writer, directories.len())?;
     for directory in directories {
-        write_u64(bytes, directory.id.0);
+        write_u64(writer, directory.id.0)?;
         match directory.parent_directory_id {
             Some(parent) => {
-                write_u8(bytes, 1);
-                write_u64(bytes, parent.0);
+                write_u8(writer, 1)?;
+                write_u64(writer, parent.0)?;
             }
-            None => write_u8(bytes, 0),
+            None => write_u8(writer, 0)?,
         }
-        write_string(bytes, &directory.name)?;
-        write_string(bytes, &directory.full_path)?;
-        write_u64(bytes, directory.direct_bytes);
-        write_u64(bytes, directory.total_bytes);
-        write_u64(bytes, directory.direct_entries);
-        write_u64(bytes, directory.total_entries);
+        write_string(writer, &directory.name)?;
+        write_string(writer, &directory.full_path)?;
+        write_u64(writer, directory.direct_bytes)?;
+        write_u64(writer, directory.total_bytes)?;
+        write_u64(writer, directory.direct_entries)?;
+        write_u64(writer, directory.total_entries)?;
     }
     Ok(())
 }
 
-fn write_file_records(bytes: &mut Vec<u8>, files: &[FileRecord]) -> Result<(), IndexStorageError> {
-    write_len(bytes, files.len())?;
+fn write_file_records<W: Write>(
+    writer: &mut W,
+    files: &[&FileRecord],
+) -> Result<(), IndexStorageError> {
+    write_len(writer, files.len())?;
     for file in files {
-        write_u64(bytes, file.id.0);
-        write_u64(bytes, file.parent_directory_id.0);
-        write_string(bytes, &file.name)?;
-        write_string(bytes, &file.full_path)?;
-        write_u64(bytes, file.size_bytes);
-        write_u64(bytes, file.allocation_bytes);
-        write_u32(bytes, file.attributes.0);
-        write_option_i64(bytes, file.created_utc)?;
-        write_option_i64(bytes, file.modified_utc)?;
-        write_option_i64(bytes, file.accessed_utc)?;
+        write_u64(writer, file.id.0)?;
+        write_u64(writer, file.parent_directory_id.0)?;
+        write_string(writer, &file.name)?;
+        write_string(writer, &file.full_path)?;
+        write_u64(writer, file.size_bytes)?;
+        write_u64(writer, file.allocation_bytes)?;
+        write_u32(writer, file.attributes.0)?;
+        write_option_i64(writer, file.created_utc)?;
+        write_option_i64(writer, file.modified_utc)?;
+        write_option_i64(writer, file.accessed_utc)?;
     }
     Ok(())
 }
 
-fn write_lineage_records(
-    bytes: &mut Vec<u8>,
+fn write_lineage_records<W: Write>(
+    writer: &mut W,
     lineages: &[FileLineageRecord],
 ) -> Result<(), IndexStorageError> {
-    write_len(bytes, lineages.len())?;
+    write_len(writer, lineages.len())?;
     for lineage in lineages {
-        write_u64(bytes, lineage.file_id.0);
-        write_u64(bytes, lineage.previous_parent_directory_id.0);
-        write_u64(bytes, lineage.current_parent_directory_id.0);
-        write_string(bytes, &lineage.previous_full_path)?;
-        write_string(bytes, &lineage.current_full_path)?;
-        write_u8(bytes, u8::from(lineage.renamed));
-        write_u8(bytes, u8::from(lineage.moved));
+        write_u64(writer, lineage.file_id.0)?;
+        write_u64(writer, lineage.previous_parent_directory_id.0)?;
+        write_u64(writer, lineage.current_parent_directory_id.0)?;
+        write_string(writer, &lineage.previous_full_path)?;
+        write_string(writer, &lineage.current_full_path)?;
+        write_u8(writer, u8::from(lineage.renamed))?;
+        write_u8(writer, u8::from(lineage.moved))?;
     }
     Ok(())
 }
 
-fn write_change_sets(
-    bytes: &mut Vec<u8>,
+fn write_change_sets<W: Write>(
+    writer: &mut W,
     change_sets: &[FileChangeSet],
 ) -> Result<(), IndexStorageError> {
-    write_len(bytes, change_sets.len())?;
+    write_len(writer, change_sets.len())?;
     for change_set in change_sets {
-        write_len(bytes, change_set.changes.len())?;
+        write_len(writer, change_set.changes.len())?;
         for change in &change_set.changes {
-            write_u64(bytes, change.file_id.0);
-            write_u8(bytes, encode_file_change_kind(change.kind));
-            write_option_string(bytes, change.previous_full_path.as_deref())?;
-            write_option_string(bytes, change.current_full_path.as_deref())?;
+            write_u64(writer, change.file_id.0)?;
+            write_u8(writer, encode_file_change_kind(change.kind))?;
+            write_option_string(writer, change.previous_full_path.as_deref())?;
+            write_option_string(writer, change.current_full_path.as_deref())?;
         }
     }
     Ok(())
@@ -774,54 +897,60 @@ fn read_change_sets(cursor: &mut Cursor<&[u8]>) -> Result<Vec<FileChangeSet>, In
     Ok(change_sets)
 }
 
-fn write_u8(bytes: &mut Vec<u8>, value: u8) {
-    bytes.push(value);
+fn write_u8<W: Write>(writer: &mut W, value: u8) -> Result<(), IndexStorageError> {
+    writer.write_all(&[value])?;
+    Ok(())
 }
 
-fn write_u32(bytes: &mut Vec<u8>, value: u32) {
-    bytes.extend_from_slice(&value.to_le_bytes());
+fn write_u32<W: Write>(writer: &mut W, value: u32) -> Result<(), IndexStorageError> {
+    writer.write_all(&value.to_le_bytes())?;
+    Ok(())
 }
 
-fn write_u64(bytes: &mut Vec<u8>, value: u64) {
-    bytes.extend_from_slice(&value.to_le_bytes());
+fn write_u64<W: Write>(writer: &mut W, value: u64) -> Result<(), IndexStorageError> {
+    writer.write_all(&value.to_le_bytes())?;
+    Ok(())
 }
 
-fn write_i64(bytes: &mut Vec<u8>, value: i64) {
-    bytes.extend_from_slice(&value.to_le_bytes());
+fn write_i64<W: Write>(writer: &mut W, value: i64) -> Result<(), IndexStorageError> {
+    writer.write_all(&value.to_le_bytes())?;
+    Ok(())
 }
 
-fn write_len(bytes: &mut Vec<u8>, value: usize) -> Result<(), IndexStorageError> {
+fn write_len<W: Write>(writer: &mut W, value: usize) -> Result<(), IndexStorageError> {
     let value = u64::try_from(value)
         .map_err(|_| IndexStorageError::CorruptSnapshot(String::from("collection too large")))?;
-    write_u64(bytes, value);
-    Ok(())
+    write_u64(writer, value)
 }
 
-fn write_string(bytes: &mut Vec<u8>, value: &str) -> Result<(), IndexStorageError> {
+fn write_string<W: Write>(writer: &mut W, value: &str) -> Result<(), IndexStorageError> {
     let value_bytes = value.as_bytes();
-    write_len(bytes, value_bytes.len())?;
-    bytes.extend_from_slice(value_bytes);
+    write_len(writer, value_bytes.len())?;
+    writer.write_all(value_bytes)?;
     Ok(())
 }
 
-fn write_option_string(bytes: &mut Vec<u8>, value: Option<&str>) -> Result<(), IndexStorageError> {
+fn write_option_string<W: Write>(
+    writer: &mut W,
+    value: Option<&str>,
+) -> Result<(), IndexStorageError> {
     match value {
         Some(value) => {
-            write_u8(bytes, 1);
-            write_string(bytes, value)?;
+            write_u8(writer, 1)?;
+            write_string(writer, value)?;
         }
-        None => write_u8(bytes, 0),
+        None => write_u8(writer, 0)?,
     }
     Ok(())
 }
 
-fn write_option_i64(bytes: &mut Vec<u8>, value: Option<i64>) -> Result<(), IndexStorageError> {
+fn write_option_i64<W: Write>(writer: &mut W, value: Option<i64>) -> Result<(), IndexStorageError> {
     match value {
         Some(value) => {
-            write_u8(bytes, 1);
-            write_i64(bytes, value);
+            write_u8(writer, 1)?;
+            write_i64(writer, value)?;
         }
-        None => write_u8(bytes, 0),
+        None => write_u8(writer, 0)?,
     }
     Ok(())
 }

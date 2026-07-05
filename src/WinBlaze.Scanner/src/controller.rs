@@ -15,7 +15,7 @@ use winblaze_core::{FileAttributes, ScanEvent, ScanIssueKind, ScanIssueRecord};
 
 use crate::errors::{classify_io_error, ScanErrorKind};
 use crate::filesystem::build_scan_access_plan;
-use crate::ntfs::{enumerate_ntfs_volume_parallel_streaming, NtfsEnumerationError};
+use crate::ntfs::{enumerate_ntfs_volume_parallel_streaming_summary, NtfsEnumerationError};
 use crate::performance::ScanPipelineConfig;
 use crate::pipeline::ScanEventPipeline;
 use crate::policy::{should_descend_into_reparse_target, ReparseTraversalPolicy};
@@ -77,15 +77,14 @@ impl ScanController {
             let mut issue_keys = HashSet::new();
             if access_plan.primary_backend == crate::types::ScanBackend::NtfsMft {
                 pipeline.emit_session_started(provisional_volume_record(&access_plan));
-                match enumerate_ntfs_volume_parallel_streaming(
+                match enumerate_ntfs_volume_parallel_streaming_summary(
                     &access_plan.selected_root,
                     worker_count,
                     |event| {
                         emit_deduplicated_event(&mut pipeline, &mut issue_keys, event);
                     },
                 ) {
-                    Ok(result) => {
-                        let crate::ntfs::NtfsEnumeration { summary, .. } = result;
+                    Ok(summary) => {
                         pipeline.emit_summary(summary);
                         pipeline.emit_completed();
                     }
@@ -183,6 +182,11 @@ fn run_fallback_scan(
         .map(|resolved| strip_verbatim_prefix(&resolved))
         .unwrap_or_else(|_| selected_root.to_path_buf());
 
+    // Force an initial progress tick regardless of which branch runs below:
+    // the parallel walker only reports progress on a shared item-count
+    // threshold, so small scans would otherwise emit no progress at all.
+    pipeline.emit_progress(1, 0, 0);
+
     let (files_seen, directories_seen, total_size_bytes, total_allocation_bytes) =
         if worker_count > 1 {
             run_fallback_scan_parallel(
@@ -197,7 +201,6 @@ fn run_fallback_scan(
         } else {
             let mut walk_state = DirectoryWalkState::new();
             walk_state.directories_seen = 1;
-            walk_state.maybe_emit_progress(pipeline, true);
 
             let mut directory_ids = HashMap::new();
             directory_ids.insert(selected_root.to_path_buf(), root_id);
@@ -226,6 +229,11 @@ fn run_fallback_scan(
     if cancelled.load(Ordering::SeqCst) {
         pipeline.emit_cancelled();
     } else {
+        pipeline.emit_progress(
+            files_seen.saturating_add(directories_seen),
+            0,
+            total_size_bytes,
+        );
         pipeline.emit_summary(winblaze_core::ScanSummary {
             files_seen,
             directories_seen,

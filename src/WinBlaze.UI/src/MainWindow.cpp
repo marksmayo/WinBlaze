@@ -1613,6 +1613,7 @@ namespace winrt::WinBlaze::UI::implementation
         winrt::Windows::Foundation::IInspectable const&)
     {
         const auto now = std::chrono::steady_clock::now();
+        std::lock_guard guard(m_pending_ui_mutex);
         if (m_last_composition_frame_time.time_since_epoch().count() > 0) {
             m_last_composition_frame_ms = std::chrono::duration<double, std::milli>(
                 now - m_last_composition_frame_time).count();
@@ -1683,8 +1684,11 @@ namespace winrt::WinBlaze::UI::implementation
 
         if (handled) {
             args.Handled(true);
-            m_last_input_latency_ms = std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - input_started).count();
+            {
+                std::lock_guard guard(m_pending_ui_mutex);
+                m_last_input_latency_ms = std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - input_started).count();
+            }
             UpdatePerformanceCounters(L"input handled");
         }
     }
@@ -1710,8 +1714,11 @@ namespace winrt::WinBlaze::UI::implementation
         m_current_root_path = root_path;
         m_has_results = false;
         m_has_error = false;
-        m_scan_started_at = std::chrono::steady_clock::now();
-        m_last_scan_duration_text = L"Scan duration: in progress";
+        {
+            std::lock_guard guard(m_pending_ui_mutex);
+            m_scan_started_at = std::chrono::steady_clock::now();
+            m_last_scan_duration_text = L"Scan duration: in progress";
+        }
         UpdateProgress(0.0, L"0% complete");
         if (!m_ui_flush_timer) {
             m_ui_flush_timer = Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread().CreateTimer();
@@ -2643,7 +2650,10 @@ namespace winrt::WinBlaze::UI::implementation
                         std::to_wstring(height) +
                         L" px. " + m_treemap_render_status));
                 }
-                m_last_composition_frame_time = std::chrono::steady_clock::now();
+                {
+                    std::lock_guard guard(m_pending_ui_mutex);
+                    m_last_composition_frame_time = std::chrono::steady_clock::now();
+                }
                 UpdatePerformanceCounters(L"treemap render flush");
             });
         }
@@ -2803,15 +2813,18 @@ namespace winrt::WinBlaze::UI::implementation
         m_last_ui_flush_time = flush_started;
         m_last_working_set_bytes = CurrentWorkingSetBytes();
         m_peak_working_set_bytes = (std::max)(m_peak_working_set_bytes, m_last_working_set_bytes);
-        ++m_total_ui_flush_count;
-        if (m_last_ui_event_time.time_since_epoch().count() > 0) {
-            const auto latency = std::chrono::duration<double, std::milli>(flush_started - m_last_ui_event_time);
-            m_last_ui_latency_ms = latency.count();
+        {
+            std::lock_guard guard(m_pending_ui_mutex);
+            ++m_total_ui_flush_count;
+            if (m_last_ui_event_time.time_since_epoch().count() > 0) {
+                const auto latency = std::chrono::duration<double, std::milli>(flush_started - m_last_ui_event_time);
+                m_last_ui_latency_ms = latency.count();
+            }
+            m_last_ui_flush_duration_ms = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - flush_started).count();
+            m_peak_ui_flush_duration_ms = (std::max)(m_peak_ui_flush_duration_ms, m_last_ui_flush_duration_ms);
+            m_last_composition_frame_time = std::chrono::steady_clock::now();
         }
-        m_last_ui_flush_duration_ms = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - flush_started).count();
-        m_peak_ui_flush_duration_ms = (std::max)(m_peak_ui_flush_duration_ms, m_last_ui_flush_duration_ms);
-        m_last_composition_frame_time = std::chrono::steady_clock::now();
 
         UpdatePerformanceCounters(L"batched flush");
         UpdateCorrectnessDiagnostics();
@@ -2824,10 +2837,32 @@ namespace winrt::WinBlaze::UI::implementation
         if (!PerformanceText()) {
             return;
         }
+
+        uint64_t total_ui_flush_count = 0;
+        uint64_t pending_event_count = 0;
+        double last_ui_latency_ms = 0.0;
+        double last_input_latency_ms = 0.0;
+        double last_ui_flush_duration_ms = 0.0;
+        double peak_ui_flush_duration_ms = 0.0;
+        uint64_t total_composition_frame_count = 0;
+        double last_composition_frame_ms = 0.0;
+        double peak_composition_frame_ms = 0.0;
         double elapsed_seconds = 0.0;
-        if (m_scan_started_at.time_since_epoch().count() > 0) {
-            elapsed_seconds = std::chrono::duration<double>(
-                std::chrono::steady_clock::now() - m_scan_started_at).count();
+        {
+            std::lock_guard guard(m_pending_ui_mutex);
+            if (m_scan_started_at.time_since_epoch().count() > 0) {
+                elapsed_seconds = std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - m_scan_started_at).count();
+            }
+            total_ui_flush_count = m_total_ui_flush_count;
+            pending_event_count = m_pending_event_count;
+            last_ui_latency_ms = m_last_ui_latency_ms;
+            last_input_latency_ms = m_last_input_latency_ms;
+            last_ui_flush_duration_ms = m_last_ui_flush_duration_ms;
+            peak_ui_flush_duration_ms = m_peak_ui_flush_duration_ms;
+            total_composition_frame_count = m_total_composition_frame_count;
+            last_composition_frame_ms = m_last_composition_frame_ms;
+            peak_composition_frame_ms = m_peak_composition_frame_ms;
         }
         const double items_per_second = elapsed_seconds > 0.0
             ? static_cast<double>(m_last_progress_items_done) / elapsed_seconds
@@ -2838,15 +2873,15 @@ namespace winrt::WinBlaze::UI::implementation
 
         const std::wstring text =
             L"UI batching: " + reason +
-            L", flushes=" + std::to_wstring(m_total_ui_flush_count) +
-            L", queued events=" + std::to_wstring(m_pending_event_count) +
-            L", last latency=" + std::to_wstring(static_cast<int>(m_last_ui_latency_ms)) + L" ms" +
-            L", last input=" + std::to_wstring(static_cast<int>(m_last_input_latency_ms)) + L" ms" +
-            L", flush cost=" + std::to_wstring(static_cast<int>(m_last_ui_flush_duration_ms)) + L" ms" +
-            L", peak flush=" + std::to_wstring(static_cast<int>(m_peak_ui_flush_duration_ms)) + L" ms" +
-            L", frames=" + std::to_wstring(m_total_composition_frame_count) +
-            L", last frame=" + std::to_wstring(static_cast<int>(m_last_composition_frame_ms)) + L" ms" +
-            L", peak frame=" + std::to_wstring(static_cast<int>(m_peak_composition_frame_ms)) + L" ms" +
+            L", flushes=" + std::to_wstring(total_ui_flush_count) +
+            L", queued events=" + std::to_wstring(pending_event_count) +
+            L", last latency=" + std::to_wstring(static_cast<int>(last_ui_latency_ms)) + L" ms" +
+            L", last input=" + std::to_wstring(static_cast<int>(last_input_latency_ms)) + L" ms" +
+            L", flush cost=" + std::to_wstring(static_cast<int>(last_ui_flush_duration_ms)) + L" ms" +
+            L", peak flush=" + std::to_wstring(static_cast<int>(peak_ui_flush_duration_ms)) + L" ms" +
+            L", frames=" + std::to_wstring(total_composition_frame_count) +
+            L", last frame=" + std::to_wstring(static_cast<int>(last_composition_frame_ms)) + L" ms" +
+            L", peak frame=" + std::to_wstring(static_cast<int>(peak_composition_frame_ms)) + L" ms" +
             L", treemap renders=" + std::to_wstring(m_total_treemap_render_flush_count) +
             L"/" + std::to_wstring(m_total_treemap_render_request_count) +
             L" requests, coalesced=" + std::to_wstring(m_total_treemap_render_coalesced_count) +
@@ -2872,6 +2907,12 @@ namespace winrt::WinBlaze::UI::implementation
             return;
         }
 
+        std::wstring scan_duration_text;
+        {
+            std::lock_guard guard(m_pending_ui_mutex);
+            scan_duration_text = m_last_scan_duration_text;
+        }
+
         const std::wstring text =
             L"Root path: " + m_current_root_path +
             L" | Section: " + SectionName(m_active_section) +
@@ -2879,7 +2920,7 @@ namespace winrt::WinBlaze::UI::implementation
             L" (" + m_current_selection_kind + L")" +
             L" | State: " + std::wstring(m_session_active ? L"scanning" : L"idle") +
             L" | Results: " + std::wstring(m_has_results ? L"loaded" : L"none") +
-            L" | " + m_last_scan_duration_text +
+            L" | " + scan_duration_text +
             L" | Error: " + std::wstring(m_has_error ? L"yes" : L"no");
 
         SummaryText().Text(winrt::hstring(text));
@@ -2891,17 +2932,41 @@ namespace winrt::WinBlaze::UI::implementation
             return;
         }
 
+        uint64_t total_ui_flush_count = 0;
+        uint64_t pending_event_count = 0;
+        double last_ui_latency_ms = 0.0;
+        double last_input_latency_ms = 0.0;
+        double last_ui_flush_duration_ms = 0.0;
+        double peak_ui_flush_duration_ms = 0.0;
+        uint64_t total_composition_frame_count = 0;
+        double last_composition_frame_ms = 0.0;
+        double peak_composition_frame_ms = 0.0;
+        std::wstring scan_duration_text;
+        {
+            std::lock_guard guard(m_pending_ui_mutex);
+            total_ui_flush_count = m_total_ui_flush_count;
+            pending_event_count = m_pending_event_count;
+            last_ui_latency_ms = m_last_ui_latency_ms;
+            last_input_latency_ms = m_last_input_latency_ms;
+            last_ui_flush_duration_ms = m_last_ui_flush_duration_ms;
+            peak_ui_flush_duration_ms = m_peak_ui_flush_duration_ms;
+            total_composition_frame_count = m_total_composition_frame_count;
+            last_composition_frame_ms = m_last_composition_frame_ms;
+            peak_composition_frame_ms = m_peak_composition_frame_ms;
+            scan_duration_text = m_last_scan_duration_text;
+        }
+
         const std::wstring text =
             L"UI batching: " + std::wstring(m_shell_ready ? L"ready" : L"starting") +
-            L", flushes=" + std::to_wstring(m_total_ui_flush_count) +
-            L", queued events=" + std::to_wstring(m_pending_event_count) +
-            L", last latency=" + std::to_wstring(static_cast<int>(m_last_ui_latency_ms)) + L" ms" +
-            L", last input=" + std::to_wstring(static_cast<int>(m_last_input_latency_ms)) + L" ms" +
-            L", flush cost=" + std::to_wstring(static_cast<int>(m_last_ui_flush_duration_ms)) + L" ms" +
-            L", peak flush=" + std::to_wstring(static_cast<int>(m_peak_ui_flush_duration_ms)) + L" ms" +
-            L", frames=" + std::to_wstring(m_total_composition_frame_count) +
-            L", last frame=" + std::to_wstring(static_cast<int>(m_last_composition_frame_ms)) + L" ms" +
-            L", peak frame=" + std::to_wstring(static_cast<int>(m_peak_composition_frame_ms)) + L" ms" +
+            L", flushes=" + std::to_wstring(total_ui_flush_count) +
+            L", queued events=" + std::to_wstring(pending_event_count) +
+            L", last latency=" + std::to_wstring(static_cast<int>(last_ui_latency_ms)) + L" ms" +
+            L", last input=" + std::to_wstring(static_cast<int>(last_input_latency_ms)) + L" ms" +
+            L", flush cost=" + std::to_wstring(static_cast<int>(last_ui_flush_duration_ms)) + L" ms" +
+            L", peak flush=" + std::to_wstring(static_cast<int>(peak_ui_flush_duration_ms)) + L" ms" +
+            L", frames=" + std::to_wstring(total_composition_frame_count) +
+            L", last frame=" + std::to_wstring(static_cast<int>(last_composition_frame_ms)) + L" ms" +
+            L", peak frame=" + std::to_wstring(static_cast<int>(peak_composition_frame_ms)) + L" ms" +
             L", treemap renders=" + std::to_wstring(m_total_treemap_render_flush_count) +
             L"/" + std::to_wstring(m_total_treemap_render_request_count) +
             L" requests, coalesced=" + std::to_wstring(m_total_treemap_render_coalesced_count) +
@@ -2910,7 +2975,7 @@ namespace winrt::WinBlaze::UI::implementation
             L", working set=" + FormatBytes(m_last_working_set_bytes) +
             L", peak=" + FormatBytes(m_peak_working_set_bytes) +
             L", " + m_last_cache_load_text +
-            L", " + m_last_scan_duration_text;
+            L", " + scan_duration_text;
 
         RuntimeSnapshotText().Text(winrt::hstring(text));
         UpdateCorrectnessDiagnostics();
@@ -3144,7 +3209,10 @@ namespace winrt::WinBlaze::UI::implementation
                     m_instant_search_hits[index].size_text + L")";
             }
         }
-        text += L" | " + m_last_scan_duration_text;
+        {
+            std::lock_guard guard(m_pending_ui_mutex);
+            text += L" | " + m_last_scan_duration_text;
+        }
 
         CatalogSnapshotText().Text(winrt::hstring(text));
     }
@@ -3489,6 +3557,11 @@ namespace winrt::WinBlaze::UI::implementation
             }
         });
 
+        if (stats.files + stats.directories > 0) {
+            std::lock_guard guard(m_pending_ui_mutex);
+            m_progress_total_estimate = stats.files + stats.directories;
+        }
+
         m_last_cache_load_text =
             L"Cache load: read " + FormatBytes(stats.cache_read_bytes) +
             L" in " + std::to_wstring(stats.cache_read_millis) + L" ms" +
@@ -3544,6 +3617,26 @@ namespace winrt::WinBlaze::UI::implementation
         UpdateSummaryText();
     }
 
+    std::wstring MainWindow::ScanElapsedText()
+    {
+        std::chrono::steady_clock::time_point started;
+        {
+            std::lock_guard guard(m_pending_ui_mutex);
+            started = m_scan_started_at;
+        }
+        if (started.time_since_epoch().count() <= 0) {
+            return L"";
+        }
+        const auto total_seconds = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now() - started).count();
+        if (total_seconds < 60) {
+            return std::to_wstring(total_seconds) + L"s";
+        }
+        const auto seconds = total_seconds % 60;
+        return std::to_wstring(total_seconds / 60) + L"m " +
+            (seconds < 10 ? L"0" : L"") + std::to_wstring(seconds) + L"s";
+    }
+
     void MainWindow::HandleNativeEvent(WbEvent const& event)
     {
         std::wstring status_text;
@@ -3557,6 +3650,8 @@ namespace winrt::WinBlaze::UI::implementation
         bool clear_session = false;
         bool mark_has_results = false;
         bool reload_snapshot = false;
+        bool reset_scan_timing = false;
+        bool update_scan_duration = false;
 
         switch (event.kind) {
         case WbEventKind_SessionStarted:
@@ -3565,73 +3660,88 @@ namespace winrt::WinBlaze::UI::implementation
             event_text = L"Session started.";
             progress_text = L"0% complete";
             progress_percent = 0.0;
-            m_scan_started_at = std::chrono::steady_clock::now();
-            m_last_scan_duration_text = L"Scan duration: in progress";
-            m_last_ui_latency_ms = 0.0;
-            m_last_input_latency_ms = 0.0;
-            m_last_ui_flush_duration_ms = 0.0;
-            m_peak_ui_flush_duration_ms = 0.0;
-            m_last_composition_frame_ms = 0.0;
-            m_peak_composition_frame_ms = 0.0;
-            m_last_composition_frame_time = std::chrono::steady_clock::now();
-            m_total_ui_flush_count = 0;
-            m_total_composition_frame_count = 0;
-            m_pending_event_count = 0;
+            reset_scan_timing = true;
             mark_has_results = true;
             break;
         case WbEventKind_Progress:
+        {
             TraceStartup(
                 L"HandleNativeEvent progress " +
                 std::to_wstring(event.progress_items_done) + L"/" +
                 std::to_wstring(event.progress_items_total));
             status_text = L"Scanning...";
-            if (event.progress_items_total > 0) {
-                progress_percent = (static_cast<double>(event.progress_items_done) / static_cast<double>(event.progress_items_total)) * 100.0;
-            }
+            const std::wstring elapsed = ScanElapsedText();
+            const std::wstring elapsed_suffix =
+                elapsed.empty() ? std::wstring() : (L" · " + elapsed);
             if (event.progress_items_total == 0) {
+                // Directory-walk backend: the total is unknowable up front,
+                // so estimate against the previous completed scan's item
+                // count (capped below 100%) instead of pinning the bar at 0
+                // until the summary snaps it to 100.
+                uint64_t total_estimate = 0;
+                {
+                    std::lock_guard guard(m_pending_ui_mutex);
+                    total_estimate = m_progress_total_estimate;
+                }
+                if (total_estimate > 0) {
+                    progress_percent = (std::min)(
+                        99.0,
+                        (static_cast<double>(event.progress_items_done) /
+                            static_cast<double>(total_estimate)) * 100.0);
+                    progress_text = L"~" + std::to_wstring(static_cast<int>(progress_percent)) +
+                        L"% complete" + elapsed_suffix;
+                } else {
+                    // First-ever scan: no estimate available; creep the bar
+                    // asymptotically so it visibly moves while staying honest
+                    // about not knowing the total.
+                    const double done = static_cast<double>(event.progress_items_done);
+                    progress_percent = (std::min)(99.0, (done / (done + 500000.0)) * 100.0);
+                    progress_text = L"Items discovered: " +
+                        std::to_wstring(event.progress_items_done) + elapsed_suffix;
+                }
                 event_text = L"Scanning in progress: " +
                     std::to_wstring(event.progress_items_done) + L" items discovered";
-                progress_text = L"Items discovered: " +
-                    std::to_wstring(event.progress_items_done);
             } else {
+                progress_percent = (static_cast<double>(event.progress_items_done) /
+                    static_cast<double>(event.progress_items_total)) * 100.0;
                 event_text = L"Scanning in progress: " +
                     std::to_wstring(event.progress_items_done) + L"/" +
                     std::to_wstring(event.progress_items_total) + L" items";
-                progress_text = std::to_wstring(static_cast<int>(progress_percent)) + L"% complete";
+                progress_text = std::to_wstring(static_cast<int>(progress_percent)) +
+                    L"% complete" + elapsed_suffix;
             }
             mark_has_results = true;
             break;
+        }
         case WbEventKind_Summary:
+        {
             TraceStartup(L"HandleNativeEvent summary");
             status_text = L"Finalizing...";
             event_text = FormatSummary(event);
             summary_text = event_text;
             progress_percent = 100.0;
-            progress_text = L"100% complete";
-            if (m_scan_started_at.time_since_epoch().count() > 0) {
-                const auto elapsed = std::chrono::steady_clock::now() - m_scan_started_at;
-                m_last_scan_duration_text = L"Scan duration: " +
-                    std::to_wstring(static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())) +
-                    L" ms";
-            }
+            const std::wstring elapsed = ScanElapsedText();
+            progress_text = L"100% complete" +
+                (elapsed.empty() ? std::wstring() : (L" · " + elapsed));
+            update_scan_duration = true;
             mark_has_results = true;
             break;
+        }
         case WbEventKind_Completed:
+        {
             TraceStartup(L"HandleNativeEvent completed");
             status_text = L"Completed.";
             event_text = L"Scan completed.";
             progress_percent = 100.0;
-            progress_text = L"100% complete";
-            if (m_scan_started_at.time_since_epoch().count() > 0) {
-                const auto elapsed = std::chrono::steady_clock::now() - m_scan_started_at;
-                m_last_scan_duration_text = L"Scan duration: " +
-                    std::to_wstring(static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())) +
-                    L" ms";
-            }
+            const std::wstring elapsed = ScanElapsedText();
+            progress_text = L"100% complete" +
+                (elapsed.empty() ? std::wstring() : (L" · " + elapsed));
+            update_scan_duration = true;
             clear_session = true;
             reload_snapshot = true;
             mark_has_results = true;
             break;
+        }
         case WbEventKind_Cancelled:
             TraceStartup(L"HandleNativeEvent cancelled");
             status_text = L"Cancelled.";
@@ -3724,6 +3834,34 @@ namespace winrt::WinBlaze::UI::implementation
 
         {
             std::lock_guard guard(m_pending_ui_mutex);
+
+            // m_scan_started_at / m_last_scan_duration_text / the UI timing
+            // counters below are also read from the UI thread (FlushPendingUiState,
+            // UpdatePerformanceCounters, UpdateSummaryText, UpdateRuntimeSnapshot,
+            // OnCompositionRendering) while this function runs on the native
+            // scan callback thread. Mutating them here, under the same mutex
+            // those readers take, avoids the unsynchronized cross-thread
+            // std::wstring/time_point access that could tear a read and crash.
+            if (reset_scan_timing) {
+                m_scan_started_at = std::chrono::steady_clock::now();
+                m_last_scan_duration_text = L"Scan duration: in progress";
+                m_last_ui_latency_ms = 0.0;
+                m_last_input_latency_ms = 0.0;
+                m_last_ui_flush_duration_ms = 0.0;
+                m_peak_ui_flush_duration_ms = 0.0;
+                m_last_composition_frame_ms = 0.0;
+                m_peak_composition_frame_ms = 0.0;
+                m_last_composition_frame_time = std::chrono::steady_clock::now();
+                m_total_ui_flush_count = 0;
+                m_total_composition_frame_count = 0;
+                m_pending_event_count = 0;
+            } else if (update_scan_duration && m_scan_started_at.time_since_epoch().count() > 0) {
+                const auto elapsed = std::chrono::steady_clock::now() - m_scan_started_at;
+                m_last_scan_duration_text = L"Scan duration: " +
+                    std::to_wstring(static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())) +
+                    L" ms";
+            }
+
             ++m_pending_event_count;
             m_last_ui_event_time = std::chrono::steady_clock::now();
 
@@ -3785,6 +3923,8 @@ namespace winrt::WinBlaze::UI::implementation
                 m_pending_ui_state.summary_files_seen = event.summary.files_seen;
                 m_pending_ui_state.summary_directories_seen = event.summary.directories_seen;
                 m_pending_ui_state.summary_total_size_bytes = event.summary.total_size_bytes;
+                m_progress_total_estimate =
+                    event.summary.files_seen + event.summary.directories_seen;
             } else if (event.kind == WbEventKind_Issue) {
                 m_pending_ui_state.correctness_dirty = true;
                 ++m_pending_ui_state.issue_count_delta;

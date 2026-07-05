@@ -33,6 +33,7 @@ const UI_PROGRESS_MIN_ITEM_DELTA: u64 = 10_000;
 const UI_PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(150);
 const EXTENSION_STATS_MIN_INTERVAL: Duration = Duration::from_millis(400);
 const EXTENSION_STATS_TOP_LIMIT: usize = 40;
+const PROGRESS_LOG_MIN_INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct NativeSession {
     controller: ScanController,
@@ -103,10 +104,32 @@ impl UiEventForwarder {
     }
 
     fn record_extension(&mut self, file: &FileRecord) {
-        let key = extension_key(&file.name);
-        let totals = self.extension_totals.entry(key).or_insert((0, 0));
-        totals.0 = totals.0.saturating_add(file.size_bytes);
-        totals.1 = totals.1.saturating_add(1);
+        // Runs once per scanned file, so avoid extension_key's per-call
+        // String: look up by borrowed &str and only allocate when a new
+        // extension is first seen (or the rare mixed-case one needs
+        // lowercasing).
+        let extension = match file.name.rsplit_once('.') {
+            Some((stem, extension)) if !stem.is_empty() && !extension.is_empty() => extension,
+            _ => "",
+        };
+
+        if extension.bytes().any(|byte| byte.is_ascii_uppercase()) {
+            let totals = self
+                .extension_totals
+                .entry(extension.to_ascii_lowercase())
+                .or_insert((0, 0));
+            totals.0 = totals.0.saturating_add(file.size_bytes);
+            totals.1 = totals.1.saturating_add(1);
+            return;
+        }
+
+        if let Some(totals) = self.extension_totals.get_mut(extension) {
+            totals.0 = totals.0.saturating_add(file.size_bytes);
+            totals.1 = totals.1.saturating_add(1);
+        } else {
+            self.extension_totals
+                .insert(extension.to_string(), (file.size_bytes, 1));
+        }
     }
 
     fn maybe_emit_extension_stats(&mut self, force: bool) {
@@ -251,31 +274,43 @@ fn forward_events(
         }
     };
     let mut transaction = BufferedIndexTransaction::default();
-    let log_path = structured_log_path(&index_root);
+    let mut log = EventLog::new(structured_log_path(&index_root));
     let mut flushed = false;
+    // True while the transaction holds volume/directory/file records that a
+    // successful flush has not yet written. Session-state bookkeeping alone
+    // does not set it, so the Completed event that follows a Summary no
+    // longer re-serializes the entire index (measured at ~20s for a full
+    // C:\ scan) just to record that the session finished.
+    let mut records_dirty = false;
     let mut ui_forwarder = UiEventForwarder::new(callback, user_data);
 
     for event in rx {
-        append_scan_event_log(&log_path, &event);
-        persist_scan_event(&mut transaction, &event);
+        log.append_scan_event(&event);
         ui_forwarder.forward(&event);
 
-        if should_flush_index(&event, persistence_mode) {
+        let flush_requested = should_flush_index(&event, persistence_mode);
+        let flush_trigger = event_name(&event);
+        records_dirty |= persist_scan_event(&mut transaction, event);
+
+        if flush_requested && (records_dirty || !flushed) {
             let result = apply_scan_transaction(&mut repository, &transaction, persistence_mode);
             if let Ok(Some(change_set)) = &result {
                 emit_incremental_change_summary(callback, user_data, change_set);
             }
             flushed = result.is_ok();
-            append_index_flush_log(&log_path, &event, result.is_ok());
+            if result.is_ok() {
+                records_dirty = false;
+            }
+            log.append_flush(flush_trigger, result.is_ok());
         }
     }
 
-    if !flushed {
+    if !flushed || records_dirty {
         let result = apply_scan_transaction(&mut repository, &transaction, persistence_mode);
         if let Ok(Some(change_set)) = &result {
             emit_incremental_change_summary(callback, user_data, change_set);
         }
-        append_index_flush_log(&log_path, &ScanEvent::Completed, result.is_ok());
+        log.append_flush("completed", result.is_ok());
     }
 }
 
@@ -302,8 +337,12 @@ fn apply_scan_transaction(
     persistence_mode: ScanPersistenceMode,
 ) -> Result<Option<FileChangeSet>, winblaze_index::IndexStorageError> {
     match persistence_mode {
+        // persist_transaction rather than apply_transaction: scan flushes
+        // only write — nothing reads back through this repository instance —
+        // and apply_transaction's clone-into-state doubles a multi-GB
+        // working set per flush.
         ScanPersistenceMode::ReplaceSnapshot => {
-            repository.apply_transaction(transaction).map(|_| None)
+            repository.persist_transaction(transaction).map(|_| None)
         }
         ScanPersistenceMode::IncrementalRescan => repository
             .apply_path_matched_incremental_transaction(transaction)
@@ -461,10 +500,13 @@ fn emit_extension_stats(
     );
 }
 
-fn persist_scan_event(transaction: &mut BufferedIndexTransaction, event: &ScanEvent) {
+/// Folds `event` into the transaction, taking ownership so records move in
+/// without a per-record clone. Returns whether catalog records (volumes,
+/// directories, files) changed — session-state bookkeeping alone returns
+/// false so callers can skip redundant full-snapshot flushes.
+fn persist_scan_event(transaction: &mut BufferedIndexTransaction, event: ScanEvent) -> bool {
     match event {
         ScanEvent::SessionStarted(volume) | ScanEvent::VolumeDiscovered(volume) => {
-            transaction.upsert_volume(volume);
             transaction.upsert_session(&ScanSession {
                 session_id: 1,
                 volume_id: volume.id,
@@ -472,10 +514,18 @@ fn persist_scan_event(transaction: &mut BufferedIndexTransaction, event: &ScanEv
                 state: ScanState::Scanning,
                 progress: Default::default(),
             });
+            transaction.insert_volume(volume);
+            true
         }
-        ScanEvent::DirectoryFound(directory) => transaction.upsert_directory(directory),
-        ScanEvent::FileFound(file) => transaction.upsert_file(file),
-        ScanEvent::Progress(_) | ScanEvent::Issue(_) | ScanEvent::Summary(_) => {}
+        ScanEvent::DirectoryFound(directory) => {
+            transaction.insert_directory(directory);
+            true
+        }
+        ScanEvent::FileFound(file) => {
+            transaction.insert_file(file);
+            true
+        }
+        ScanEvent::Progress(_) | ScanEvent::Issue(_) | ScanEvent::Summary(_) => false,
         ScanEvent::Completed | ScanEvent::Cancelled | ScanEvent::Failed(_) => {
             transaction.upsert_session(&ScanSession {
                 session_id: 1,
@@ -488,6 +538,7 @@ fn persist_scan_event(transaction: &mut BufferedIndexTransaction, event: &ScanEv
                 },
                 progress: Default::default(),
             });
+            false
         }
     }
 }
@@ -507,80 +558,134 @@ fn structured_log_path(index_root: &std::path::Path) -> PathBuf {
         .join("events.jsonl")
 }
 
-fn append_scan_event_log(path: &std::path::Path, event: &ScanEvent) {
-    match event {
-        ScanEvent::DirectoryFound(_) | ScanEvent::FileFound(_) => return,
-        _ => {}
-    }
-
-    let payload = match event {
-        ScanEvent::SessionStarted(volume) => format!(
-            r#""event":"scanner.session_started","root":"{}","volume_id":{}"#,
-            json_escape(&volume.mount_point),
-            volume.id.0
-        ),
-        ScanEvent::VolumeDiscovered(volume) => format!(
-            r#""event":"scanner.volume_discovered","root":"{}","volume_id":{}"#,
-            json_escape(&volume.mount_point),
-            volume.id.0
-        ),
-        ScanEvent::Progress(progress) => format!(
-            r#""event":"scanner.progress","items_done":{},"items_total":{},"bytes_done":{},"bytes_total":{}"#,
-            progress.completed_items,
-            progress.total_items,
-            progress.completed_bytes,
-            progress.total_bytes
-        ),
-        ScanEvent::Summary(summary) => format!(
-            r#""event":"scanner.summary","files":{},"directories":{},"bytes":{},"allocated_bytes":{}"#,
-            summary.files_seen,
-            summary.directories_seen,
-            summary.total_size_bytes,
-            summary.total_allocation_bytes
-        ),
-        ScanEvent::Completed => r#""event":"scanner.completed""#.to_string(),
-        ScanEvent::Cancelled => r#""event":"scanner.cancelled""#.to_string(),
-        ScanEvent::Failed(message) => format!(
-            r#""event":"scanner.failed","message":"{}""#,
-            json_escape(message)
-        ),
-        ScanEvent::Issue(issue) => format!(
-            r#""event":"scanner.issue","kind":"{:?}","path":"{}","message":"{}""#,
-            issue.kind,
-            json_escape(issue.path.as_deref().unwrap_or("")),
-            json_escape(&issue.message)
-        ),
-        ScanEvent::DirectoryFound(_) | ScanEvent::FileFound(_) => unreachable!(),
-    };
-
-    append_json_log(path, &payload);
+/// Structured-event log writer that keeps one open handle instead of paying
+/// create_dir_all + rotation stat + open + close for every line — a full
+/// drive scan emits thousands of progress events, which previously meant
+/// four filesystem operations on the log file per event. Progress lines are
+/// additionally throttled to one per second; they only exist for post-hoc
+/// timing analysis, and the summary line carries the final totals.
+struct EventLog {
+    path: PathBuf,
+    file: Option<fs::File>,
+    written_bytes: u64,
+    last_progress_log: Option<Instant>,
 }
 
-fn append_index_flush_log(path: &std::path::Path, event: &ScanEvent, ok: bool) {
-    append_json_log(
-        path,
-        &format!(
-            r#""event":"index.flush","trigger":"{}","ok":{}"#,
-            event_name(event),
-            ok
-        ),
-    );
-}
-
-fn append_json_log(path: &std::path::Path, payload: &str) {
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
+impl EventLog {
+    fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            file: None,
+            written_bytes: 0,
+            last_progress_log: None,
+        }
     }
-    rotate_log_if_needed(path, MAX_JSON_LOG_BYTES);
-    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
-        return;
-    };
-    let _ = writeln!(
-        file,
-        r#"{{"ts_ms":{},"component":"native",{} }}"#,
-        now_ms(),
-        payload
-    );
+
+    fn append_scan_event(&mut self, event: &ScanEvent) {
+        match event {
+            ScanEvent::DirectoryFound(_) | ScanEvent::FileFound(_) => return,
+            ScanEvent::Progress(_) => {
+                let now = Instant::now();
+                if self
+                    .last_progress_log
+                    .is_some_and(|last| now.duration_since(last) < PROGRESS_LOG_MIN_INTERVAL)
+                {
+                    return;
+                }
+                self.last_progress_log = Some(now);
+            }
+            _ => {}
+        }
+
+        let payload = match event {
+            ScanEvent::SessionStarted(volume) => format!(
+                r#""event":"scanner.session_started","root":"{}","volume_id":{}"#,
+                json_escape(&volume.mount_point),
+                volume.id.0
+            ),
+            ScanEvent::VolumeDiscovered(volume) => format!(
+                r#""event":"scanner.volume_discovered","root":"{}","volume_id":{}"#,
+                json_escape(&volume.mount_point),
+                volume.id.0
+            ),
+            ScanEvent::Progress(progress) => format!(
+                r#""event":"scanner.progress","items_done":{},"items_total":{},"bytes_done":{},"bytes_total":{}"#,
+                progress.completed_items,
+                progress.total_items,
+                progress.completed_bytes,
+                progress.total_bytes
+            ),
+            ScanEvent::Summary(summary) => format!(
+                r#""event":"scanner.summary","files":{},"directories":{},"bytes":{},"allocated_bytes":{}"#,
+                summary.files_seen,
+                summary.directories_seen,
+                summary.total_size_bytes,
+                summary.total_allocation_bytes
+            ),
+            ScanEvent::Completed => r#""event":"scanner.completed""#.to_string(),
+            ScanEvent::Cancelled => r#""event":"scanner.cancelled""#.to_string(),
+            ScanEvent::Failed(message) => format!(
+                r#""event":"scanner.failed","message":"{}""#,
+                json_escape(message)
+            ),
+            ScanEvent::Issue(issue) => format!(
+                r#""event":"scanner.issue","kind":"{:?}","path":"{}","message":"{}""#,
+                issue.kind,
+                json_escape(issue.path.as_deref().unwrap_or("")),
+                json_escape(&issue.message)
+            ),
+            ScanEvent::DirectoryFound(_) | ScanEvent::FileFound(_) => unreachable!(),
+        };
+
+        self.append(&payload);
+    }
+
+    fn append_flush(&mut self, trigger: &str, ok: bool) {
+        self.append(&format!(
+            r#""event":"index.flush","trigger":"{trigger}","ok":{ok}"#
+        ));
+    }
+
+    fn append(&mut self, payload: &str) {
+        if self.written_bytes >= MAX_JSON_LOG_BYTES {
+            self.file = None;
+            rotate_log_if_needed(&self.path, MAX_JSON_LOG_BYTES);
+            self.written_bytes = 0;
+        }
+
+        if self.file.is_none() {
+            self.open();
+        }
+        let Some(file) = self.file.as_mut() else {
+            return;
+        };
+
+        let line = format!(
+            "{{\"ts_ms\":{},\"component\":\"native\",{} }}\n",
+            now_ms(),
+            payload
+        );
+        if file.write_all(line.as_bytes()).is_ok() {
+            self.written_bytes = self.written_bytes.saturating_add(line.len() as u64);
+        } else {
+            self.file = None;
+        }
+    }
+
+    fn open(&mut self) {
+        if let Some(parent) = self.path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        rotate_log_if_needed(&self.path, MAX_JSON_LOG_BYTES);
+        self.written_bytes = fs::metadata(&self.path)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0);
+        self.file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .ok();
+    }
 }
 
 fn rotate_log_if_needed(path: &std::path::Path, max_bytes: u64) {
@@ -777,14 +882,17 @@ fn load_extension_stats_from_snapshot(
     };
 
     let repository = SqliteIndexRepository::open(&index_storage_root(), IndexBackend::BinaryCache);
-    let files = repository.snapshot_files();
 
+    // Aggregating by extension needs every record, but not a clone of every
+    // record: `for_each_file` visits references into the existing table
+    // instead of cloning ~everything (names, paths, timestamps) into a
+    // throwaway Vec first.
     let mut totals: HashMap<String, (u64, u64)> = HashMap::new();
-    for file in &files {
+    repository.for_each_file(|file| {
         let entry = totals.entry(extension_key(&file.name)).or_insert((0, 0));
         entry.0 = entry.0.saturating_add(file.size_bytes);
         entry.1 = entry.1.saturating_add(1);
-    }
+    });
 
     let totals: Vec<(String, u64, u64)> = totals
         .into_iter()
@@ -820,14 +928,23 @@ fn load_catalog_entries_with_stats(
 ) -> WbIndexSnapshotStats {
     let repository = SqliteIndexRepository::open(&index_storage_root(), IndexBackend::BinaryCache);
     let snapshot = repository.snapshot();
-    let volumes = repository.snapshot_volumes();
-    let directories = repository.snapshot_directories();
-    let files = repository.snapshot_files();
+    // Counts come from the cheap `_count()` accessors, and only the first
+    // SNAPSHOT_ENTRY_LIMIT records of each kind are ever cloned: callers of
+    // this snapshot (e.g. the post-scan catalog reload) never display more
+    // than that many rows, so cloning every record in a multi-million-row
+    // index just to throw away all but a few thousand isn't just wasteful,
+    // it can stall the caller long enough to hit an allocator abort.
+    let volume_count = repository.volume_count();
+    let directory_count = repository.directory_count();
+    let file_count = repository.file_count();
+    let volumes = repository.snapshot_volumes_limited(SNAPSHOT_ENTRY_LIMIT);
+    let directories = repository.snapshot_directories_limited(SNAPSHOT_ENTRY_LIMIT);
+    let files = repository.snapshot_files_limited(SNAPSHOT_ENTRY_LIMIT);
 
     let stats = WbIndexSnapshotStats {
-        volumes: volumes.len() as u64,
-        directories: directories.len() as u64,
-        files: files.len() as u64,
+        volumes: volume_count as u64,
+        directories: directory_count as u64,
+        files: file_count as u64,
         entries_emitted_limit: SNAPSHOT_ENTRY_LIMIT as u64,
         cache_read_bytes: snapshot.cache_read_bytes,
         cache_read_millis: snapshot.cache_read_millis,

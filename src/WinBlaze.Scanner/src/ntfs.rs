@@ -59,25 +59,53 @@ pub fn enumerate_ntfs_volume_parallel(
 pub fn enumerate_ntfs_volume_parallel_streaming<F>(
     root: &Path,
     worker_count: usize,
-    on_event: F,
+    mut on_event: F,
 ) -> Result<NtfsEnumeration, NtfsEnumerationError>
 where
     F: FnMut(ScanEvent),
 {
+    let entries = stream_ntfs_entries(root, worker_count, &mut on_event)?;
+    parse_entries(root, entries, None)
+}
+
+/// Streaming enumeration that finishes with just the scan summary instead of
+/// the fully materialized `NtfsEnumeration`. The scan controller only reads
+/// the summary from the result, and building the rest re-resolves every path
+/// and clones every record purely to throw them away — a significant share
+/// of the fast-path wall clock on a multi-million-record volume.
+pub fn enumerate_ntfs_volume_parallel_streaming_summary<F>(
+    root: &Path,
+    worker_count: usize,
+    mut on_event: F,
+) -> Result<ScanSummary, NtfsEnumerationError>
+where
+    F: FnMut(ScanEvent),
+{
+    let entries = stream_ntfs_entries(root, worker_count, &mut on_event)?;
+    Ok(summarize_entries(&entries))
+}
+
+fn stream_ntfs_entries(
+    root: &Path,
+    worker_count: usize,
+    on_event: &mut dyn FnMut(ScanEvent),
+) -> Result<HashMap<u64, ParsedNtfsEntry>, NtfsEnumerationError> {
     let mut file = open_ntfs_metadata_file(root, "$MFT")?;
     let total_records = file
         .metadata()
         .ok()
         .map(|metadata| (metadata.len() / NTFS_RECORD_SIZE as u64).max(1))
         .unwrap_or(1);
-    let records_per_read = worker_count.max(1).saturating_mul(1024).clamp(1024, 65_536);
+    let workers = worker_count.max(1);
+    let records_per_read = workers.saturating_mul(1024).clamp(1024, 65_536);
     let mut buffer = vec![0u8; NTFS_RECORD_SIZE * records_per_read];
-    let mut carry = Vec::new();
+    let mut carry: Vec<u8> = Vec::new();
     let mut entries: HashMap<u64, ParsedNtfsEntry> = HashMap::new();
     let mut resolved_paths: HashMap<u64, String> = HashMap::new();
     let mut emitted: HashSet<u64> = HashSet::new();
-    let mut on_event = on_event;
+    let mut pending: Vec<u64> = Vec::new();
     let mut processed_records = 0u64;
+    let root_text = root.display().to_string();
 
     loop {
         let read = file.read(&mut buffer)?;
@@ -89,21 +117,17 @@ where
         let full_records = carry.len() / NTFS_RECORD_SIZE;
         let full_bytes = full_records * NTFS_RECORD_SIZE;
 
-        let mut parsed_ids = Vec::new();
-        for record in carry[..full_bytes].chunks(NTFS_RECORD_SIZE) {
-            if record.len() < NTFS_RECORD_SIZE || &record[0..4] != FILE_RECORD_SIGNATURE {
-                continue;
-            }
+        let parsed = parse_batch(&carry[..full_bytes], full_records, workers)?;
+        processed_records = processed_records.saturating_add(full_records as u64);
 
-            processed_records = processed_records.saturating_add(1);
-            if let Some(entry) = parse_record(record)? {
-                let file_id = entry.file_id.0;
-                entries.insert(file_id, entry);
-                parsed_ids.push(file_id);
-            }
+        let mut parsed_ids = Vec::with_capacity(parsed.len());
+        for entry in parsed {
+            let file_id = entry.file_id.0;
+            entries.insert(file_id, entry);
+            parsed_ids.push(file_id);
         }
 
-        carry = carry[full_bytes..].to_vec();
+        carry.drain(..full_bytes);
         let progress = ScanProgress {
             completed_items: processed_records,
             total_items: total_records,
@@ -112,24 +136,98 @@ where
         };
         on_event(ScanEvent::Progress(progress));
         emit_streaming_entries(
-            root,
+            &root_text,
             &entries,
             &parsed_ids,
+            &mut pending,
             &mut resolved_paths,
             &mut emitted,
-            &mut on_event,
+            on_event,
         );
     }
 
     emit_streaming_entries(
-        root,
+        &root_text,
         &entries,
         &[],
+        &mut pending,
         &mut resolved_paths,
         &mut emitted,
-        &mut on_event,
+        on_event,
     );
-    parse_entries(root, entries, None)
+    Ok(entries)
+}
+
+/// Parses one read batch of MFT records, fanning the work across `workers`
+/// threads. The read loop was previously single-threaded regardless of
+/// `worker_count` (the count only sized the read buffer), which left the
+/// elevated fast path slower than the directory-walk fallback it exists to
+/// beat.
+fn parse_batch(
+    batch: &[u8],
+    record_count: usize,
+    workers: usize,
+) -> Result<Vec<ParsedNtfsEntry>, NtfsEnumerationError> {
+    if workers <= 1 || record_count < 2048 {
+        return parse_record_range(batch, 0, record_count);
+    }
+
+    let chunk_size = record_count.div_ceil(workers);
+    thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(workers);
+        for worker_index in 0..workers {
+            let start_record = worker_index * chunk_size;
+            if start_record >= record_count {
+                break;
+            }
+            let end_record = ((worker_index + 1) * chunk_size).min(record_count);
+            handles.push(scope.spawn(move || parse_record_range(batch, start_record, end_record)));
+        }
+
+        let mut parsed = Vec::new();
+        for handle in handles {
+            match handle.join() {
+                Ok(Ok(chunk)) => parsed.extend(chunk),
+                Ok(Err(error)) => return Err(error),
+                Err(_) => {
+                    return Err(NtfsEnumerationError::InvalidRecord(String::from(
+                        "parallel parser worker panicked",
+                    )))
+                }
+            }
+        }
+        Ok(parsed)
+    })
+}
+
+fn summarize_entries(entries: &HashMap<u64, ParsedNtfsEntry>) -> ScanSummary {
+    let mut files_seen = 0u64;
+    let mut directories_seen = 0u64;
+    let mut total_size_bytes = 0u64;
+    let mut total_allocation_bytes = 0u64;
+    for entry in entries.values() {
+        if entry.is_directory {
+            directories_seen = directories_seen.saturating_add(1);
+        } else {
+            files_seen = files_seen.saturating_add(1);
+            total_size_bytes = total_size_bytes.saturating_add(entry.size_bytes);
+            total_allocation_bytes = total_allocation_bytes.saturating_add(entry.allocation_bytes);
+        }
+    }
+
+    // parse_entries() inserts a synthetic root (record 5) when the MFT bytes
+    // did not include one; mirror that so both completion paths report the
+    // same directory count.
+    if !entries.contains_key(&5) {
+        directories_seen = directories_seen.saturating_add(1);
+    }
+
+    ScanSummary {
+        files_seen,
+        directories_seen,
+        total_size_bytes,
+        total_allocation_bytes,
+    }
 }
 
 fn open_ntfs_metadata_file(root: &Path, file_name: &str) -> Result<File, NtfsEnumerationError> {
@@ -481,21 +579,26 @@ fn parse_entries(
     })
 }
 
-fn emit_streaming_entries<F>(
-    root: &Path,
+fn emit_streaming_entries(
+    root_text: &str,
     entries: &HashMap<u64, ParsedNtfsEntry>,
     candidate_ids: &[u64],
+    pending: &mut Vec<u64>,
     resolved_paths: &mut HashMap<u64, String>,
     emitted: &mut HashSet<u64>,
-    on_event: &mut F,
-) where
-    F: FnMut(ScanEvent),
-{
-    let root_text = root.display().to_string();
-    let mut ids: Vec<_> = if candidate_ids.is_empty() {
+    on_event: &mut dyn FnMut(ScanEvent),
+) {
+    // An empty candidate list marks the final pass: every entry not yet
+    // emitted goes out now, falling back to the root path for records whose
+    // parent never appeared in the MFT (e.g. orphaned records).
+    let final_pass = candidate_ids.is_empty();
+    let mut ids: Vec<_> = if final_pass {
+        pending.clear();
         entries.keys().copied().collect()
     } else {
-        candidate_ids.to_vec()
+        let mut ids = std::mem::take(pending);
+        ids.extend_from_slice(candidate_ids);
+        ids
     };
     ids.sort_unstable();
 
@@ -505,7 +608,7 @@ fn emit_streaming_entries<F>(
             continue;
         }
 
-        if !emitted.insert(file_id) {
+        if emitted.contains(&file_id) {
             continue;
         }
 
@@ -513,33 +616,37 @@ fn emit_streaming_entries<F>(
             continue;
         };
 
-        let full_path = resolve_entry_path(
-            file_id,
-            entries,
-            resolved_paths,
-            &root_text,
-            &mut Vec::new(),
-        );
+        // MFT records mostly arrive parent-before-child, but not always.
+        // Emitting an entry before its parent record has been parsed would
+        // bake the root-fallback path into the streamed (and persisted)
+        // record, so defer it until a later batch or the final pass.
+        if !final_pass && !parent_chain_known(file_id, entries, resolved_paths) {
+            pending.push(file_id);
+            continue;
+        }
+
+        emitted.insert(file_id);
+        let full_path =
+            resolve_entry_path(file_id, entries, resolved_paths, root_text, &mut Vec::new());
 
         if entry.is_directory {
             let directory = DirectoryRecord {
                 id: DirectoryId(entry.file_id.0),
                 parent_directory_id: entry.parent_directory_id.map(DirectoryId),
                 name: entry.name.clone(),
-                full_path: full_path.clone(),
+                full_path,
                 direct_bytes: 0,
                 total_bytes: 0,
                 direct_entries: 0,
                 total_entries: 0,
             };
             on_event(ScanEvent::DirectoryFound(directory));
-            emitted.insert(file_id);
         } else {
             let file = FileRecord {
                 id: FileId(entry.file_id.0),
                 parent_directory_id: DirectoryId(entry.parent_directory_id.unwrap_or(5)),
                 name: entry.name.clone(),
-                full_path: full_path.clone(),
+                full_path,
                 size_bytes: entry.size_bytes,
                 allocation_bytes: entry.allocation_bytes,
                 attributes: entry.attributes,
@@ -548,7 +655,46 @@ fn emit_streaming_entries<F>(
                 accessed_utc: entry.accessed_utc,
             };
             on_event(ScanEvent::FileFound(file));
-            emitted.insert(file_id);
+        }
+    }
+}
+
+/// Whether every link in `file_id`'s parent chain is either already
+/// path-resolved or present in `entries`, i.e. resolving the path now will
+/// not silently fall back to the root because a parent record has simply not
+/// been parsed yet. Cycles are treated as known — `resolve_entry_path` has
+/// its own cycle guard.
+fn parent_chain_known(
+    file_id: u64,
+    entries: &HashMap<u64, ParsedNtfsEntry>,
+    resolved_paths: &HashMap<u64, String>,
+) -> bool {
+    let mut current = file_id;
+    let mut hops = 0usize;
+    loop {
+        if current == 5 {
+            return true;
+        }
+        if hops > 4096 {
+            return true;
+        }
+        hops += 1;
+
+        let Some(entry) = entries.get(&current) else {
+            return false;
+        };
+        match entry.parent_directory_id {
+            None => return true,
+            Some(parent) if parent == current => return true,
+            Some(parent) => {
+                if parent == 5 || resolved_paths.contains_key(&parent) {
+                    return true;
+                }
+                if !entries.contains_key(&parent) {
+                    return false;
+                }
+                current = parent;
+            }
         }
     }
 }

@@ -76,6 +76,7 @@ namespace winrt::WinBlaze::UI::implementation
         void RefreshInstantSearch();
         void LoadPersistedCatalogSnapshot();
         void UpdateProgress(double percent, std::wstring const& text);
+        std::wstring ScanElapsedText();
         void HandleNativeEvent(WbEvent const& event);
         std::wstring FormatSummary(WbEvent const& event) const;
         std::wstring FormatSearchQuery();
@@ -337,6 +338,11 @@ namespace winrt::WinBlaze::UI::implementation
         std::chrono::steady_clock::time_point m_scan_started_at{};
         std::chrono::duration<double, std::milli> m_last_scan_duration{ 0.0 };
         std::wstring m_last_scan_duration_text{ L"Scan duration: n/a" };
+        // Item-count total from the previous completed scan (or the loaded
+        // snapshot), used to estimate progress for the directory-walk
+        // backend, which reports total_items=0 because it cannot know the
+        // total up front. Guarded by m_pending_ui_mutex.
+        uint64_t m_progress_total_estimate{ 0 };
         std::wstring m_last_cache_load_text{ L"Cache load: n/a" };
         uint64_t m_scan_issue_count{ 0 };
         std::wstring m_last_scan_issue_text{ L"none" };

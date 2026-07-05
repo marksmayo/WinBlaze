@@ -11,7 +11,7 @@ pub enum ScanBackend {
     DirectoryWalk,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScanRuntimeConfig {
     pub backend: ScanBackend,
     pub max_parallelism: usize,
@@ -19,6 +19,24 @@ pub struct ScanRuntimeConfig {
     pub root_path: PathBuf,
     pub reparse_policy: ReparseTraversalPolicy,
     pub pipeline: ScanPipelineConfig,
+}
+
+impl Default for ScanRuntimeConfig {
+    fn default() -> Self {
+        Self {
+            backend: ScanBackend::default(),
+            // A derived default left this at 0 (= one worker), silently
+            // running every scan single-threaded for any caller that didn't
+            // override it — measured at 9x slower on a full-drive walk.
+            max_parallelism: std::thread::available_parallelism()
+                .map(|parallelism| parallelism.get())
+                .unwrap_or(4),
+            emit_partial_results: false,
+            root_path: PathBuf::new(),
+            reparse_policy: ReparseTraversalPolicy::default(),
+            pipeline: ScanPipelineConfig::default(),
+        }
+    }
 }
 
 impl ScanRuntimeConfig {
