@@ -17,6 +17,7 @@ use winblaze_core::{
 
 const FILE_RECORD_SIGNATURE: &[u8; 4] = b"FILE";
 const NTFS_RECORD_SIZE: usize = 1024;
+const ATTRIBUTE_LIST: u32 = 0x20;
 const ATTRIBUTE_FILE_NAME: u32 = 0x30;
 const ATTRIBUTE_DATA: u32 = 0x80;
 const FILE_RECORD_FLAG_IN_USE: u16 = 0x0001;
@@ -61,18 +62,6 @@ pub fn enumerate_ntfs_volume_parallel(
     parse_mft_records_parallel(root, &mft_bytes, worker_count)
 }
 
-pub fn enumerate_ntfs_volume_parallel_streaming<F>(
-    root: &Path,
-    worker_count: usize,
-    mut on_event: F,
-) -> Result<NtfsEnumeration, NtfsEnumerationError>
-where
-    F: FnMut(ScanEvent),
-{
-    let entries = stream_ntfs_entries(root, worker_count, &mut on_event)?;
-    parse_entries(root, entries, None)
-}
-
 /// Streaming enumeration that finishes with just the scan summary instead of
 /// the fully materialized `NtfsEnumeration`. The scan controller only reads
 /// the summary from the result, and building the rest re-resolves every path
@@ -86,15 +75,25 @@ pub fn enumerate_ntfs_volume_parallel_streaming_summary<F>(
 where
     F: FnMut(ScanEvent),
 {
-    let entries = stream_ntfs_entries(root, worker_count, &mut on_event)?;
-    Ok(summarize_entries(&entries))
+    stream_ntfs_entries(root, worker_count, &mut on_event)
 }
 
+/// Streams MFT records straight to `on_event` as they parse, returning the
+/// running summary.
+///
+/// Files are emitted the moment they parse: their records carry a parent id
+/// but no materialized path (paths derive on demand downstream), so nothing
+/// gates them and nothing retains them. Directories bake their full path
+/// into the emitted record, so a directory whose parent has not resolved yet
+/// waits in a bucket keyed by that parent id and cascades out the moment the
+/// parent resolves - each record is touched a constant number of times,
+/// where the previous implementation rescanned every still-pending record on
+/// every read batch.
 fn stream_ntfs_entries(
     root: &Path,
     worker_count: usize,
     on_event: &mut dyn FnMut(ScanEvent),
-) -> Result<IdHashMap<u64, ParsedNtfsEntry>, NtfsEnumerationError> {
+) -> Result<ScanSummary, NtfsEnumerationError> {
     let mut file = open_mft_stream(root)?;
     let bytes_per_sector = file.bytes_per_sector as usize;
     let total_records = (file.total_bytes / NTFS_RECORD_SIZE as u64).max(1);
@@ -102,18 +101,10 @@ fn stream_ntfs_entries(
     let records_per_read = workers.saturating_mul(1024).clamp(1024, 65_536);
     let mut buffer = vec![0u8; NTFS_RECORD_SIZE * records_per_read];
     let mut carry: Vec<u8> = Vec::new();
-    // total_records counts every MFT slot, so these never rehash mid-scan.
-    let sizing = usize::try_from(total_records).unwrap_or(usize::MAX);
-    let mut entries: IdHashMap<u64, ParsedNtfsEntry> =
-        IdHashMap::with_capacity_and_hasher(sizing, Default::default());
-    let mut resolved_paths: IdHashMap<u64, String> =
-        IdHashMap::with_capacity_and_hasher(sizing / 8, Default::default());
-    let mut emitted: IdHashSet<u64> =
-        IdHashSet::with_capacity_and_hasher(sizing, Default::default());
-    let mut pending: Vec<u64> = Vec::new();
-    let mut pending_extensions: IdHashMap<u64, ExtensionSizes> = IdHashMap::default();
+    let mut state = NtfsStreamState::new(root.display().to_string());
     let mut processed_records = 0u64;
-    let root_text = root.display().to_string();
+
+    state.emit_root(on_event);
 
     loop {
         let read = file.read(&mut buffer)?;
@@ -131,34 +122,11 @@ fn stream_ntfs_entries(
         let (parsed, extensions) = parse_batch(&carry[..full_bytes], full_records, workers)?;
         processed_records = processed_records.saturating_add(full_records as u64);
 
-        let mut parsed_ids = Vec::with_capacity(parsed.len());
-        for mut entry in parsed {
-            let file_id = entry.file_id.0;
-            if let Some(sizes) = pending_extensions.remove(&file_id) {
-                entry.size_bytes = entry.size_bytes.max(sizes.size_bytes);
-                entry.allocation_bytes = entry.allocation_bytes.max(sizes.allocation_bytes);
-            }
-            entries.insert(file_id, entry);
-            parsed_ids.push(file_id);
+        for entry in parsed {
+            state.ingest_entry(entry, on_event);
         }
-
-        // Merge sizes carried by extension records into their base entries;
-        // if the base was already emitted, re-emit it so downstream
-        // consumers upsert the corrected sizes.
         for extension in extensions {
-            match entries.get_mut(&extension.base_record) {
-                Some(entry) => {
-                    entry.size_bytes = entry.size_bytes.max(extension.size_bytes);
-                    entry.allocation_bytes =
-                        entry.allocation_bytes.max(extension.allocation_bytes);
-                    if emitted.remove(&extension.base_record) {
-                        parsed_ids.push(extension.base_record);
-                    }
-                }
-                None => {
-                    pending_extensions.insert(extension.base_record, extension);
-                }
-            }
+            state.ingest_extension(extension, on_event);
         }
 
         carry.drain(..full_bytes);
@@ -169,27 +137,267 @@ fn stream_ntfs_entries(
             total_bytes: total_records.saturating_mul(NTFS_RECORD_SIZE as u64),
         };
         on_event(ScanEvent::Progress(progress));
-        emit_streaming_entries(
-            &root_text,
-            &entries,
-            &parsed_ids,
-            &mut pending,
-            &mut resolved_paths,
-            &mut emitted,
-            on_event,
-        );
     }
 
-    emit_streaming_entries(
-        &root_text,
-        &entries,
-        &[],
-        &mut pending,
-        &mut resolved_paths,
-        &mut emitted,
-        on_event,
-    );
-    Ok(entries)
+    state.finish(on_event);
+    Ok(state.into_summary())
+}
+
+const NTFS_ROOT_RECORD: u64 = 5;
+
+/// Streaming emit state: resolved directory paths, orphaned directories
+/// bucketed by the parent id they wait on, and the running summary.
+struct NtfsStreamState {
+    root_text: String,
+    /// Directory id -> full path, for every directory emitted so far.
+    resolved_paths: IdHashMap<u64, String>,
+    /// Directories whose parent has not resolved yet, keyed by that parent.
+    orphan_dirs: IdHashMap<u64, Vec<ParsedNtfsEntry>>,
+    /// Emitted files that carry $ATTRIBUTE_LIST: the only records whose
+    /// sizes a later extension record can still correct (with a re-emit).
+    retained_files: IdHashMap<u64, ParsedNtfsEntry>,
+    /// Extension sizes seen before their base record parsed.
+    pending_extensions: IdHashMap<u64, ExtensionSizes>,
+    /// Reusable worklist for cascading newly resolved directories.
+    cascade: Vec<ParsedNtfsEntry>,
+    files_seen: u64,
+    directories_seen: u64,
+    total_size_bytes: u64,
+    total_allocation_bytes: u64,
+}
+
+impl NtfsStreamState {
+    fn new(root_text: String) -> Self {
+        Self {
+            root_text,
+            resolved_paths: IdHashMap::default(),
+            orphan_dirs: IdHashMap::default(),
+            retained_files: IdHashMap::default(),
+            pending_extensions: IdHashMap::default(),
+            cascade: Vec::new(),
+            files_seen: 0,
+            directories_seen: 0,
+            total_size_bytes: 0,
+            total_allocation_bytes: 0,
+        }
+    }
+
+    /// Emits the scan root (record 5) up front: children can then resolve in
+    /// a single hop, and downstream root selection needs record 5 in the
+    /// persisted model (its absence made the tree mis-root at whichever
+    /// top-level directory happened to sort first).
+    fn emit_root(&mut self, on_event: &mut dyn FnMut(ScanEvent)) {
+        self.resolved_paths
+            .insert(NTFS_ROOT_RECORD, self.root_text.clone());
+        self.directories_seen = self.directories_seen.saturating_add(1);
+        on_event(ScanEvent::DirectoryFound(DirectoryRecord {
+            id: DirectoryId(NTFS_ROOT_RECORD),
+            parent_directory_id: None,
+            name: self.root_text.clone(),
+            full_path: self.root_text.clone(),
+            direct_bytes: 0,
+            total_bytes: 0,
+            direct_entries: 0,
+            total_entries: 0,
+        }));
+    }
+
+    fn ingest_entry(&mut self, mut entry: ParsedNtfsEntry, on_event: &mut dyn FnMut(ScanEvent)) {
+        let file_id = entry.file_id.0;
+        if let Some(sizes) = self.pending_extensions.remove(&file_id) {
+            entry.size_bytes = entry.size_bytes.max(sizes.size_bytes);
+            entry.allocation_bytes = entry.allocation_bytes.max(sizes.allocation_bytes);
+        }
+
+        if entry.is_directory {
+            if file_id == NTFS_ROOT_RECORD {
+                return; // synthetic root already emitted
+            }
+            let parent = normalized_parent(&entry);
+            if self.resolved_paths.contains_key(&parent) {
+                self.cascade.push(entry);
+                self.drain_cascade(on_event);
+            } else {
+                self.orphan_dirs.entry(parent).or_default().push(entry);
+            }
+        } else {
+            self.emit_file(entry, on_event);
+        }
+    }
+
+    fn emit_file(&mut self, mut entry: ParsedNtfsEntry, on_event: &mut dyn FnMut(ScanEvent)) {
+        self.files_seen = self.files_seen.saturating_add(1);
+        self.total_size_bytes = self.total_size_bytes.saturating_add(entry.size_bytes);
+        self.total_allocation_bytes = self
+            .total_allocation_bytes
+            .saturating_add(entry.allocation_bytes);
+
+        let retain = entry.has_attribute_list;
+        let name = if retain {
+            entry.name.clone()
+        } else {
+            std::mem::take(&mut entry.name)
+        };
+        on_event(ScanEvent::FileFound(FileRecord {
+            id: entry.file_id,
+            parent_directory_id: DirectoryId(
+                entry.parent_directory_id.unwrap_or(NTFS_ROOT_RECORD),
+            ),
+            name,
+            full_path: String::new(),
+            size_bytes: entry.size_bytes,
+            allocation_bytes: entry.allocation_bytes,
+            attributes: entry.attributes,
+            created_utc: entry.created_utc,
+            modified_utc: entry.modified_utc,
+            accessed_utc: entry.accessed_utc,
+        }));
+        if retain {
+            self.retained_files.insert(entry.file_id.0, entry);
+        }
+    }
+
+    /// Extension records carry attributes (and so sizes) for a base record
+    /// that overflowed. NTFS only moves attributes out of a record that has
+    /// $ATTRIBUTE_LIST, so a file base is always in `retained_files` when its
+    /// extension arrives after it; before it, the sizes park in
+    /// `pending_extensions`. Directory bases ignore sizes entirely.
+    fn ingest_extension(
+        &mut self,
+        extension: ExtensionSizes,
+        on_event: &mut dyn FnMut(ScanEvent),
+    ) {
+        if let Some(entry) = self.retained_files.get_mut(&extension.base_record) {
+            let size = entry.size_bytes.max(extension.size_bytes);
+            let allocation = entry.allocation_bytes.max(extension.allocation_bytes);
+            if size == entry.size_bytes && allocation == entry.allocation_bytes {
+                return;
+            }
+            self.total_size_bytes = self
+                .total_size_bytes
+                .saturating_add(size - entry.size_bytes);
+            self.total_allocation_bytes = self
+                .total_allocation_bytes
+                .saturating_add(allocation - entry.allocation_bytes);
+            entry.size_bytes = size;
+            entry.allocation_bytes = allocation;
+            // Re-emit so downstream consumers upsert the corrected sizes.
+            on_event(ScanEvent::FileFound(FileRecord {
+                id: entry.file_id,
+                parent_directory_id: DirectoryId(
+                    entry.parent_directory_id.unwrap_or(NTFS_ROOT_RECORD),
+                ),
+                name: entry.name.clone(),
+                full_path: String::new(),
+                size_bytes: entry.size_bytes,
+                allocation_bytes: entry.allocation_bytes,
+                attributes: entry.attributes,
+                created_utc: entry.created_utc,
+                modified_utc: entry.modified_utc,
+                accessed_utc: entry.accessed_utc,
+            }));
+            return;
+        }
+
+        if self.resolved_paths.contains_key(&extension.base_record) {
+            return; // directory base: sizes unused
+        }
+
+        self.pending_extensions
+            .entry(extension.base_record)
+            .and_modify(|sizes| {
+                sizes.size_bytes = sizes.size_bytes.max(extension.size_bytes);
+                sizes.allocation_bytes =
+                    sizes.allocation_bytes.max(extension.allocation_bytes);
+            })
+            .or_insert(extension);
+    }
+
+    /// Emits every directory on the worklist, then any orphans that were
+    /// waiting on one of them, transitively. Entries reaching this point
+    /// have a resolved parent except during `finish`, where a missing parent
+    /// deliberately falls back to the root path.
+    fn drain_cascade(&mut self, on_event: &mut dyn FnMut(ScanEvent)) {
+        while let Some(mut entry) = self.cascade.pop() {
+            let file_id = entry.file_id.0;
+            let parent = normalized_parent(&entry);
+            let full_path = {
+                let parent_path = self
+                    .resolved_paths
+                    .get(&parent)
+                    .map(String::as_str)
+                    .unwrap_or(self.root_text.as_str());
+                join_path(parent_path, &entry.name)
+            };
+            let name = std::mem::take(&mut entry.name);
+            self.directories_seen = self.directories_seen.saturating_add(1);
+            on_event(ScanEvent::DirectoryFound(DirectoryRecord {
+                id: DirectoryId(file_id),
+                parent_directory_id: entry.parent_directory_id.map(DirectoryId),
+                name,
+                full_path: full_path.clone(),
+                direct_bytes: 0,
+                total_bytes: 0,
+                direct_entries: 0,
+                total_entries: 0,
+            }));
+            self.resolved_paths.insert(file_id, full_path);
+            if let Some(children) = self.orphan_dirs.remove(&file_id) {
+                self.cascade.extend(children);
+            }
+        }
+    }
+
+    /// Final pass: directories whose parent never parsed (deleted, corrupt,
+    /// or cyclic references) resolve under the root. Buckets whose key is
+    /// itself waiting in another bucket are left for their parent's cascade
+    /// so they keep their real path; pure cycles break at the smallest key.
+    fn finish(&mut self, on_event: &mut dyn FnMut(ScanEvent)) {
+        while !self.orphan_dirs.is_empty() {
+            let mut waiting: IdHashSet<u64> = IdHashSet::default();
+            for children in self.orphan_dirs.values() {
+                for child in children {
+                    waiting.insert(child.file_id.0);
+                }
+            }
+            let mut stuck: Vec<u64> = self
+                .orphan_dirs
+                .keys()
+                .filter(|key| !waiting.contains(key))
+                .copied()
+                .collect();
+            if stuck.is_empty() {
+                if let Some(any) = self.orphan_dirs.keys().copied().min() {
+                    stuck.push(any);
+                }
+            }
+            stuck.sort_unstable();
+            for parent in stuck {
+                if let Some(children) = self.orphan_dirs.remove(&parent) {
+                    self.cascade.extend(children);
+                    self.drain_cascade(on_event);
+                }
+            }
+        }
+    }
+
+    fn into_summary(self) -> ScanSummary {
+        ScanSummary {
+            files_seen: self.files_seen,
+            directories_seen: self.directories_seen,
+            total_size_bytes: self.total_size_bytes,
+            total_allocation_bytes: self.total_allocation_bytes,
+        }
+    }
+}
+
+/// The parent a record resolves under: self-referential or absent parent
+/// links resolve under the root record.
+fn normalized_parent(entry: &ParsedNtfsEntry) -> u64 {
+    match entry.parent_directory_id {
+        Some(parent) if parent != entry.file_id.0 => parent,
+        _ => NTFS_ROOT_RECORD,
+    }
 }
 
 /// Parses one read batch of MFT records, fanning the work across `workers`
@@ -236,36 +444,6 @@ fn parse_batch(
         }
         Ok((parsed, extensions))
     })
-}
-
-fn summarize_entries(entries: &IdHashMap<u64, ParsedNtfsEntry>) -> ScanSummary {
-    let mut files_seen = 0u64;
-    let mut directories_seen = 0u64;
-    let mut total_size_bytes = 0u64;
-    let mut total_allocation_bytes = 0u64;
-    for entry in entries.values() {
-        if entry.is_directory {
-            directories_seen = directories_seen.saturating_add(1);
-        } else {
-            files_seen = files_seen.saturating_add(1);
-            total_size_bytes = total_size_bytes.saturating_add(entry.size_bytes);
-            total_allocation_bytes = total_allocation_bytes.saturating_add(entry.allocation_bytes);
-        }
-    }
-
-    // parse_entries() inserts a synthetic root (record 5) when the MFT bytes
-    // did not include one; mirror that so both completion paths report the
-    // same directory count.
-    if !entries.contains_key(&5) {
-        directories_seen = directories_seen.saturating_add(1);
-    }
-
-    ScanSummary {
-        files_seen,
-        directories_seen,
-        total_size_bytes,
-        total_allocation_bytes,
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -956,6 +1134,7 @@ fn parse_entries(
         parent_directory_id: None,
         name: String::from(""),
         is_directory: true,
+        has_attribute_list: false,
         size_bytes: 0,
         allocation_bytes: 0,
         attributes: FileAttributes::DIRECTORY,
@@ -1062,134 +1241,13 @@ fn parse_entries(
     })
 }
 
-fn emit_streaming_entries(
-    root_text: &str,
-    entries: &IdHashMap<u64, ParsedNtfsEntry>,
-    candidate_ids: &[u64],
-    pending: &mut Vec<u64>,
-    resolved_paths: &mut IdHashMap<u64, String>,
-    emitted: &mut IdHashSet<u64>,
-    on_event: &mut dyn FnMut(ScanEvent),
-) {
-    // An empty candidate list marks the final pass: every entry not yet
-    // emitted goes out now, falling back to the root path for records whose
-    // parent never appeared in the MFT (e.g. orphaned records).
-    let final_pass = candidate_ids.is_empty();
-    let mut ids: Vec<_> = if final_pass {
-        pending.clear();
-        entries.keys().copied().collect()
-    } else {
-        let mut ids = std::mem::take(pending);
-        ids.extend_from_slice(candidate_ids);
-        ids
-    };
-    ids.sort_unstable();
-
-    for file_id in ids {
-        if file_id == 5 {
-            emitted.insert(file_id);
-            continue;
-        }
-
-        if emitted.contains(&file_id) {
-            continue;
-        }
-
-        let Some(entry) = entries.get(&file_id) else {
-            continue;
-        };
-
-        // MFT records mostly arrive parent-before-child, but not always.
-        // Emitting an entry before its parent record has been parsed would
-        // bake the root-fallback path into the streamed (and persisted)
-        // record, so defer it until a later batch or the final pass.
-        if !final_pass && !parent_chain_known(file_id, entries, resolved_paths) {
-            pending.push(file_id);
-            continue;
-        }
-
-        emitted.insert(file_id);
-
-        if entry.is_directory {
-            // Only directories carry a materialized path; file paths derive
-            // from their parent on demand (see FileRecord docs).
-            let full_path =
-                resolve_entry_path(file_id, entries, resolved_paths, root_text, &mut Vec::new());
-            let directory = DirectoryRecord {
-                id: DirectoryId(entry.file_id.0),
-                parent_directory_id: entry.parent_directory_id.map(DirectoryId),
-                name: entry.name.clone(),
-                full_path,
-                direct_bytes: 0,
-                total_bytes: 0,
-                direct_entries: 0,
-                total_entries: 0,
-            };
-            on_event(ScanEvent::DirectoryFound(directory));
-        } else {
-            let file = FileRecord {
-                id: FileId(entry.file_id.0),
-                parent_directory_id: DirectoryId(entry.parent_directory_id.unwrap_or(5)),
-                name: entry.name.clone(),
-                full_path: String::new(),
-                size_bytes: entry.size_bytes,
-                allocation_bytes: entry.allocation_bytes,
-                attributes: entry.attributes,
-                created_utc: entry.created_utc,
-                modified_utc: entry.modified_utc,
-                accessed_utc: entry.accessed_utc,
-            };
-            on_event(ScanEvent::FileFound(file));
-        }
-    }
-}
-
-/// Whether every link in `file_id`'s parent chain is either already
-/// path-resolved or present in `entries`, i.e. resolving the path now will
-/// not silently fall back to the root because a parent record has simply not
-/// been parsed yet. Cycles are treated as known — `resolve_entry_path` has
-/// its own cycle guard.
-fn parent_chain_known(
-    file_id: u64,
-    entries: &IdHashMap<u64, ParsedNtfsEntry>,
-    resolved_paths: &IdHashMap<u64, String>,
-) -> bool {
-    let mut current = file_id;
-    let mut hops = 0usize;
-    loop {
-        if current == 5 {
-            return true;
-        }
-        if hops > 4096 {
-            return true;
-        }
-        hops += 1;
-
-        let Some(entry) = entries.get(&current) else {
-            return false;
-        };
-        match entry.parent_directory_id {
-            None => return true,
-            Some(parent) if parent == current => return true,
-            Some(parent) => {
-                if parent == 5 || resolved_paths.contains_key(&parent) {
-                    return true;
-                }
-                if !entries.contains_key(&parent) {
-                    return false;
-                }
-                current = parent;
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 struct ParsedNtfsEntry {
     file_id: FileId,
     parent_directory_id: Option<u64>,
     name: String,
     is_directory: bool,
+    has_attribute_list: bool,
     size_bytes: u64,
     allocation_bytes: u64,
     attributes: FileAttributes,
@@ -1234,6 +1292,7 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
     let mut file_name: Option<FileNameAttribute> = None;
     let mut allocation_bytes = 0u64;
     let mut size_bytes = 0u64;
+    let mut has_attribute_list = false;
 
     while cursor + 8 <= record.len() {
         let attribute_type = read_u32(record, cursor)?;
@@ -1252,6 +1311,9 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
         // not count toward file size; only the unnamed default stream does.
         let attribute_name_length = record[cursor + 9];
         match attribute_type {
+            // $ATTRIBUTE_LIST precedes $FILE_NAME in a record (attributes are
+            // type-ordered), so the early break below cannot miss it.
+            ATTRIBUTE_LIST => has_attribute_list = true,
             ATTRIBUTE_FILE_NAME if non_resident == 0 => {
                 let value_offset = read_u16(record, cursor + 20)? as usize;
                 let value_length = read_u32(record, cursor + 16)? as usize;
@@ -1259,7 +1321,19 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
                     match parse_file_name(
                         &record[cursor + value_offset..cursor + value_offset + value_length],
                     ) {
-                        Ok(name) => file_name = Some(name),
+                        Ok(name) => {
+                            // Records carry one $FILE_NAME per namespace;
+                            // last-parsed used to win, surfacing DOS 8.3
+                            // names like PROGRA~1 when that one sat last.
+                            let replace = file_name
+                                .as_ref()
+                                .is_none_or(|current| {
+                                    name.namespace_rank() >= current.namespace_rank()
+                                });
+                            if replace {
+                                file_name = Some(name);
+                            }
+                        }
                         Err(_) => return Ok(ParsedRecordOutcome::None),
                     }
                 }
@@ -1279,8 +1353,13 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
             _ => {}
         }
 
+        // Only stop early once a Win32-namespace name is in hand: the DOS
+        // 8.3 alias sorts before it, so breaking on the first $FILE_NAME
+        // surfaced names like PROGRA~1 for every directory.
         if base_record == 0
-            && file_name.is_some()
+            && file_name
+                .as_ref()
+                .is_some_and(|name| name.namespace_rank() == 2)
             && (is_directory || size_bytes != 0 || allocation_bytes != 0)
         {
             break;
@@ -1318,6 +1397,7 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
         parent_directory_id: file_name.parent_reference,
         name: file_name.name,
         is_directory,
+        has_attribute_list,
         size_bytes,
         allocation_bytes,
         attributes,
@@ -1333,7 +1413,21 @@ struct FileNameAttribute {
     created_utc: i64,
     modified_utc: i64,
     accessed_utc: i64,
+    namespace: u8,
     name: String,
+}
+
+impl FileNameAttribute {
+    /// Preference order for picking among a record's $FILE_NAME attributes:
+    /// Win32 (1) and Win32&DOS (3) carry the long name, POSIX (0) is rare
+    /// but real, and DOS (2) is the 8.3 alias nobody wants to see.
+    fn namespace_rank(&self) -> u8 {
+        match self.namespace {
+            1 | 3 => 2,
+            0 => 1,
+            _ => 0,
+        }
+    }
 }
 
 fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute, NtfsEnumerationError> {
@@ -1348,6 +1442,7 @@ fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute, NtfsEnumerationErr
     let modified_utc = read_i64(bytes, 16)?;
     let accessed_utc = read_i64(bytes, 24)?;
     let name_length = bytes[64] as usize;
+    let namespace = bytes[65];
     let name_offset = 66usize;
     let name_bytes = name_length.saturating_mul(2);
     if name_offset + name_bytes > bytes.len() {
@@ -1370,6 +1465,7 @@ fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute, NtfsEnumerationErr
         created_utc,
         modified_utc,
         accessed_utc,
+        namespace,
         name,
     })
 }
@@ -1674,6 +1770,10 @@ mod tests {
     }
 
     fn build_file_name_value(parent: u64, name: &str) -> Vec<u8> {
+        build_file_name_value_ns(parent, name, 0)
+    }
+
+    fn build_file_name_value_ns(parent: u64, name: &str, namespace: u8) -> Vec<u8> {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&parent.to_le_bytes());
         bytes.extend_from_slice(&0i64.to_le_bytes());
@@ -1686,7 +1786,7 @@ mod tests {
         bytes.extend_from_slice(&0u32.to_le_bytes());
         let utf16: Vec<u16> = name.encode_utf16().collect();
         bytes.push(utf16.len() as u8);
-        bytes.push(0);
+        bytes.push(namespace);
         for unit in utf16 {
             bytes.extend_from_slice(&unit.to_le_bytes());
         }
@@ -1805,6 +1905,185 @@ mod tests {
         record
     }
 
+
+    fn parsed_entry(
+        id: u64,
+        parent: u64,
+        name: &str,
+        is_directory: bool,
+        size: u64,
+    ) -> ParsedNtfsEntry {
+        ParsedNtfsEntry {
+            file_id: FileId(id),
+            parent_directory_id: Some(parent),
+            name: name.to_string(),
+            is_directory,
+            has_attribute_list: false,
+            size_bytes: size,
+            allocation_bytes: size,
+            attributes: if is_directory {
+                FileAttributes::DIRECTORY
+            } else {
+                FileAttributes::ARCHIVE
+            },
+            created_utc: None,
+            modified_utc: None,
+            accessed_utc: None,
+        }
+    }
+
+    fn collect_stream(
+        entries: Vec<ParsedNtfsEntry>,
+        extensions: Vec<ExtensionSizes>,
+    ) -> (ScanSummary, Vec<ScanEvent>) {
+        let mut events = Vec::new();
+        let mut state = NtfsStreamState::new(String::from(r"C:\"));
+        {
+            let mut sink = |event: ScanEvent| events.push(event);
+            state.emit_root(&mut sink);
+            for entry in entries {
+                state.ingest_entry(entry, &mut sink);
+            }
+            for extension in extensions {
+                state.ingest_extension(extension, &mut sink);
+            }
+            state.finish(&mut sink);
+        }
+        (state.into_summary(), events)
+    }
+
+    fn directory_paths(events: &[ScanEvent]) -> Vec<(u64, String)> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                ScanEvent::DirectoryFound(directory) => {
+                    Some((directory.id.0, directory.full_path.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn streaming_root_record_is_emitted_first() {
+        let (summary, events) = collect_stream(vec![parsed_entry(10, 5, "Users", true, 0)], vec![]);
+        let directories = directory_paths(&events);
+        assert_eq!(directories[0].0, 5, "root record must be the first directory out");
+        assert_eq!(directories[0].1, r"C:\");
+        assert_eq!(summary.directories_seen, 2);
+    }
+
+    #[test]
+    fn streaming_resolves_out_of_order_parents_with_real_paths() {
+        // Children arrive before their parents: 12 -> 11 -> 10 -> root.
+        let (summary, events) = collect_stream(
+            vec![
+                parsed_entry(12, 11, "deep", true, 0),
+                parsed_entry(11, 10, "mid", true, 0),
+                parsed_entry(20, 12, "leaf.txt", false, 64),
+                parsed_entry(10, 5, "top", true, 0),
+            ],
+            vec![],
+        );
+        let directories = directory_paths(&events);
+        let deep = directories.iter().find(|(id, _)| *id == 12).expect("dir 12");
+        assert_eq!(deep.1, r"C:\top\mid\deep", "orphan cascade must bake real paths");
+        assert_eq!(summary.directories_seen, 4);
+        assert_eq!(summary.files_seen, 1);
+        assert_eq!(summary.total_size_bytes, 64);
+    }
+
+    #[test]
+    fn streaming_orphans_without_parents_fall_back_to_root() {
+        // Parent record 99 never appears; 40 still emits, rooted at C:\.
+        let (summary, events) =
+            collect_stream(vec![parsed_entry(40, 99, "lost", true, 0)], vec![]);
+        let directories = directory_paths(&events);
+        let lost = directories.iter().find(|(id, _)| *id == 40).expect("dir 40");
+        assert_eq!(lost.1, r"C:\lost");
+        assert_eq!(summary.directories_seen, 2);
+    }
+
+    #[test]
+    fn streaming_breaks_parent_reference_cycles() {
+        // 50 and 51 reference each other; both must still emit exactly once.
+        let (summary, events) = collect_stream(
+            vec![
+                parsed_entry(50, 51, "a", true, 0),
+                parsed_entry(51, 50, "b", true, 0),
+            ],
+            vec![],
+        );
+        let directories = directory_paths(&events);
+        assert_eq!(directories.len(), 3, "root + both cycle members");
+        assert_eq!(summary.directories_seen, 3);
+    }
+
+    #[test]
+    fn streaming_extension_after_emit_reissues_corrected_file() {
+        let mut base = parsed_entry(60, 5, "big.bin", false, 100);
+        base.has_attribute_list = true;
+        let (summary, events) = collect_stream(
+            vec![base],
+            vec![ExtensionSizes {
+                base_record: 60,
+                size_bytes: 5_000,
+                allocation_bytes: 5_000,
+            }],
+        );
+        let file_sizes: Vec<u64> = events
+            .iter()
+            .filter_map(|event| match event {
+                ScanEvent::FileFound(file) => Some(file.size_bytes),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(file_sizes, vec![100, 5_000], "corrected record must re-emit");
+        assert_eq!(summary.files_seen, 1, "re-emit must not double count");
+        assert_eq!(summary.total_size_bytes, 5_000);
+    }
+
+    #[test]
+    fn streaming_extension_before_base_merges_on_arrival() {
+        let mut state = NtfsStreamState::new(String::from(r"C:\"));
+        let mut events = Vec::new();
+        let mut sink = |event: ScanEvent| events.push(event);
+        state.emit_root(&mut sink);
+        state.ingest_extension(
+            ExtensionSizes {
+                base_record: 61,
+                size_bytes: 7_000,
+                allocation_bytes: 7_000,
+            },
+            &mut sink,
+        );
+        state.ingest_entry(parsed_entry(61, 5, "later.bin", false, 10), &mut sink);
+        state.finish(&mut sink);
+        drop(sink);
+        let summary = state.into_summary();
+        assert_eq!(summary.total_size_bytes, 7_000);
+        assert_eq!(summary.files_seen, 1);
+    }
+
+    #[test]
+    fn streaming_summary_matches_batch_parser() {
+        // Same fixture as parses_directories_and_files_from_mft_records, via
+        // the streaming path: counts must agree with parse_mft_records.
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&build_record(5, true, 5, "", 0));
+        bytes.extend_from_slice(&build_record(10, true, 5, "Users", 0));
+        bytes.extend_from_slice(&build_record(11, false, 10, "file.txt", 123));
+
+        let batch = parse_mft_records(Path::new(r"C:\"), &bytes).expect("batch parse");
+
+        let (parsed, extensions) =
+            parse_batch(&bytes, bytes.len() / NTFS_RECORD_SIZE, 1).expect("parse batch");
+        let (summary, _) = collect_stream(parsed, extensions);
+        assert_eq!(summary.files_seen, batch.summary.files_seen);
+        assert_eq!(summary.directories_seen, batch.summary.directories_seen);
+        assert_eq!(summary.total_size_bytes, batch.summary.total_size_bytes);
+    }
+
     #[test]
     fn parses_directories_and_files_from_mft_records() {
         let mut bytes = Vec::new();
@@ -1920,6 +2199,38 @@ mod tests {
         assert_eq!(result.files[0].allocation_bytes, 1024);
         assert_eq!(result.summary.total_size_bytes, 4096);
         assert_eq!(result.summary.total_allocation_bytes, 1024);
+    }
+
+    #[test]
+    fn win32_name_preferred_over_trailing_dos_alias() {
+        // Win32 name first, DOS 8.3 alias last - the alias must not win.
+        let mut record = vec![0u8; NTFS_RECORD_SIZE];
+        record[0..4].copy_from_slice(FILE_RECORD_SIGNATURE);
+        record[0x14..0x16].copy_from_slice(&0x30u16.to_le_bytes());
+        record[0x16..0x18].copy_from_slice(&0x0001u16.to_le_bytes());
+
+        let mut attr_bytes = Vec::new();
+        attr_bytes.extend_from_slice(&build_resident_attribute(
+            ATTRIBUTE_FILE_NAME,
+            &build_file_name_value_ns(5, "Program Files", 1),
+        ));
+        attr_bytes.extend_from_slice(&build_resident_attribute(
+            ATTRIBUTE_FILE_NAME,
+            &build_file_name_value_ns(5, "PROGRA~1", 2),
+        ));
+        attr_bytes.extend_from_slice(&build_resident_attribute(ATTRIBUTE_DATA, &[1, 2, 3]));
+        attr_bytes.extend_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+        record[0x30..0x30 + attr_bytes.len()].copy_from_slice(&attr_bytes);
+        record[0x1C..0x20].copy_from_slice(&(NTFS_RECORD_SIZE as u32).to_le_bytes());
+        record[0x2C..0x30].copy_from_slice(&31u32.to_le_bytes());
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&build_record(5, true, 5, "", 0));
+        bytes.extend_from_slice(&record);
+
+        let result = parse_mft_records(Path::new(r"C:\"), &bytes).expect("parse");
+        assert_eq!(result.files.len(), 1);
+        assert_eq!(result.files[0].name, "Program Files");
     }
 
     #[test]
