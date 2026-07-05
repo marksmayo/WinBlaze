@@ -498,14 +498,7 @@ fn walk_directory_tree(
                     continue;
                 }
             };
-            emit_file_record(
-                pipeline,
-                walk_state,
-                parent_directory_id,
-                &entry_path,
-                entry_name,
-                &metadata,
-            );
+            emit_file_record(pipeline, walk_state, parent_directory_id, entry_name, &metadata);
         }
     }
 }
@@ -541,7 +534,6 @@ fn emit_file_record(
     pipeline: &mut ScanEventPipeline,
     walk_state: &mut DirectoryWalkState,
     parent_directory_id: winblaze_core::DirectoryId,
-    full_path: &std::path::Path,
     name: String,
     metadata: &fs::Metadata,
 ) {
@@ -555,7 +547,10 @@ fn emit_file_record(
         id: winblaze_core::FileId(walk_state.next_file_id()),
         parent_directory_id,
         name,
-        full_path: full_path.display().to_string(),
+        // Derived on demand from the parent directory (see FileRecord docs);
+        // materializing one String per file dominated scan-time allocation,
+        // index memory, and snapshot size.
+        full_path: String::new(),
         size_bytes,
         allocation_bytes: size_bytes,
         attributes: winblaze_core::FileAttributes::ARCHIVE,
@@ -917,14 +912,7 @@ fn process_fallback_directory(
                     continue;
                 }
             };
-            emit_file_record_shared(
-                pipeline,
-                shared,
-                task.directory_id,
-                &entry_path,
-                entry_name,
-                &metadata,
-            );
+            emit_file_record_shared(pipeline, shared, task.directory_id, entry_name, &metadata);
         }
     }
 
@@ -957,7 +945,6 @@ fn emit_file_record_shared(
     pipeline: &mut ScanEventPipeline,
     shared: &FallbackSharedState,
     parent_directory_id: winblaze_core::DirectoryId,
-    full_path: &std::path::Path,
     name: String,
     metadata: &fs::Metadata,
 ) {
@@ -973,7 +960,8 @@ fn emit_file_record_shared(
         id: winblaze_core::FileId(file_id),
         parent_directory_id,
         name,
-        full_path: full_path.display().to_string(),
+        // Derived on demand from the parent directory (see FileRecord docs).
+        full_path: String::new(),
         size_bytes,
         allocation_bytes: size_bytes,
         attributes: winblaze_core::FileAttributes::ARCHIVE,

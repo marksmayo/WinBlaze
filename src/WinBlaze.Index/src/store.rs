@@ -153,8 +153,10 @@ impl SqliteIndexRepository {
         &mut self,
         transaction: &BufferedIndexTransaction,
     ) -> Result<FileChangeSet, IndexStorageError> {
-        let previous_files = self.state.snapshot_files();
-        let current_files = transaction.snapshot_files();
+        // Path-materialized on both sides: lineage/move detection compares
+        // full paths, and scanners no longer store them per file.
+        let previous_files = self.state.snapshot_files_with_paths();
+        let current_files = transaction.snapshot_files_with_paths();
         let mut merged = transaction.clone();
         merged.files = self.state.files.clone();
         merged.lineages = self.state.lineages.clone();
@@ -169,9 +171,11 @@ impl SqliteIndexRepository {
         &mut self,
         transaction: &BufferedIndexTransaction,
     ) -> Result<FileChangeSet, IndexStorageError> {
-        let previous_files = self.state.snapshot_files();
+        // Path-materialized on both sides: the remap joins files across
+        // scans by full path, and scanners no longer store them per file.
+        let previous_files = self.state.snapshot_files_with_paths();
         let current_files =
-            remap_current_files_by_path(&previous_files, &transaction.snapshot_files());
+            remap_current_files_by_path(&previous_files, &transaction.snapshot_files_with_paths());
         let mut current_transaction = transaction.clone();
         current_transaction.files = current_files
             .iter()
@@ -326,6 +330,20 @@ impl BufferedIndexTransaction {
     pub fn snapshot_files(&self) -> Vec<FileRecord> {
         let mut files = Vec::from_iter(self.files.values().cloned());
         files.sort_by_key(|file| file.id.0);
+        files
+    }
+
+    /// Like `snapshot_files`, but with `full_path` materialized from the
+    /// directory table (scanners emit files without one). Incremental
+    /// rescans join records across scans by path, so both sides of the
+    /// comparison need real paths.
+    pub fn snapshot_files_with_paths(&self) -> Vec<FileRecord> {
+        let mut files = self.snapshot_files();
+        for file in &mut files {
+            if file.full_path.is_empty() {
+                file.full_path = winblaze_core::derive_file_path(&self.directories, file);
+            }
+        }
         files
     }
 

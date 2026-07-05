@@ -23,8 +23,8 @@ use winblaze_scanner::{ScanController, ScanRequest, ScanRuntimeConfig};
 use crate::api::{
     WbCStringView, WbCatalogCallback, WbCatalogEntry, WbEvent, WbEventCallback, WbEventKind,
     WbExtensionStat, WbExtensionStatCallback, WbExtensionStatsSnapshot, WbIncrementalChangeSummary,
-    WbIndexSnapshotStats, WbNativeError, WbScanSessionHandle, WbScanSummary, WbTreeChildrenResult,
-    WbTreeNode, WbTreeNodeCallback,
+    WbIndexSnapshotStats, WbLiveDirectory, WbLiveDirectoryBatch, WbNativeError,
+    WbScanSessionHandle, WbScanSummary, WbTreeChildrenResult, WbTreeNode, WbTreeNodeCallback,
 };
 
 const MAX_JSON_LOG_BYTES: u64 = 2 * 1024 * 1024;
@@ -36,6 +36,8 @@ const EXTENSION_STATS_MIN_INTERVAL: Duration = Duration::from_millis(400);
 const EXTENSION_STATS_TOP_LIMIT: usize = 40;
 const PROGRESS_LOG_MIN_INTERVAL: Duration = Duration::from_secs(1);
 const TREE_CHILDREN_LIMIT: usize = 4096;
+const DIRECTORY_BATCH_SIZE: usize = 4096;
+const DIRECTORY_BATCH_MAX_LATENCY: Duration = Duration::from_millis(250);
 
 /// Read model shared by the tree/catalog/extension-stats queries: the display
 /// tree plus derived totals, built once per snapshot instead of re-reading
@@ -148,6 +150,13 @@ struct OwnedEvent {
     _strings: Vec<CString>,
 }
 
+struct PendingLiveDirectory {
+    id: u64,
+    parent_id: u64,
+    has_parent: bool,
+    name: String,
+}
+
 struct UiEventForwarder {
     callback: WbEventCallback,
     user_data: usize,
@@ -156,6 +165,15 @@ struct UiEventForwarder {
     last_progress_items: u64,
     extension_totals: HashMap<String, (u64, u64)>,
     last_extension_stats_at: Option<Instant>,
+    // Directory id -> full path, accumulated from directory events so the
+    // capped set of forwarded file events can carry a derived path (file
+    // records no longer store one).
+    directory_paths: HashMap<u64, String>,
+    // Directories waiting to be delivered as one DirectoryBatch event: a
+    // full drive discovers hundreds of thousands, and one FFI crossing per
+    // directory dominated scan wall-clock.
+    pending_directories: Vec<PendingLiveDirectory>,
+    last_directory_batch_at: Option<Instant>,
 }
 
 impl UiEventForwarder {
@@ -168,6 +186,9 @@ impl UiEventForwarder {
             last_progress_items: 0,
             extension_totals: HashMap::new(),
             last_extension_stats_at: None,
+            directory_paths: HashMap::new(),
+            pending_directories: Vec::new(),
+            last_directory_batch_at: None,
         }
     }
 
@@ -180,9 +201,57 @@ impl UiEventForwarder {
             self.record_extension(file);
         }
 
+        if let ScanEvent::DirectoryFound(directory) = event {
+            // Track directory paths only while file events can still be
+            // forwarded: they exist solely to derive paths for that capped
+            // set.
+            if self.live_catalog_events < UI_LIVE_CATALOG_EVENT_LIMIT {
+                self.directory_paths
+                    .insert(directory.id.0, directory.full_path.clone());
+            }
+
+            self.pending_directories.push(PendingLiveDirectory {
+                id: directory.id.0,
+                parent_id: directory
+                    .parent_directory_id
+                    .map(|parent| parent.0)
+                    .unwrap_or(0),
+                has_parent: directory.parent_directory_id.is_some(),
+                name: directory.name.clone(),
+            });
+            let now = Instant::now();
+            let latency_due = self
+                .last_directory_batch_at
+                .is_none_or(|last| now.duration_since(last) >= DIRECTORY_BATCH_MAX_LATENCY);
+            if self.pending_directories.len() >= DIRECTORY_BATCH_SIZE || latency_due {
+                self.flush_directory_batch();
+            }
+            return;
+        }
+
+        // The tree must be complete before summary/terminal states reach the
+        // UI (their handlers snapshot and reload).
+        if matches!(
+            event,
+            ScanEvent::Summary(_) | ScanEvent::Completed | ScanEvent::Cancelled | ScanEvent::Failed(_)
+        ) {
+            self.flush_directory_batch();
+        }
+
         if let Some(cb) = self.callback {
             if self.should_forward(event) {
-                let native_event = convert_event(event.clone());
+                let native_event = match event {
+                    ScanEvent::FileFound(file) if file.full_path.is_empty() => {
+                        let mut file = file.clone();
+                        if let Some(parent) =
+                            self.directory_paths.get(&file.parent_directory_id.0)
+                        {
+                            file.full_path = winblaze_core::join_path(parent, &file.name);
+                        }
+                        convert_event(ScanEvent::FileFound(file))
+                    }
+                    _ => convert_event(event.clone()),
+                };
                 cb(
                     &native_event.event as *const WbEvent,
                     self.user_data as *mut core::ffi::c_void,
@@ -192,6 +261,46 @@ impl UiEventForwarder {
 
         let force_emit = matches!(event, ScanEvent::Completed | ScanEvent::Summary(_));
         self.maybe_emit_extension_stats(force_emit);
+    }
+
+    fn flush_directory_batch(&mut self) {
+        self.last_directory_batch_at = Some(Instant::now());
+        if self.pending_directories.is_empty() {
+            return;
+        }
+        let Some(cb) = self.callback else {
+            self.pending_directories.clear();
+            return;
+        };
+
+        let mut names: Vec<CString> = Vec::with_capacity(self.pending_directories.len());
+        let mut items: Vec<WbLiveDirectory> = Vec::with_capacity(self.pending_directories.len());
+        for directory in self.pending_directories.drain(..) {
+            let name = CString::new(directory.name).unwrap_or_default();
+            items.push(WbLiveDirectory {
+                id: directory.id,
+                parent_id: directory.parent_id,
+                has_parent: u8::from(directory.has_parent),
+                name: WbCStringView {
+                    ptr: name.as_ptr(),
+                    len: name.as_bytes().len(),
+                },
+            });
+            names.push(name);
+        }
+
+        let event = WbEvent {
+            kind: WbEventKind::DirectoryBatch,
+            directory_batch: WbLiveDirectoryBatch {
+                items: items.as_ptr(),
+                count: items.len(),
+            },
+            ..WbEvent::default()
+        };
+        cb(
+            &event as *const WbEvent,
+            self.user_data as *mut core::ffi::c_void,
+        );
     }
 
     fn record_extension(&mut self, file: &FileRecord) {
@@ -250,10 +359,9 @@ impl UiEventForwarder {
 
     fn should_forward(&mut self, event: &ScanEvent) -> bool {
         match event {
-            // Every directory reaches the UI so the folder tree can grow
-            // live during the scan; only file events are capped (the flat
-            // previews never display more than the cap anyway).
-            ScanEvent::DirectoryFound(_) => true,
+            // Directories are delivered as DirectoryBatch events by
+            // forward() and never reach this check.
+            ScanEvent::DirectoryFound(_) => false,
             ScanEvent::FileFound(_) => {
                 if self.live_catalog_events >= UI_LIVE_CATALOG_EVENT_LIMIT {
                     return false;
@@ -884,6 +992,35 @@ fn json_escape(value: &str) -> String {
     escaped
 }
 
+/// Live directory events feed the folder tree, which needs only id, parent
+/// linkage, and name. Every directory on the volume flows through here
+/// (hundreds of thousands per scan), so this skips the path/kind/size/
+/// description strings a full catalog entry would allocate — that formatting
+/// dominated scan wall-clock once directory events stopped being capped.
+fn convert_directory_event(directory: &DirectoryRecord) -> OwnedEvent {
+    let mut strings = Vec::new();
+    let entry = WbCatalogEntry {
+        name: c_view(directory.name.clone(), &mut strings),
+        id: directory.id.0,
+        parent_id: directory
+            .parent_directory_id
+            .map(|parent| parent.0)
+            .unwrap_or(0),
+        has_parent: u8::from(directory.parent_directory_id.is_some()),
+        is_directory: 1,
+        total_entries: directory.total_entries,
+        ..WbCatalogEntry::default()
+    };
+    OwnedEvent {
+        event: WbEvent {
+            kind: WbEventKind::DirectoryFound,
+            catalog_entry: entry,
+            ..WbEvent::default()
+        },
+        _strings: strings,
+    }
+}
+
 fn convert_event(event: ScanEvent) -> OwnedEvent {
     match event {
         ScanEvent::SessionStarted(volume) => {
@@ -908,19 +1045,11 @@ fn convert_event(event: ScanEvent) -> OwnedEvent {
                 _strings: catalog._strings,
             }
         }
-        ScanEvent::DirectoryFound(directory) => {
-            let catalog = catalog_entry_from_directory(&directory);
-            OwnedEvent {
-                event: WbEvent {
-                    kind: WbEventKind::DirectoryFound,
-                    catalog_entry: catalog.entry,
-                    ..WbEvent::default()
-                },
-                _strings: catalog._strings,
-            }
-        }
+        ScanEvent::DirectoryFound(directory) => convert_directory_event(&directory),
         ScanEvent::FileFound(file) => {
-            let catalog = catalog_entry_from_file(&file);
+            // The forwarder fills full_path for forwarded live events; falls
+            // back to the (possibly empty) stored path otherwise.
+            let catalog = catalog_entry_from_file(&file, &file.full_path);
             OwnedEvent {
                 event: WbEvent {
                     kind: WbEventKind::FileFound,
@@ -1089,7 +1218,7 @@ fn load_catalog_entries_with_stats(
             if emitted >= SNAPSHOT_ENTRY_LIMIT {
                 return stats;
             }
-            let entry = catalog_entry_from_file(file);
+            let entry = catalog_entry_from_file(file, &tree.file_display_path(file));
             cb(&entry.entry as *const WbCatalogEntry, user_data);
             emitted += 1;
         }
@@ -1169,11 +1298,11 @@ fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntr
     }
 }
 
-fn catalog_entry_from_file(file: &FileRecord) -> OwnedCatalogEntry {
+fn catalog_entry_from_file(file: &FileRecord, full_path: &str) -> OwnedCatalogEntry {
     let mut strings = Vec::new();
     let entry = WbCatalogEntry {
         name: c_view(file.name.clone(), &mut strings),
-        path: c_view(file.full_path.clone(), &mut strings),
+        path: c_view(full_path.to_string(), &mut strings),
         kind: c_view("File".to_string(), &mut strings),
         size_text: c_view(format_size(file.size_bytes), &mut strings),
         description: c_view(

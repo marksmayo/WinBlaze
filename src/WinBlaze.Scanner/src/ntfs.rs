@@ -504,15 +504,16 @@ fn parse_entries(
     }
 
     for entry in ordered_entries {
-        let full_path = resolve_entry_path(
-            entry.file_id.0,
-            &entries,
-            &mut resolved_paths,
-            &root_text,
-            &mut Vec::new(),
-        );
-
         if entry.is_directory {
+            // Only directories carry a materialized path; file paths derive
+            // from their parent on demand (see FileRecord docs).
+            let full_path = resolve_entry_path(
+                entry.file_id.0,
+                &entries,
+                &mut resolved_paths,
+                &root_text,
+                &mut Vec::new(),
+            );
             let directory = DirectoryRecord {
                 id: DirectoryId(entry.file_id.0),
                 parent_directory_id: if entry.file_id.0 == 5 {
@@ -536,7 +537,7 @@ fn parse_entries(
                 id: FileId(entry.file_id.0),
                 parent_directory_id: DirectoryId(entry.parent_directory_id.unwrap_or(5)),
                 name: entry.name.clone(),
-                full_path,
+                full_path: String::new(),
                 size_bytes: entry.size_bytes,
                 allocation_bytes: entry.allocation_bytes,
                 attributes: entry.attributes,
@@ -626,10 +627,12 @@ fn emit_streaming_entries(
         }
 
         emitted.insert(file_id);
-        let full_path =
-            resolve_entry_path(file_id, entries, resolved_paths, root_text, &mut Vec::new());
 
         if entry.is_directory {
+            // Only directories carry a materialized path; file paths derive
+            // from their parent on demand (see FileRecord docs).
+            let full_path =
+                resolve_entry_path(file_id, entries, resolved_paths, root_text, &mut Vec::new());
             let directory = DirectoryRecord {
                 id: DirectoryId(entry.file_id.0),
                 parent_directory_id: entry.parent_directory_id.map(DirectoryId),
@@ -646,7 +649,7 @@ fn emit_streaming_entries(
                 id: FileId(entry.file_id.0),
                 parent_directory_id: DirectoryId(entry.parent_directory_id.unwrap_or(5)),
                 name: entry.name.clone(),
-                full_path,
+                full_path: String::new(),
                 size_bytes: entry.size_bytes,
                 allocation_bytes: entry.allocation_bytes,
                 attributes: entry.attributes,
@@ -1220,7 +1223,14 @@ mod tests {
         assert_eq!(result.files.len(), 1);
         assert_eq!(result.directories.len(), 2);
         assert_eq!(result.files[0].name, "file.txt");
-        assert!(result.files[0].full_path.ends_with(r"\Users\file.txt"));
+        // File records no longer store a path; the parent directory carries it.
+        assert!(result.files[0].full_path.is_empty());
+        let parent = result
+            .directories
+            .iter()
+            .find(|directory| directory.id == result.files[0].parent_directory_id)
+            .expect("parent directory");
+        assert!(parent.full_path.ends_with(r"\Users"));
         assert_eq!(result.summary.files_seen, 1);
         assert_eq!(result.summary.directories_seen, 2);
         assert_eq!(result.summary.total_size_bytes, 123);

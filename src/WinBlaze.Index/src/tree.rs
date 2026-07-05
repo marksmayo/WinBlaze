@@ -289,6 +289,23 @@ impl TreeIndex {
         Some(&self.nodes[index].rollup)
     }
 
+    pub fn directory_full_path(&self, directory_id: u64) -> Option<&str> {
+        let index = *self.dir_index_by_id.get(&directory_id)? as usize;
+        Some(self.directories[index].full_path.as_str())
+    }
+
+    /// Display path for a file record: the stored path when present (records
+    /// from older snapshots carry one), otherwise parent path + name.
+    pub fn file_display_path(&self, file: &FileRecord) -> String {
+        if !file.full_path.is_empty() {
+            return file.full_path.clone();
+        }
+        match self.directory_full_path(file.parent_directory_id.0) {
+            Some(parent) => winblaze_core::join_path(parent, &file.name),
+            None => file.name.clone(),
+        }
+    }
+
     /// Total direct children (directories + files) of `directory_id`.
     pub fn child_count(&self, directory_id: u64) -> Option<u64> {
         let index = *self.dir_index_by_id.get(&directory_id)? as usize;

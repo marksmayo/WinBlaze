@@ -138,12 +138,15 @@ namespace winrt::WinBlaze::UI::implementation
         };
 
         // A directory announced by a running scan, queued for the live tree.
+        // The name stays UTF-8 until applied on the UI thread — conversion
+        // for hundreds of thousands of names must not run on the native
+        // callback thread, where it would stall the scan event pipeline.
         struct LiveDirectory
         {
             uint64_t id{ 0 };
             uint64_t parent_id{ 0 };
             bool has_parent{ false };
-            std::wstring name;
+            std::string name_utf8;
         };
 
         // One node in the lazily-loaded display tree (arena-indexed; parent

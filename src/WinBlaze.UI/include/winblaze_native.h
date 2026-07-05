@@ -87,7 +87,26 @@ typedef enum WbEventKind
     WbEventKind_FileFound = 10,
     WbEventKind_IncrementalChanges = 11,
     WbEventKind_ExtensionStats = 12,
+    WbEventKind_DirectoryBatch = 13,
 } WbEventKind;
+
+/* One directory in a live scan batch. */
+typedef struct WbLiveDirectory
+{
+    uint64_t id;
+    uint64_t parent_id;
+    uint8_t has_parent;
+    WbCStringView name;
+} WbLiveDirectory;
+
+/* Borrowed view over a batch of scan-discovered directories; valid only for
+   the duration of the callback invocation. Directories arrive batched
+   because a full drive emits hundreds of thousands. */
+typedef struct WbLiveDirectoryBatch
+{
+    const WbLiveDirectory* items;
+    size_t count;
+} WbLiveDirectoryBatch;
 
 typedef struct WbScanSummary
 {
@@ -118,6 +137,7 @@ typedef struct WbEvent
     WbNativeError error;
     WbCatalogEntry catalog_entry;
     WbExtensionStatsSnapshot extension_stats;
+    WbLiveDirectoryBatch directory_batch;
 } WbEvent;
 
 /* One entry in the display tree. `id` identifies a directory only when

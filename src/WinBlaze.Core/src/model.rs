@@ -81,6 +81,11 @@ pub struct FileRecord {
     pub id: FileId,
     pub parent_directory_id: DirectoryId,
     pub name: String,
+    /// May be empty: scanners no longer materialize per-file paths (storing
+    /// one per record dominated index memory and snapshot size). Derive on
+    /// demand from the parent directory's `full_path` via
+    /// [`derive_file_path`] / [`join_path`]. Directory records always carry
+    /// their full path.
     pub full_path: String,
     pub size_bytes: u64,
     pub allocation_bytes: u64,
@@ -88,6 +93,33 @@ pub struct FileRecord {
     pub created_utc: Option<i64>,
     pub modified_utc: Option<i64>,
     pub accessed_utc: Option<i64>,
+}
+
+/// Joins a parent directory path and child name with a single backslash.
+pub fn join_path(parent: &str, name: &str) -> String {
+    if parent.is_empty() {
+        return name.to_string();
+    }
+    if parent.ends_with('\\') {
+        format!("{parent}{name}")
+    } else {
+        format!("{parent}\\{name}")
+    }
+}
+
+/// Resolves a file's full path: the stored path when present (records from
+/// older snapshots still carry one), otherwise parent path + name.
+pub fn derive_file_path(
+    directories: &std::collections::HashMap<DirectoryId, DirectoryRecord>,
+    file: &FileRecord,
+) -> String {
+    if !file.full_path.is_empty() {
+        return file.full_path.clone();
+    }
+    match directories.get(&file.parent_directory_id) {
+        Some(parent) => join_path(&parent.full_path, &file.name),
+        None => file.name.clone(),
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -425,6 +457,52 @@ mod tests {
         assert_eq!(child.total_bytes, 32);
         assert_eq!(child.direct_entries, 1);
         assert_eq!(child.total_entries, 1);
+    }
+
+    #[test]
+    fn derive_file_path_joins_parent_and_falls_back() {
+        let mut directories = std::collections::HashMap::new();
+        directories.insert(
+            DirectoryId(9),
+            DirectoryRecord {
+                id: DirectoryId(9),
+                parent_directory_id: None,
+                name: String::from("Users"),
+                full_path: String::from(r"C:\Users"),
+                direct_bytes: 0,
+                total_bytes: 0,
+                direct_entries: 0,
+                total_entries: 0,
+            },
+        );
+
+        let file = FileRecord {
+            id: FileId(1),
+            parent_directory_id: DirectoryId(9),
+            name: String::from("file.txt"),
+            full_path: String::new(),
+            size_bytes: 1,
+            allocation_bytes: 1,
+            attributes: FileAttributes::ARCHIVE,
+            created_utc: None,
+            modified_utc: None,
+            accessed_utc: None,
+        };
+        assert_eq!(derive_file_path(&directories, &file), r"C:\Users\file.txt");
+
+        // Stored paths win (older snapshots still carry them).
+        let mut stored = file.clone();
+        stored.full_path = String::from(r"D:\elsewhere\file.txt");
+        assert_eq!(derive_file_path(&directories, &stored), r"D:\elsewhere\file.txt");
+
+        // Unknown parent falls back to the bare name.
+        let mut orphan = file.clone();
+        orphan.parent_directory_id = DirectoryId(404);
+        assert_eq!(derive_file_path(&directories, &orphan), "file.txt");
+
+        // Root paths with a trailing separator don't double it.
+        assert_eq!(join_path(r"C:\", "file.txt"), r"C:\file.txt");
+        assert_eq!(join_path(r"C:\Users", "file.txt"), r"C:\Users\file.txt");
     }
 
     #[test]

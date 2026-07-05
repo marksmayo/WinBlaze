@@ -31,7 +31,9 @@ pub struct IndexCatalog {
 impl IndexCatalog {
     pub fn from_transaction(transaction: &crate::store::BufferedIndexTransaction) -> Self {
         let directories = transaction.snapshot_directories();
-        let files = transaction.snapshot_files();
+        // Path-materialized: search matches patterns against full paths, and
+        // scanners no longer store one per file.
+        let files = transaction.snapshot_files_with_paths();
         let aggregated_directories = aggregate_directory_records(&directories, &files);
 
         Self {

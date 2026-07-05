@@ -81,6 +81,36 @@ pub struct WbTreeChildrenResult {
     pub total: u64,
 }
 
+/// One directory in a live scan batch (see `WbLiveDirectoryBatch`).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WbLiveDirectory {
+    pub id: u64,
+    pub parent_id: u64,
+    pub has_parent: u8,
+    pub name: WbCStringView,
+}
+
+/// Borrowed view over a batch of scan-discovered directories. Directories
+/// are batched rather than sent one event each — a full drive emits hundreds
+/// of thousands, and per-event FFI crossings dominated scan wall-clock.
+/// Valid only for the duration of the callback invocation.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WbLiveDirectoryBatch {
+    pub items: *const WbLiveDirectory,
+    pub count: usize,
+}
+
+impl Default for WbLiveDirectoryBatch {
+    fn default() -> Self {
+        Self {
+            items: core::ptr::null(),
+            count: 0,
+        }
+    }
+}
+
 pub type WbTreeNodeCallback =
     Option<extern "C" fn(node: *const WbTreeNode, user_data: *mut core::ffi::c_void)>;
 
@@ -109,6 +139,7 @@ pub enum WbEventKind {
     FileFound = 10,
     IncrementalChanges = 11,
     ExtensionStats = 12,
+    DirectoryBatch = 13,
 }
 
 /// One row of the live per-extension breakdown (bytes/files aggregated
@@ -165,6 +196,7 @@ pub struct WbEvent {
     pub error: WbNativeError,
     pub catalog_entry: WbCatalogEntry,
     pub extension_stats: WbExtensionStatsSnapshot,
+    pub directory_batch: WbLiveDirectoryBatch,
 }
 
 #[repr(C)]

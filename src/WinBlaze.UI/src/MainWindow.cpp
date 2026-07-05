@@ -3836,10 +3836,12 @@ namespace winrt::WinBlaze::UI::implementation
             mark_has_results = true;
             break;
         case WbEventKind_DirectoryFound:
-            // Every discovered directory flows through here (hundreds of
-            // thousands on a full drive), so no per-event tracing or status
-            // strings — the payload is queued for the live folder tree in
-            // the lock block below.
+            // Directories now arrive batched (WbEventKind_DirectoryBatch);
+            // an individual event only marks that results exist.
+            mark_has_results = true;
+            break;
+        case WbEventKind_DirectoryBatch:
+            // Queued for the live folder tree in the lock block below.
             mark_has_results = true;
             break;
         case WbEventKind_FileFound:
@@ -3968,22 +3970,28 @@ namespace winrt::WinBlaze::UI::implementation
                 m_pending_ui_state.extension_stats = std::move(extension_stats_parsed);
             }
 
-            if (event.kind == WbEventKind_DirectoryFound) {
-                // Live folder tree: queue the directory; FlushPendingUiState
+            if (event.kind == WbEventKind_DirectoryBatch) {
+                // Live folder tree: queue the whole batch; FlushPendingUiState
                 // splices it into the arena. Directories deliberately skip
                 // the flat catalog (m_tree_catalog) — the full set would
-                // duplicate hundreds of MB of strings.
-                m_pending_ui_state.live_directories.push_back(LiveDirectory{
-                    event.catalog_entry.id,
-                    event.catalog_entry.parent_id,
-                    event.catalog_entry.has_parent != 0,
-                    event.catalog_entry.name.ptr == nullptr
-                        ? std::wstring{}
-                        : Utf8ToWide(std::string_view{
-                              event.catalog_entry.name.ptr,
-                              event.catalog_entry.name.len,
-                          }),
-                });
+                // duplicate hundreds of MB of strings. Names stay UTF-8 here;
+                // the UI thread converts them at apply time.
+                auto const& batch = event.directory_batch;
+                if (batch.items != nullptr && batch.count > 0) {
+                    auto& queued = m_pending_ui_state.live_directories;
+                    queued.reserve(queued.size() + batch.count);
+                    for (size_t index = 0; index < batch.count; ++index) {
+                        auto const& item = batch.items[index];
+                        queued.push_back(LiveDirectory{
+                            item.id,
+                            item.parent_id,
+                            item.has_parent != 0,
+                            item.name.ptr == nullptr
+                                ? std::string{}
+                                : std::string(item.name.ptr, item.name.len),
+                        });
+                    }
+                }
             } else if (event.kind == WbEventKind_VolumeDiscovered ||
                 event.kind == WbEventKind_FileFound ||
                 event.kind == WbEventKind_SessionStarted) {
@@ -4308,7 +4316,7 @@ namespace winrt::WinBlaze::UI::implementation
                 TreeNodeUi node;
                 node.id = directory.id;
                 node.is_directory = true;
-                node.name = std::move(directory.name);
+                node.name = Utf8ToWide(directory.name_utf8);
                 node.children_loaded = true;
                 const size_t node_index = m_tree_nodes.size();
                 if (parent_index == SIZE_MAX) {
