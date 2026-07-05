@@ -11,6 +11,7 @@
 #undef GetCurrentTime
 #endif
 #include <cstdint>
+#include <atomic>
 #include <chrono>
 #include <algorithm>
 #include <cwctype>
@@ -21,6 +22,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 #include <unknwn.h>
 #include <winrt/Microsoft.UI.Dispatching.h>

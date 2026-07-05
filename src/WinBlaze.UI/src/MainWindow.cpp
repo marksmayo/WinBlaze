@@ -1603,10 +1603,13 @@ namespace winrt::WinBlaze::UI::implementation
         m_current_root_path = root_path;
         m_has_results = false;
         m_has_error = false;
-        // Drop the previous scan's tree so live catalog previews render
-        // during the scan; the tree reloads when the scan completes.
+        // Drop the previous scan's tree; the live tree rebuilds from
+        // directory events as the scan discovers them.
         m_tree_nodes.clear();
         m_tree_visible_rows.clear();
+        m_tree_node_index_by_id.clear();
+        m_live_orphans.clear();
+        m_last_live_tree_refresh = {};
         {
             std::lock_guard guard(m_pending_ui_mutex);
             m_scan_started_at = std::chrono::steady_clock::now();
@@ -2696,7 +2699,8 @@ namespace winrt::WinBlaze::UI::implementation
                 m_pending_ui_state.summary_dirty || m_pending_ui_state.progress_dirty ||
                 m_pending_ui_state.error_dirty || m_pending_ui_state.selection_dirty ||
                 m_pending_ui_state.visualization_dirty || m_pending_ui_state.catalog_dirty ||
-                m_pending_ui_state.extension_stats_dirty;
+                m_pending_ui_state.extension_stats_dirty ||
+                !m_pending_ui_state.live_directories.empty();
 
             if (has_pending) {
                 pending = std::move(m_pending_ui_state);
@@ -2798,6 +2802,10 @@ namespace winrt::WinBlaze::UI::implementation
                     }
                 }
             }
+        }
+
+        if (!pending.live_directories.empty()) {
+            ApplyLiveDirectories(pending.live_directories);
         }
 
         if (pending.catalog_dirty && !pending.catalog_entries.empty()) {
@@ -3402,7 +3410,7 @@ namespace winrt::WinBlaze::UI::implementation
 
         if (m_selection_status_text) {
             m_selection_status_text.Text(winrt::hstring(
-                m_current_selection_name + L" (" + m_current_selection_kind + L") · " +
+                m_current_selection_name + L" (" + m_current_selection_kind + L") \u00B7 " +
                 m_current_selection_size));
         }
     }
@@ -3528,17 +3536,43 @@ namespace winrt::WinBlaze::UI::implementation
 
         ::WinBlaze::UI::NativeBridge::Initialize();
 
+        // Fetch off the UI thread: the first call after startup loads and
+        // decodes the persisted snapshot and builds the tree index, which is
+        // multi-second work on a full-drive catalog. The generation counter
+        // discards results superseded by a newer scan/reload. The window
+        // (and therefore `this`) outlives the app's dispatcher queue, which
+        // stops running callbacks at shutdown.
+        const uint64_t generation = ++m_snapshot_load_generation;
+        UpdateStatus(L"Loading catalog snapshot...");
+        auto dispatcher = DispatcherQueue();
+        std::thread([this, generation, dispatcher]() {
+            auto snapshot = std::make_shared<std::vector<TreeCatalogEntry>>();
+            WbIndexSnapshotStats stats{};
+            stats = ::WinBlaze::UI::NativeBridge::LoadCatalogSnapshotWithStats(
+                [&snapshot, this](WbCatalogEntry const& entry) {
+                    if (snapshot->size() < kCatalogSnapshotLoadLimit) {
+                        snapshot->push_back(CatalogEntryFromNative(entry));
+                    }
+                });
+            dispatcher.TryEnqueue([this, generation, stats, snapshot]() {
+                if (generation != m_snapshot_load_generation.load()) {
+                    TraceStartup(L"LoadPersistedCatalogSnapshot stale result dropped");
+                    return;
+                }
+                ApplyPersistedCatalogSnapshot(stats, std::move(*snapshot));
+            });
+        }).detach();
+    }
+
+    void MainWindow::ApplyPersistedCatalogSnapshot(
+        WbIndexSnapshotStats stats,
+        std::vector<TreeCatalogEntry> snapshot)
+    {
+        TraceStartup(L"ApplyPersistedCatalogSnapshot begin");
         m_tree_catalog.clear();
         m_tree_catalog_keys.clear();
         m_instant_search_hits.clear();
         m_tree_window_offset = 0;
-
-        std::vector<TreeCatalogEntry> snapshot;
-        const auto stats = ::WinBlaze::UI::NativeBridge::LoadCatalogSnapshotWithStats([&](WbCatalogEntry const& entry) {
-            if (snapshot.size() < kCatalogSnapshotLoadLimit) {
-                snapshot.push_back(CatalogEntryFromNative(entry));
-            }
-        });
 
         if (stats.files + stats.directories > 0) {
             std::lock_guard guard(m_pending_ui_mutex);
@@ -3557,7 +3591,7 @@ namespace winrt::WinBlaze::UI::implementation
             (stats.cache_loaded_from_backup != 0 ? L", source=backup" : L", source=primary");
 
         if (snapshot.empty()) {
-            TraceStartup(L"LoadPersistedCatalogSnapshot empty");
+            TraceStartup(L"ApplyPersistedCatalogSnapshot empty");
             UpdateTreeSnapshotPreview(std::vector<TreeCatalogEntry>{});
             UpdateSearchResultsPreview(std::vector<TreeCatalogEntry>{});
             UpdateCatalogSnapshot();
@@ -3566,6 +3600,7 @@ namespace winrt::WinBlaze::UI::implementation
             UpdateSummaryText();
             UpdateRuntimeSnapshot();
             PopulateExtensionList(std::vector<ExtensionStatEntry>{});
+            UpdateStatus(L"No catalog snapshot available.");
             return;
         }
         for (auto const& entry : snapshot) {
@@ -3585,9 +3620,10 @@ namespace winrt::WinBlaze::UI::implementation
         UpdateRuntimeSnapshot();
         LoadExtensionStatsSnapshot();
         // Replace the flat preview in the tree pane with the real expandable
-        // folder tree served by the native tree index.
+        // folder tree served by the native tree index (hot cache by now).
         LoadTreeSnapshot();
-        TraceStartup(L"LoadPersistedCatalogSnapshot end");
+        UpdateStatus(L"Catalog snapshot loaded.");
+        TraceStartup(L"ApplyPersistedCatalogSnapshot end");
     }
 
     void MainWindow::UpdateProgress(double percent, std::wstring const& text)
@@ -3658,7 +3694,7 @@ namespace winrt::WinBlaze::UI::implementation
             status_text = L"Scanning...";
             const std::wstring elapsed = ScanElapsedText();
             const std::wstring elapsed_suffix =
-                elapsed.empty() ? std::wstring() : (L" · " + elapsed);
+                elapsed.empty() ? std::wstring() : (L" \u00B7 " + elapsed);
             if (event.progress_items_total == 0) {
                 // Directory-walk backend: the total is unknowable up front,
                 // so estimate against the previous completed scan's item
@@ -3708,7 +3744,7 @@ namespace winrt::WinBlaze::UI::implementation
             progress_percent = 100.0;
             const std::wstring elapsed = ScanElapsedText();
             progress_text = L"100% complete" +
-                (elapsed.empty() ? std::wstring() : (L" · " + elapsed));
+                (elapsed.empty() ? std::wstring() : (L" \u00B7 " + elapsed));
             update_scan_duration = true;
             mark_has_results = true;
             break;
@@ -3721,7 +3757,7 @@ namespace winrt::WinBlaze::UI::implementation
             progress_percent = 100.0;
             const std::wstring elapsed = ScanElapsedText();
             progress_text = L"100% complete" +
-                (elapsed.empty() ? std::wstring() : (L" · " + elapsed));
+                (elapsed.empty() ? std::wstring() : (L" \u00B7 " + elapsed));
             update_scan_duration = true;
             clear_session = true;
             reload_snapshot = true;
@@ -3800,12 +3836,10 @@ namespace winrt::WinBlaze::UI::implementation
             mark_has_results = true;
             break;
         case WbEventKind_DirectoryFound:
-            TraceStartup(L"HandleNativeEvent directory found");
-            status_text = L"Scanning...";
-            event_text = L"Directory discovered: " + Utf8ToWide(std::string_view{
-                event.catalog_entry.path.ptr,
-                event.catalog_entry.path.len,
-            });
+            // Every discovered directory flows through here (hundreds of
+            // thousands on a full drive), so no per-event tracing or status
+            // strings — the payload is queued for the live folder tree in
+            // the lock block below.
             mark_has_results = true;
             break;
         case WbEventKind_FileFound:
@@ -3934,8 +3968,23 @@ namespace winrt::WinBlaze::UI::implementation
                 m_pending_ui_state.extension_stats = std::move(extension_stats_parsed);
             }
 
-            if (event.kind == WbEventKind_VolumeDiscovered ||
-                event.kind == WbEventKind_DirectoryFound ||
+            if (event.kind == WbEventKind_DirectoryFound) {
+                // Live folder tree: queue the directory; FlushPendingUiState
+                // splices it into the arena. Directories deliberately skip
+                // the flat catalog (m_tree_catalog) — the full set would
+                // duplicate hundreds of MB of strings.
+                m_pending_ui_state.live_directories.push_back(LiveDirectory{
+                    event.catalog_entry.id,
+                    event.catalog_entry.parent_id,
+                    event.catalog_entry.has_parent != 0,
+                    event.catalog_entry.name.ptr == nullptr
+                        ? std::wstring{}
+                        : Utf8ToWide(std::string_view{
+                              event.catalog_entry.name.ptr,
+                              event.catalog_entry.name.len,
+                          }),
+                });
+            } else if (event.kind == WbEventKind_VolumeDiscovered ||
                 event.kind == WbEventKind_FileFound ||
                 event.kind == WbEventKind_SessionStarted) {
                 m_pending_ui_state.catalog_dirty = true;
@@ -4204,6 +4253,8 @@ namespace winrt::WinBlaze::UI::implementation
         TraceStartup(L"LoadTreeSnapshot begin");
         m_tree_nodes.clear();
         m_tree_visible_rows.clear();
+        m_tree_node_index_by_id.clear();
+        m_live_orphans.clear();
         m_tree_window_offset = 0;
 
         ::WinBlaze::UI::NativeBridge::Initialize();
@@ -4234,6 +4285,92 @@ namespace winrt::WinBlaze::UI::implementation
         RebuildTreeVisibleRows();
         RefreshTreeListView();
         TraceStartup(L"LoadTreeSnapshot end");
+    }
+
+    // Splices scan-discovered directories into the live folder tree. Parents
+    // always precede children in walk order; MFT-streamed entries can arrive
+    // out of order, in which case the orphan is skipped here and appears when
+    // the finished tree replaces the live one. Sizes stay pending ("...")
+    // until the scan completes and rollups exist.
+    void MainWindow::ApplyLiveDirectories(std::vector<LiveDirectory> const& directories)
+    {
+        bool structure_changed = false;
+
+        // Insert one directory and drain any orphans that were waiting for
+        // it, iteratively (orphan chains can be deep).
+        auto insert_with_orphans = [&](LiveDirectory const& first, size_t first_parent_index) {
+            std::vector<std::pair<LiveDirectory, size_t>> work;
+            work.emplace_back(first, first_parent_index);
+            while (!work.empty()) {
+                auto [directory, parent_index] = std::move(work.back());
+                work.pop_back();
+
+                TreeNodeUi node;
+                node.id = directory.id;
+                node.is_directory = true;
+                node.name = std::move(directory.name);
+                node.children_loaded = true;
+                const size_t node_index = m_tree_nodes.size();
+                if (parent_index == SIZE_MAX) {
+                    node.expanded = true; // root
+                } else {
+                    node.depth = m_tree_nodes[parent_index].depth + 1;
+                    node.parent = parent_index;
+                }
+                m_tree_node_index_by_id[directory.id] = node_index;
+                m_tree_nodes.push_back(std::move(node));
+                if (parent_index != SIZE_MAX) {
+                    m_tree_nodes[parent_index].children.push_back(node_index);
+                }
+                structure_changed = true;
+
+                const auto orphan_it = m_live_orphans.find(directory.id);
+                if (orphan_it != m_live_orphans.end()) {
+                    for (auto& orphan : orphan_it->second) {
+                        work.emplace_back(std::move(orphan), node_index);
+                    }
+                    m_live_orphans.erase(orphan_it);
+                }
+            }
+        };
+
+        for (auto const& directory : directories) {
+            if (m_tree_node_index_by_id.count(directory.id) != 0) {
+                continue;
+            }
+
+            if (!directory.has_parent) {
+                if (!m_tree_nodes.empty()) {
+                    continue;
+                }
+                insert_with_orphans(directory, SIZE_MAX);
+                continue;
+            }
+
+            const auto parent_it = m_tree_node_index_by_id.find(directory.parent_id);
+            if (parent_it == m_tree_node_index_by_id.end()) {
+                // Parent not seen yet (per-worker event batching reorders
+                // across workers); park it until the parent arrives.
+                m_live_orphans[directory.parent_id].push_back(directory);
+                continue;
+            }
+            insert_with_orphans(directory, parent_it->second);
+        }
+
+        if (!structure_changed) {
+            return;
+        }
+
+        // Directories stream in constantly during a scan; rebuilding the
+        // visible rows and repopulating the ListView on every 16ms flush
+        // would dominate the UI thread, so refresh at most twice a second.
+        const auto now = std::chrono::steady_clock::now();
+        if (now - m_last_live_tree_refresh < std::chrono::milliseconds(500)) {
+            return;
+        }
+        m_last_live_tree_refresh = now;
+        RebuildTreeVisibleRows();
+        RefreshTreeListView();
     }
 
     void MainWindow::EnsureTreeChildrenLoaded(size_t node_index)
@@ -4432,7 +4569,7 @@ namespace winrt::WinBlaze::UI::implementation
         const double indent_width = (std::min)(240.0, static_cast<double>(node.depth) * 16.0);
         auto glyph = TextBlock{};
         glyph.Text(winrt::hstring(
-            node.is_directory && !node.is_more_row ? (node.expanded ? L"▾" : L"▸") : L" "));
+            node.is_directory && !node.is_more_row ? (node.expanded ? L"\u25BE" : L"\u25B8") : L" "));
         glyph.Width(14.0);
         glyph.Margin(Thickness{ indent_width, 0.0, 0.0, 0.0 });
         glyph.VerticalAlignment(VerticalAlignment::Center);
@@ -4487,12 +4624,19 @@ namespace winrt::WinBlaze::UI::implementation
             row.Children().Append(cell);
         };
 
+        // Rollups don't exist until the scan finishes, so live-tree rows
+        // show pending markers instead of misleading zeros.
+        const bool totals_pending = m_session_active && node.physical_bytes == 0;
+
         wchar_t percent_text[16]{};
         swprintf_s(percent_text, L"%.1f%%", percent);
-        append_cell(percent_text, 52.0, 0.8);
-        append_cell(FormatBytes(node.physical_bytes), 84.0, 0.8);
-        append_cell(FormatBytes(node.logical_bytes), 84.0, 0.8);
-        append_cell(node.is_directory ? std::to_wstring(node.file_count) : std::wstring(L"-"), 64.0, 0.72);
+        append_cell(totals_pending ? std::wstring(L"...") : std::wstring(percent_text), 52.0, 0.8);
+        append_cell(totals_pending ? std::wstring(L"...") : FormatBytes(node.physical_bytes), 84.0, 0.8);
+        append_cell(totals_pending ? std::wstring(L"...") : FormatBytes(node.logical_bytes), 84.0, 0.8);
+        append_cell(
+            (node.is_directory && !totals_pending) ? std::to_wstring(node.file_count) : std::wstring(L"-"),
+            64.0,
+            0.72);
         append_cell(
             node.has_modified_utc ? FormatFileTimeUtc(node.modified_utc) : std::wstring(L"-"),
             120.0,
@@ -4502,7 +4646,7 @@ namespace winrt::WinBlaze::UI::implementation
             item,
             winrt::hstring(
                 node.name + L", " + (node.is_directory ? L"Folder" : L"File") +
-                L", " + FormatBytes(node.physical_bytes)));
+                L", " + (totals_pending ? std::wstring(L"scanning") : FormatBytes(node.physical_bytes))));
 
         item.Content(row);
         return item;

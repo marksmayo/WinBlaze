@@ -137,6 +137,15 @@ namespace winrt::WinBlaze::UI::implementation
             uint64_t files{};
         };
 
+        // A directory announced by a running scan, queued for the live tree.
+        struct LiveDirectory
+        {
+            uint64_t id{ 0 };
+            uint64_t parent_id{ 0 };
+            bool has_parent{ false };
+            std::wstring name;
+        };
+
         // One node in the lazily-loaded display tree (arena-indexed; parent
         // and children reference positions in m_tree_nodes).
         struct TreeNodeUi
@@ -179,6 +188,8 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::ListViewItem CreateTreeListItem(TreeCatalogEntry const& entry) const;
         void PopulateTreeList(std::vector<TreeCatalogEntry> const& entries);
         void LoadTreeSnapshot();
+        void ApplyLiveDirectories(std::vector<LiveDirectory> const& directories);
+        void ApplyPersistedCatalogSnapshot(WbIndexSnapshotStats stats, std::vector<TreeCatalogEntry> snapshot);
         void EnsureTreeChildrenLoaded(size_t node_index);
         void RebuildTreeVisibleRows();
         void RefreshTreeListView();
@@ -333,6 +344,14 @@ namespace winrt::WinBlaze::UI::implementation
         std::vector<TreeCatalogEntry> m_instant_search_hits;
         std::vector<TreeNodeUi> m_tree_nodes;
         std::vector<size_t> m_tree_visible_rows;
+        std::unordered_map<uint64_t, size_t> m_tree_node_index_by_id;
+        // Live directories whose parent has not arrived yet (the parallel
+        // walker's per-worker event batching can deliver children first);
+        // keyed by the missing parent id and attached when it shows up.
+        std::unordered_map<uint64_t, std::vector<LiveDirectory>> m_live_orphans;
+        std::chrono::steady_clock::time_point m_last_live_tree_refresh{};
+        // Discards stale async snapshot loads (a newer scan superseded them).
+        std::atomic<uint64_t> m_snapshot_load_generation{ 0 };
         size_t m_tree_window_offset{ 0 };
         bool m_tree_updates_ready{ false };
         bool m_tree_selection_updates_suppressed{ false };
@@ -413,6 +432,9 @@ namespace winrt::WinBlaze::UI::implementation
             std::wstring treemap_hover_size;
             bool catalog_dirty{ false };
             std::vector<TreeCatalogEntry> catalog_entries;
+            // Directories discovered by the running scan, applied to the
+            // live folder tree on flush.
+            std::vector<LiveDirectory> live_directories;
             bool extension_stats_dirty{ false };
             std::vector<ExtensionStatEntry> extension_stats;
             bool reload_snapshot{ false };

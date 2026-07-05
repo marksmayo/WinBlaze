@@ -201,6 +201,12 @@ impl SqliteIndexRepository {
     pub fn into_transaction(self) -> BufferedIndexTransaction {
         self.state
     }
+
+    /// Takes the in-memory state, leaving the repository empty. Used when
+    /// the repository must stay alive but its state moves into a read model.
+    pub fn take_state(&mut self) -> BufferedIndexTransaction {
+        std::mem::take(&mut self.state)
+    }
 }
 
 #[derive(Debug, Default)]

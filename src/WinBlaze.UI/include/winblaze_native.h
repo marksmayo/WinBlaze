@@ -26,6 +26,13 @@ typedef struct WbCatalogEntry
     WbCStringView kind;
     WbCStringView size_text;
     WbCStringView description;
+    /* Record id and parent directory id (valid when has_parent is set), so
+       live scan events can be assembled into a tree. File and directory id
+       counters overlap numerically. */
+    uint64_t id;
+    uint64_t parent_id;
+    uint8_t has_parent;
+    uint8_t is_directory;
     uint64_t size_bytes;
     /* Physical (on-disk allocation) size. For directories/volumes this is
        the same rolled-up value as size_bytes (no separate logical-size

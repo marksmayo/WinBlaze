@@ -134,11 +134,26 @@
       <ReferencePath Include="@(CppWinRTProjectWinMDReferences)" />
     </ItemGroup>
   </Target>
+  <!-- Debug UI builds ship whichever native DLL is newest. Scanning is
+       CPU-bound Rust, so a debug-profile DLL makes every local scan many
+       times slower; building winblaze-native with the cargo release profile
+       makes Debug UI builds pick up the optimized DLL automatically, while
+       a fresh debug cargo build still wins if it is newer. -->
   <Target Name="CopyWinBlazeNativeDebugDll" AfterTargets="Build" Condition="'$(Configuration)'=='Debug'">
+    <PropertyGroup>
+      <_NativeDebugDll>$(ProjectDir)..\..\target\debug\winblaze_native.dll</_NativeDebugDll>
+      <_NativeReleaseDll>$(ProjectDir)..\..\target\release\winblaze_native.dll</_NativeReleaseDll>
+      <_NativeDebugTicks>0</_NativeDebugTicks>
+      <_NativeReleaseTicks>0</_NativeReleaseTicks>
+      <_NativeDebugTicks Condition="Exists('$(_NativeDebugDll)')">$([System.IO.File]::GetLastWriteTime('$(_NativeDebugDll)').Ticks)</_NativeDebugTicks>
+      <_NativeReleaseTicks Condition="Exists('$(_NativeReleaseDll)')">$([System.IO.File]::GetLastWriteTime('$(_NativeReleaseDll)').Ticks)</_NativeReleaseTicks>
+    </PropertyGroup>
     <ItemGroup>
-      <_WinBlazeNativeDll Include="$(ProjectDir)..\..\target\debug\winblaze_native.dll" Condition="Exists('$(ProjectDir)..\..\target\debug\winblaze_native.dll')" />
+      <_WinBlazeNativeDll Include="$(_NativeReleaseDll)" Condition="'$(_NativeReleaseTicks)' != '0' AND $(_NativeReleaseTicks) &gt;= $(_NativeDebugTicks)" />
+      <_WinBlazeNativeDll Include="$(_NativeDebugDll)" Condition="'@(_WinBlazeNativeDll)' == '' AND '$(_NativeDebugTicks)' != '0'" />
     </ItemGroup>
-    <Copy SourceFiles="@(_WinBlazeNativeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_WinBlazeNativeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="false" />
+    <Message Importance="high" Text="WinBlaze native DLL: @(_WinBlazeNativeDll)" />
   </Target>
   <Target Name="CopyWinBlazeNativeReleaseDll" AfterTargets="Build" Condition="'$(Configuration)'=='Release'">
     <ItemGroup>

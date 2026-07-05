@@ -24,6 +24,14 @@ pub struct WbCatalogEntry {
     pub kind: WbCStringView,
     pub size_text: WbCStringView,
     pub description: WbCStringView,
+    /// Record id and parent directory id (valid when `has_parent` is set),
+    /// so live scan events can be assembled into a tree without waiting for
+    /// the post-scan index. Ids share the caveat from `WbTreeNode`: file and
+    /// directory counters overlap numerically.
+    pub id: u64,
+    pub parent_id: u64,
+    pub has_parent: u8,
+    pub is_directory: u8,
     pub size_bytes: u64,
     /// Physical (on-disk allocation) size. For files this is the file's own
     /// allocation size; for directories/volumes it is the same rolled-up

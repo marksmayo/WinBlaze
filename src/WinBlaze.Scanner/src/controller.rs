@@ -186,6 +186,9 @@ fn run_fallback_scan(
     // the parallel walker only reports progress on a shared item-count
     // threshold, so small scans would otherwise emit no progress at all.
     pipeline.emit_progress(1, 0, 0);
+    // Flush so the root directory reaches consumers before any worker's
+    // child events; live tree views key children off their parent.
+    pipeline.flush();
 
     let (files_seen, directories_seen, total_size_bytes, total_allocation_bytes) =
         if worker_count > 1 {

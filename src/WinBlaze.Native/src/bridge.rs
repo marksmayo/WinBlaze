@@ -250,7 +250,11 @@ impl UiEventForwarder {
 
     fn should_forward(&mut self, event: &ScanEvent) -> bool {
         match event {
-            ScanEvent::DirectoryFound(_) | ScanEvent::FileFound(_) => {
+            // Every directory reaches the UI so the folder tree can grow
+            // live during the scan; only file events are capped (the flat
+            // previews never display more than the cap anyway).
+            ScanEvent::DirectoryFound(_) => true,
+            ScanEvent::FileFound(_) => {
                 if self.live_catalog_events >= UI_LIVE_CATALOG_EVENT_LIMIT {
                     return false;
                 }
@@ -383,17 +387,40 @@ fn forward_events(
     // longer re-serializes the entire index (measured at ~20s for a full
     // C:\ scan) just to record that the session finished.
     let mut records_dirty = false;
+    let mut model_published = false;
     let mut ui_forwarder = UiEventForwarder::new(callback, user_data);
 
     for event in rx {
         log.append_scan_event(&event);
+
+        // Publish the read model BEFORE the UI learns the scan ended: its
+        // snapshot reload then finds a hot cache instead of re-reading the
+        // multi-hundred-MB snapshot from disk on the UI thread. Safe only
+        // once the Summary flush succeeded with nothing dirty since.
+        if !model_published
+            && matches!(event, ScanEvent::Completed | ScanEvent::Cancelled)
+            && flushed
+            && !records_dirty
+        {
+            let model = match persistence_mode {
+                ScanPersistenceMode::ReplaceSnapshot => {
+                    build_index_model(std::mem::take(&mut transaction), None)
+                }
+                ScanPersistenceMode::IncrementalRescan => {
+                    build_index_model(repository.take_state(), None)
+                }
+            };
+            set_index_model(model);
+            model_published = true;
+        }
+
         ui_forwarder.forward(&event);
 
         let flush_requested = should_flush_index(&event, persistence_mode);
         let flush_trigger = event_name(&event);
         records_dirty |= persist_scan_event(&mut transaction, event);
 
-        if flush_requested && (records_dirty || !flushed) {
+        if flush_requested && (records_dirty || !flushed) && !model_published {
             let result = apply_scan_transaction(&mut repository, &transaction, persistence_mode);
             if let Ok(Some(change_set)) = &result {
                 emit_incremental_change_summary(callback, user_data, change_set);
@@ -406,24 +433,25 @@ fn forward_events(
         }
     }
 
-    if !flushed || records_dirty {
-        let result = apply_scan_transaction(&mut repository, &transaction, persistence_mode);
-        if let Ok(Some(change_set)) = &result {
-            emit_incremental_change_summary(callback, user_data, change_set);
+    if !model_published {
+        if !flushed || records_dirty {
+            let result = apply_scan_transaction(&mut repository, &transaction, persistence_mode);
+            if let Ok(Some(change_set)) = &result {
+                emit_incremental_change_summary(callback, user_data, change_set);
+            }
+            log.append_flush("completed", result.is_ok());
         }
-        log.append_flush("completed", result.is_ok());
-    }
 
-    // Publish the read model for tree/catalog/extension queries. For a
-    // replace-snapshot scan the transaction IS the new state; an incremental
-    // rescan merged into the repository, so take its state instead.
-    let model = match persistence_mode {
-        ScanPersistenceMode::ReplaceSnapshot => build_index_model(transaction, None),
-        ScanPersistenceMode::IncrementalRescan => {
-            build_index_model(repository.into_transaction(), None)
-        }
-    };
-    set_index_model(model);
+        // For a replace-snapshot scan the transaction IS the new state; an
+        // incremental rescan merged into the repository, so take its state.
+        let model = match persistence_mode {
+            ScanPersistenceMode::ReplaceSnapshot => build_index_model(transaction, None),
+            ScanPersistenceMode::IncrementalRescan => {
+                build_index_model(repository.into_transaction(), None)
+            }
+        };
+        set_index_model(model);
+    }
 }
 
 fn should_flush_index(event: &ScanEvent, persistence_mode: ScanPersistenceMode) -> bool {
@@ -1095,6 +1123,10 @@ fn catalog_entry_from_volume(volume: &VolumeRecord) -> OwnedCatalogEntry {
             format!("Root directory id {}", volume.root_directory_id.0),
             &mut strings,
         ),
+        id: volume.root_directory_id.0,
+        parent_id: 0,
+        has_parent: 0,
+        is_directory: 1,
         size_bytes: volume.total_bytes,
         allocation_bytes: volume.total_bytes,
         total_entries: 0,
@@ -1121,6 +1153,10 @@ fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntr
             ),
             &mut strings,
         ),
+        id: directory.id.0,
+        parent_id: directory.parent_directory_id.map(|parent| parent.0).unwrap_or(0),
+        has_parent: u8::from(directory.parent_directory_id.is_some()),
+        is_directory: 1,
         size_bytes: directory.total_bytes,
         allocation_bytes: directory.total_bytes,
         total_entries: directory.total_entries,
@@ -1144,6 +1180,10 @@ fn catalog_entry_from_file(file: &FileRecord) -> OwnedCatalogEntry {
             format!("allocation {} bytes", file.allocation_bytes),
             &mut strings,
         ),
+        id: file.id.0,
+        parent_id: file.parent_directory_id.0,
+        has_parent: 1,
+        is_directory: 0,
         size_bytes: file.size_bytes,
         allocation_bytes: file.allocation_bytes,
         total_entries: 1,
