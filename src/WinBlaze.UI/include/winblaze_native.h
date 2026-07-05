@@ -187,6 +187,9 @@ uint8_t wb_tree_root(WbTreeNodeCallback callback, void* user_data);
    capped at 4096 starting at offset; total lets callers page and render a
    "+N more" row. */
 WbTreeChildrenResult wb_tree_children(uint64_t parent_id, uint64_t offset, WbTreeNodeCallback callback, void* user_data);
+/* Emits the largest files by allocation size, descending; node.name carries
+   the full display path. */
+void wb_tree_largest_files(uint64_t limit, WbTreeNodeCallback callback, void* user_data);
 
 #ifdef __cplusplus
 }

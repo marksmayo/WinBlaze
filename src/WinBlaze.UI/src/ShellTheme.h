@@ -147,7 +147,7 @@ namespace winrt::WinBlaze::UI::implementation
             theme.card_background = { 0xFF, 0x17, 0x17, 0x1A };    // #17171a - panel
             theme.card_border = { 0xFF, 0x2B, 0x24, 0x26 };        // warm hairline
             theme.text_primary = { 0xFF, 0xE6, 0xE1, 0xE0 };       // light warm gray
-            theme.text_secondary = { 0xFF, 0xA8, 0x9F, 0x9E };     // muted warm gray
+            theme.text_secondary = { 0xFF, 0xB5, 0xAC, 0xAB };     // muted warm gray (>=7:1 on panels)
             theme.text_on_accent = { 0xFF, 0x1A, 0x04, 0x04 };     // near-black on red
             theme.subtle_background = { 0xFF, 0x0A, 0x0A, 0x0C };  // wells
             theme.subtle_border = { 0xFF, 0x2B, 0x24, 0x26 };

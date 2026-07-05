@@ -15,6 +15,7 @@ namespace
     using LoadExtensionStatsFn = void(__stdcall *)(WbExtensionStatCallback, void*);
     using TreeRootFn = uint8_t(__stdcall *)(WbTreeNodeCallback, void*);
     using TreeChildrenFn = WbTreeChildrenResult(__stdcall *)(uint64_t, uint64_t, WbTreeNodeCallback, void*);
+    using TreeLargestFilesFn = void(__stdcall *)(uint64_t, WbTreeNodeCallback, void*);
 
     struct DllApi
     {
@@ -27,6 +28,7 @@ namespace
         LoadExtensionStatsFn load_extension_stats{ nullptr };
         TreeRootFn tree_root{ nullptr };
         TreeChildrenFn tree_children{ nullptr };
+        TreeLargestFilesFn tree_largest_files{ nullptr };
     };
 
     DllApi& Api()
@@ -88,8 +90,9 @@ namespace
         api.load_extension_stats = reinterpret_cast<LoadExtensionStatsFn>(GetProcAddress(api.module, "wb_index_snapshot_extension_stats"));
         api.tree_root = reinterpret_cast<TreeRootFn>(GetProcAddress(api.module, "wb_tree_root"));
         api.tree_children = reinterpret_cast<TreeChildrenFn>(GetProcAddress(api.module, "wb_tree_children"));
+        api.tree_largest_files = reinterpret_cast<TreeLargestFilesFn>(GetProcAddress(api.module, "wb_tree_largest_files"));
 
-        if (api.start_scan == nullptr || api.start_incremental_scan == nullptr || api.cancel_scan == nullptr || api.destroy_scan == nullptr || api.load_catalog_snapshot_with_stats == nullptr || api.load_extension_stats == nullptr || api.tree_root == nullptr || api.tree_children == nullptr) {
+        if (api.start_scan == nullptr || api.start_incremental_scan == nullptr || api.cancel_scan == nullptr || api.destroy_scan == nullptr || api.load_catalog_snapshot_with_stats == nullptr || api.load_extension_stats == nullptr || api.tree_root == nullptr || api.tree_children == nullptr || api.tree_largest_files == nullptr) {
             throw std::runtime_error("Failed to resolve winblaze_native exports");
         }
     }
@@ -238,5 +241,13 @@ namespace WinBlaze::UI::NativeBridge
         auto context = std::make_shared<TreeNodeCallbackContext>();
         context->handler = std::move(handler);
         return Api().tree_children(parentId, offset, &OnTreeNodeWithContext, context.get());
+    }
+
+    void TreeLargestFiles(uint64_t limit, TreeNodeHandler handler)
+    {
+        EnsureLoaded();
+        auto context = std::make_shared<TreeNodeCallbackContext>();
+        context->handler = std::move(handler);
+        Api().tree_largest_files(limit, &OnTreeNodeWithContext, context.get());
     }
 }

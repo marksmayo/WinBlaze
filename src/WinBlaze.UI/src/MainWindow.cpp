@@ -534,30 +534,15 @@ namespace winrt::WinBlaze::UI::implementation
                 return item;
             };
 
-            auto dashboard_item = make_sidebar_item(L"Dashboard", false);
-            dashboard_item.Click([this](auto const&, auto const&) {
-                m_show_runtime_metrics = true;
-                if (m_runtime_metrics_toggle) {
-                    m_runtime_metrics_toggle.IsChecked(true);
-                }
-                SetSection(m_active_section);
-                UpdateStatus(L"Runtime dashboard revealed.");
-            });
-            auto explorer_item = make_sidebar_item(L"Explorer", true);
-            explorer_item.Click([this](auto const&, auto const&) {
-                SetSection(m_active_section);
-                UpdateStatus(L"Explorer view.");
-            });
-            auto insights_item = make_sidebar_item(L"Insights", false);
-            insights_item.Click([this](auto const&, auto const&) {
-                m_show_search = true;
-                SetSection(m_active_section);
-                UpdateStatus(L"Search and insights revealed.");
-            });
-            auto cleanup_item = make_sidebar_item(L"Cleanup", false);
-            cleanup_item.Click([this](auto const&, auto const&) {
-                UpdateStatus(L"Cleanup center is not available yet.");
-            });
+            auto register_view_item = [&](std::wstring_view label, AppView view, bool active) {
+                auto item = make_sidebar_item(label, active);
+                item.Click([this, view](auto const&, auto const&) { SwitchView(view); });
+                m_sidebar_items[view] = item;
+            };
+            register_view_item(L"Dashboard", AppView::Dashboard, false);
+            register_view_item(L"Explorer", AppView::Explorer, true);
+            register_view_item(L"Insights", AppView::Insights, false);
+            register_view_item(L"Cleanup", AppView::Cleanup, false);
 
             Grid::SetRow(sidebar_stack, 0);
             sidebar_grid.Children().Append(sidebar_stack);
@@ -566,23 +551,30 @@ namespace winrt::WinBlaze::UI::implementation
             sidebar_bottom.Padding(Thickness{ 14.0, 8.0, 14.0, 12.0 });
             sidebar_bottom.Spacing(6.0);
 
-            auto make_sidebar_caption = [&](std::wstring_view label) {
-                auto caption = TextBlock{};
-                caption.Text(winrt::hstring(label));
-                caption.FontSize(11.0);
-                caption.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
-                caption.Foreground(make_brush(theme.text_secondary));
-                sidebar_bottom.Children().Append(caption);
-                return caption;
+            auto make_sidebar_caption_item = [&](std::wstring_view label, AppView view) {
+                auto item = Button{};
+                item.Content(box_value(winrt::hstring(label)));
+                item.HorizontalAlignment(HorizontalAlignment::Stretch);
+                item.HorizontalContentAlignment(HorizontalAlignment::Left);
+                item.Padding(Thickness{ 4.0, 4.0, 4.0, 4.0 });
+                item.BorderThickness(Thickness{ 0.0, 0.0, 0.0, 0.0 });
+                item.Background(make_brush(Windows::UI::Colors::Transparent()));
+                item.Foreground(make_brush(theme.text_secondary));
+                item.FontSize(11.0);
+                item.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item, winrt::hstring(label));
+                item.Click([this, view](auto const&, auto const&) { SwitchView(view); });
+                m_sidebar_items[view] = item;
+                sidebar_bottom.Children().Append(item);
             };
-            make_sidebar_caption(L"SETTINGS");
-            make_sidebar_caption(L"SUPPORT");
+            make_sidebar_caption_item(L"SETTINGS", AppView::Settings);
+            make_sidebar_caption_item(L"SUPPORT", AppView::Support);
 
             m_sidebar_status_text = TextBlock{};
             m_sidebar_status_text.Text(L"ENGINE: idle");
             m_sidebar_status_text.FontSize(10.0);
             m_sidebar_status_text.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
-            m_sidebar_status_text.Foreground(make_brush(theme.chip_active_background));
+            m_sidebar_status_text.Foreground(make_brush(theme.folder_accent));
             m_sidebar_status_text.TextWrapping(TextWrapping::WrapWholeWords);
             m_sidebar_status_text.Margin(Thickness{ 0.0, 8.0, 0.0, 0.0 });
             sidebar_bottom.Children().Append(m_sidebar_status_text);
@@ -654,7 +646,8 @@ namespace winrt::WinBlaze::UI::implementation
         auto about_item = MenuFlyoutItem{};
         about_item.Text(L"About WinBlaze");
         about_item.Click([this](auto const&, auto const&) {
-            UpdateStatus(L"WinBlaze: fast NTFS disk usage analyzer.");
+            OpenExternal(L"https://github.com/marksmayo/WinBlaze");
+            UpdateStatus(L"Opened the WinBlaze repository.");
         });
         help_flyout.Items().Append(about_item);
         help_button.Flyout(help_flyout);
@@ -736,11 +729,12 @@ namespace winrt::WinBlaze::UI::implementation
         auto shell_r1 = RowDefinition();
         shell_r1.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
         auto shell_r2 = RowDefinition();
-        shell_r2.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star)); // Folder tree | extensions
-        shell_r2.MinHeight(220.0);
+        shell_r2.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star)); // Directory table
+        shell_r2.MinHeight(180.0);
         auto shell_r3 = RowDefinition();
-        shell_r3.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star)); // Treemap
-        shell_r3.MinHeight(200.0);
+        // The treemap is the hero visual: give it the larger share.
+        shell_r3.Height(GridLengthHelper::FromValueAndType(1.6, GridUnitType::Star)); // Treemap | extensions
+        shell_r3.MinHeight(260.0);
         auto shell_r4 = RowDefinition();
         shell_r4.Height(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
         auto shell_r5 = RowDefinition();
@@ -1144,32 +1138,25 @@ namespace winrt::WinBlaze::UI::implementation
             m_tree_card = tree_card;
             apply_card_style(tree_card);
 
-            auto tree_stack = StackPanel{};
-            tree_stack.Spacing(8);
+            // Grid so the tree ListView stretches to fill the card.
+            auto tree_stack = Grid{};
+            tree_stack.RowSpacing(8);
+            auto append_tree_row = [&](Microsoft::UI::Xaml::UIElement const& element, bool star) {
+                auto row = RowDefinition();
+                row.Height(star
+                    ? GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star)
+                    : GridLengthHelper::FromValueAndType(1.0, GridUnitType::Auto));
+                tree_stack.RowDefinitions().Append(row);
+                Grid::SetRow(element.as<Microsoft::UI::Xaml::FrameworkElement>(), tree_stack.RowDefinitions().Size() - 1);
+                tree_stack.Children().Append(element);
+            };
             tree_card.Child(tree_stack);
 
-            tree_stack.Children().Append(make_card_title(L"Folder tree"));
-
-            auto tree_subtitle = TextBlock{};
-            tree_subtitle.Text(L"Catalog-backed tree rows and capped live list.");
-            tree_subtitle.Opacity(0.75);
-            tree_subtitle.TextWrapping(TextWrapping::WrapWholeWords);
-            tree_stack.Children().Append(tree_subtitle);
+            append_tree_row(make_card_title(L"Directory analysis"), false);
 
             auto tree_action_row = StackPanel{};
             tree_action_row.Orientation(Orientation::Horizontal);
             tree_action_row.Spacing(10);
-
-            m_tree_snapshot_expand_button = Button{};
-            m_tree_snapshot_expand_button.Content(box_value(L"Load more rows"));
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-                m_tree_snapshot_expand_button,
-                L"Load more tree rows");
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
-                m_tree_snapshot_expand_button,
-                L"Show or hide additional catalog tree rows.");
-            m_tree_snapshot_expand_button.Click({ this, &MainWindow::OnTreeSnapshotExpandClicked });
-            tree_action_row.Children().Append(m_tree_snapshot_expand_button);
 
             m_tree_window_previous_button = Button{};
             m_tree_window_previous_button.Content(box_value(L"Previous rows"));
@@ -1196,32 +1183,20 @@ namespace winrt::WinBlaze::UI::implementation
             tree_action_row.Children().Append(m_tree_window_next_button);
 
             auto tree_action_hint = TextBlock{};
-            tree_action_hint.Text(L"Rows are paged in a virtualized window so large catalogs stay responsive.");
+            tree_action_hint.Text(L"Double-click folders to expand; rows page in a virtualized window.");
             tree_action_hint.Opacity(0.72);
             tree_action_hint.VerticalAlignment(VerticalAlignment::Center);
             tree_action_row.Children().Append(tree_action_hint);
-            tree_stack.Children().Append(tree_action_row);
+            append_tree_row(tree_action_row, false);
 
             m_tree_catalog.clear();
             m_tree_catalog_keys.clear();
 
-            m_tree_snapshot_panel = StackPanel{};
-            m_tree_snapshot_panel.Spacing(6);
-            tree_stack.Children().Append(m_tree_snapshot_panel);
-
-            m_tree_snapshot_extra_panel = StackPanel{};
-            m_tree_snapshot_extra_panel.Spacing(6);
-            m_tree_snapshot_extra_panel.Visibility(Visibility::Collapsed);
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-                m_tree_snapshot_extra_panel,
-                L"Additional tree rows");
-            tree_stack.Children().Append(m_tree_snapshot_extra_panel);
-
             m_tree_list_status_text = TextBlock{};
-            m_tree_list_status_text.Text(L"Live list is waiting for catalog rows.");
+            m_tree_list_status_text.Text(L"Scan or load a cached catalog to build the folder tree; rows render in virtualized ListView containers.");
             m_tree_list_status_text.Opacity(0.72);
             m_tree_list_status_text.TextWrapping(TextWrapping::WrapWholeWords);
-            tree_stack.Children().Append(m_tree_list_status_text);
+            append_tree_row(m_tree_list_status_text, false);
 
             auto tree_list_header = StackPanel{};
             tree_list_header.Orientation(Orientation::Horizontal);
@@ -1249,10 +1224,9 @@ namespace winrt::WinBlaze::UI::implementation
             tree_list_header.Children().Append(make_tree_header_label(L"Logical", 84.0));
             tree_list_header.Children().Append(make_tree_header_label(L"Files", 64.0));
             tree_list_header.Children().Append(make_tree_header_label(L"Last Change", 120.0));
-            tree_stack.Children().Append(tree_list_header);
+            append_tree_row(tree_list_header, false);
 
             m_tree_list_view = ListView{};
-            m_tree_list_view.MaxHeight(440.0);
             m_tree_list_view.ItemsPanel(
                 Microsoft::UI::Xaml::Markup::XamlReader::Load(
                     LR"(<ItemsPanelTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><ItemsStackPanel Orientation="Vertical"/></ItemsPanelTemplate>)")
@@ -1265,13 +1239,15 @@ namespace winrt::WinBlaze::UI::implementation
                 m_tree_list_view,
                 L"Paged virtualized list of catalog entries. Select a row to update details and treemap focus.");
             m_tree_list_view.SelectionChanged({ this, &MainWindow::OnTreeSelectionChanged });
-            tree_stack.Children().Append(m_tree_list_view);
+            append_tree_row(m_tree_list_view, true);
             m_tree_updates_ready = true;
 
+            // Directory table spans the full width per the design; the
+            // treemap + extension panel share the row below.
             Grid::SetRow(tree_card, 2);
             Grid::SetColumn(tree_card, 0);
+            Grid::SetColumnSpan(tree_card, 2);
             shell.Children().Append(tree_card);
-            UpdateTreeSnapshotPreview(m_tree_catalog);
         }
         TraceStartup(L"BuildShell tree card end");
 
@@ -1412,7 +1388,7 @@ namespace winrt::WinBlaze::UI::implementation
         right_content_panel.Children().Append(detail_card);
         Grid::SetRow(extension_card, 1);
         right_content_panel.Children().Append(extension_card);
-        Grid::SetRow(right_content_panel, 2);
+        Grid::SetRow(right_content_panel, 3);
         Grid::SetColumn(right_content_panel, 1);
         shell.Children().Append(right_content_panel);
 
@@ -1495,7 +1471,6 @@ namespace winrt::WinBlaze::UI::implementation
 
             Grid::SetRow(treemap_card, 3);
             Grid::SetColumn(treemap_card, 0);
-            Grid::SetColumnSpan(treemap_card, 2);
             shell.Children().Append(treemap_card);
         }
         TraceStartup(L"BuildShell treemap card end");
@@ -1591,6 +1566,37 @@ namespace winrt::WinBlaze::UI::implementation
             shell.Children().Append(runtime_card);
         }
         TraceStartup(L"BuildShell runtime card end");
+
+        // --- Sidebar view hosts (Dashboard/Insights/Cleanup/Settings/
+        // Support). Each is a scrollable card covering the explorer pane
+        // area; content is rebuilt on switch so data stays fresh.
+        {
+            auto make_view_card = [&](Microsoft::UI::Xaml::Controls::Border& card_storage,
+                                      Microsoft::UI::Xaml::Controls::StackPanel& content_storage) {
+                auto card = Border{};
+                card_storage = card;
+                apply_card_style(card);
+                auto scroll = ScrollViewer{};
+                scroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
+                scroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
+                auto content = StackPanel{};
+                content_storage = content;
+                content.Spacing(14.0);
+                scroll.Content(content);
+                card.Child(scroll);
+                card.Visibility(Visibility::Collapsed);
+                Grid::SetRow(card, 2);
+                Grid::SetRowSpan(card, 5);
+                Grid::SetColumn(card, 0);
+                Grid::SetColumnSpan(card, 2);
+                shell.Children().Append(card);
+            };
+            make_view_card(m_dashboard_card, m_dashboard_content);
+            make_view_card(m_insights_card, m_insights_content);
+            make_view_card(m_cleanup_card, m_cleanup_content);
+            make_view_card(m_settings_card, m_settings_content);
+            make_view_card(m_support_card, m_support_content);
+        }
 
         {
             // The panes size to the window now (star rows); no outer scroll.
@@ -2707,12 +2713,7 @@ namespace winrt::WinBlaze::UI::implementation
             return;
         }
 
-        SetControlVisibility(OverviewCard(), m_show_current_state);
-        SetControlVisibility(TreeCard(), m_show_folder_tree);
-        SetControlVisibility(SearchCard(), m_show_search);
-        SetControlVisibility(DiagnosticsCard(), m_show_runtime_metrics);
-        SetControlVisibility(TreemapCard(), true);
-        SetControlVisibility(DetailCard(), m_show_folder_view);
+        ApplyViewVisibility();
         TraceStartup(L"SetSection end");
     }
 
@@ -4989,6 +4990,622 @@ namespace winrt::WinBlaze::UI::implementation
 
         item.Content(row);
         return item;
+    }
+
+    void MainWindow::OpenExternal(std::wstring const& target)
+    {
+        ShellExecuteW(nullptr, L"open", target.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    }
+
+    // Shows exactly the cards belonging to the active sidebar view. The
+    // explorer view additionally honors the per-panel toggles.
+    void MainWindow::ApplyViewVisibility()
+    {
+        const bool explorer = m_active_view == AppView::Explorer;
+        SetControlVisibility(OverviewCard(), explorer && m_show_current_state);
+        SetControlVisibility(TreeCard(), explorer && m_show_folder_tree);
+        SetControlVisibility(SearchCard(), explorer && m_show_search);
+        SetControlVisibility(DiagnosticsCard(), explorer && m_show_runtime_metrics);
+        SetControlVisibility(TreemapCard(), explorer);
+        SetControlVisibility(DetailCard(), explorer && m_show_folder_view);
+        if (ExtensionCard()) {
+            // The extension card sits inside the right panel next to the
+            // treemap; hide the whole panel outside the explorer view.
+            auto parent = ExtensionCard().Parent().try_as<Microsoft::UI::Xaml::FrameworkElement>();
+            if (parent) {
+                SetControlVisibility(parent, explorer);
+            }
+        }
+        SetControlVisibility(m_dashboard_card, m_active_view == AppView::Dashboard);
+        SetControlVisibility(m_insights_card, m_active_view == AppView::Insights);
+        SetControlVisibility(m_cleanup_card, m_active_view == AppView::Cleanup);
+        SetControlVisibility(m_settings_card, m_active_view == AppView::Settings);
+        SetControlVisibility(m_support_card, m_active_view == AppView::Support);
+    }
+
+    void MainWindow::SwitchView(AppView view)
+    {
+        m_active_view = view;
+
+        // Restyle the sidebar rail: active item gets the red pill.
+        auto const& theme = ActiveShellTheme();
+        for (auto const& [item_view, item] : m_sidebar_items) {
+            if (!item) {
+                continue;
+            }
+            const bool active = item_view == view;
+            item.Background(MakeBrush(active
+                ? theme.chip_active_background
+                : Windows::UI::Colors::Transparent()));
+            item.Foreground(MakeBrush(active ? theme.text_on_accent : theme.text_secondary));
+            item.FontWeight({ active ? uint16_t{ 700 } : uint16_t{ 400 } });
+        }
+
+        switch (view) {
+        case AppView::Dashboard:
+            PopulateDashboardView();
+            UpdateStatus(L"Dashboard view.");
+            break;
+        case AppView::Insights:
+            PopulateInsightsView();
+            UpdateStatus(L"Insights view.");
+            break;
+        case AppView::Cleanup:
+            PopulateCleanupView();
+            UpdateStatus(L"Cleanup center.");
+            break;
+        case AppView::Settings:
+            PopulateSettingsView();
+            UpdateStatus(L"Settings.");
+            break;
+        case AppView::Support:
+            PopulateSupportView();
+            UpdateStatus(L"Support.");
+            break;
+        case AppView::Explorer:
+        default:
+            UpdateStatus(L"Explorer view.");
+            break;
+        }
+        ApplyViewVisibility();
+    }
+
+    namespace
+    {
+        // Shared helpers for the sidebar views.
+        struct DriveSpace
+        {
+            uint64_t total_bytes{ 0 };
+            uint64_t free_bytes{ 0 };
+            bool valid{ false };
+        };
+
+        DriveSpace QueryDriveSpace(std::wstring const& root_path)
+        {
+            DriveSpace space;
+            std::wstring root = root_path.empty() ? L"C:\\" : root_path;
+            if (root.size() >= 2 && root[1] == L':') {
+                root = root.substr(0, 2) + L"\\";
+            }
+            ULARGE_INTEGER free_to_caller{}, total{}, total_free{};
+            if (GetDiskFreeSpaceExW(root.c_str(), &free_to_caller, &total, &total_free)) {
+                space.total_bytes = total.QuadPart;
+                space.free_bytes = total_free.QuadPart;
+                space.valid = true;
+            }
+            return space;
+        }
+    }
+
+    void MainWindow::PopulateDashboardView()
+    {
+        using namespace Microsoft::UI::Xaml;
+        using namespace Microsoft::UI::Xaml::Controls;
+        if (!m_dashboard_content) {
+            return;
+        }
+        auto const& theme = ActiveShellTheme();
+        auto& content = m_dashboard_content;
+        content.Children().Clear();
+
+        content.Children().Append(MakeCardTitle(L"Storage dashboard"));
+
+        const auto space = QueryDriveSpace(m_current_root_path);
+        const uint64_t used = space.valid ? space.total_bytes - space.free_bytes : 0;
+        const double used_percent = (space.valid && space.total_bytes > 0)
+            ? (static_cast<double>(used) / static_cast<double>(space.total_bytes)) * 100.0
+            : 0.0;
+
+        // Stat cards row: total / used / free.
+        auto stat_row = StackPanel{};
+        stat_row.Orientation(Orientation::Horizontal);
+        stat_row.Spacing(14.0);
+        auto make_stat = [&](std::wstring_view label, std::wstring const& value, std::wstring const& caption) {
+            auto card = Border{};
+            ApplyCompactCardStyle(card);
+            card.MinWidth(220.0);
+            auto stack = StackPanel{};
+            stack.Spacing(4.0);
+            stack.Children().Append(MakeCardTitle(label));
+            auto value_text = TextBlock{};
+            value_text.Text(winrt::hstring(value));
+            value_text.FontSize(26.0);
+            value_text.FontWeight({ 700 });
+            value_text.Foreground(MakeBrush(theme.text_primary));
+            stack.Children().Append(value_text);
+            auto caption_text = TextBlock{};
+            caption_text.Text(winrt::hstring(caption));
+            caption_text.FontSize(12.0);
+            caption_text.Foreground(MakeBrush(theme.text_secondary));
+            stack.Children().Append(caption_text);
+            card.Child(stack);
+            stat_row.Children().Append(card);
+        };
+        wchar_t percent_text[32]{};
+        swprintf_s(percent_text, L"%.1f%% of total capacity", used_percent);
+        make_stat(L"Total capacity", space.valid ? FormatBytes(space.total_bytes) : L"-",
+            m_current_root_path.empty() ? L"C:\\" : m_current_root_path);
+        make_stat(L"Used space", space.valid ? FormatBytes(used) : L"-", percent_text);
+        make_stat(L"Free space", space.valid ? FormatBytes(space.free_bytes) : L"-",
+            L"Available for new data");
+        content.Children().Append(stat_row);
+
+        // Disk usage meter.
+        auto meter_card = Border{};
+        ApplyCompactCardStyle(meter_card);
+        auto meter_stack = StackPanel{};
+        meter_stack.Spacing(8.0);
+        meter_stack.Children().Append(MakeCardTitle(L"Disk usage"));
+        auto meter_value = TextBlock{};
+        wchar_t busy_text[32]{};
+        swprintf_s(busy_text, L"%.0f%%", used_percent);
+        meter_value.Text(winrt::hstring(busy_text));
+        meter_value.FontSize(44.0);
+        meter_value.FontWeight({ 800 });
+        meter_value.Foreground(MakeBrush(theme.chip_active_background));
+        meter_stack.Children().Append(meter_value);
+        auto meter_track = Border{};
+        meter_track.Height(10.0);
+        meter_track.CornerRadius(UniformRadius(theme.progress_radius));
+        meter_track.Background(MakeBrush(theme.progress_track));
+        meter_track.HorizontalAlignment(HorizontalAlignment::Stretch);
+        auto meter_fill = Border{};
+        meter_fill.Height(10.0);
+        meter_fill.Width(6.0 * used_percent);
+        meter_fill.CornerRadius(UniformRadius(theme.progress_radius));
+        meter_fill.Background(MakeBrush(theme.progress_fill));
+        meter_fill.HorizontalAlignment(HorizontalAlignment::Left);
+        meter_track.Child(meter_fill);
+        meter_stack.Children().Append(meter_track);
+        meter_card.Child(meter_stack);
+        content.Children().Append(meter_card);
+
+        // Content distribution from extension stats.
+        auto distribution_card = Border{};
+        ApplyCompactCardStyle(distribution_card);
+        auto distribution_stack = StackPanel{};
+        distribution_stack.Spacing(8.0);
+        distribution_stack.Children().Append(MakeCardTitle(L"Content distribution"));
+        if (m_extension_stats.empty()) {
+            auto empty_text = TextBlock{};
+            empty_text.Text(L"Run a scan to populate the by-extension breakdown.");
+            empty_text.Foreground(MakeBrush(theme.text_secondary));
+            distribution_stack.Children().Append(empty_text);
+        } else {
+            uint64_t total_bytes = 0;
+            for (auto const& stat : m_extension_stats) {
+                total_bytes += stat.bytes;
+            }
+            auto bar = StackPanel{};
+            bar.Orientation(Orientation::Horizontal);
+            bar.Height(14.0);
+            const size_t segments = (std::min)(static_cast<size_t>(6), m_extension_stats.size());
+            for (size_t index = 0; index < segments && total_bytes > 0; ++index) {
+                auto const& stat = m_extension_stats[index];
+                auto segment = Border{};
+                segment.Height(14.0);
+                segment.Width((std::max)(4.0,
+                    720.0 * static_cast<double>(stat.bytes) / static_cast<double>(total_bytes)));
+                segment.Background(MakeBrush(ExtensionSwatchColor(stat.extension)));
+                bar.Children().Append(segment);
+            }
+            distribution_stack.Children().Append(bar);
+            for (size_t index = 0; index < segments; ++index) {
+                auto const& stat = m_extension_stats[index];
+                auto legend_row = StackPanel{};
+                legend_row.Orientation(Orientation::Horizontal);
+                legend_row.Spacing(8.0);
+                auto swatch = Border{};
+                swatch.Width(10.0);
+                swatch.Height(10.0);
+                swatch.CornerRadius(CornerRadius{ 2.0, 2.0, 2.0, 2.0 });
+                swatch.Background(MakeBrush(ExtensionSwatchColor(stat.extension)));
+                swatch.VerticalAlignment(VerticalAlignment::Center);
+                legend_row.Children().Append(swatch);
+                auto legend_text = TextBlock{};
+                const std::wstring extension_label =
+                    stat.extension.empty() ? L"(no extension)" : L"." + stat.extension;
+                legend_text.Text(winrt::hstring(
+                    extension_label + L"  " + FormatBytes(stat.bytes) + L"  (" +
+                    std::to_wstring(stat.files) + L" files)"));
+                legend_text.Foreground(MakeBrush(theme.text_primary));
+                legend_row.Children().Append(legend_text);
+                distribution_stack.Children().Append(legend_row);
+            }
+        }
+        distribution_card.Child(distribution_stack);
+        content.Children().Append(distribution_card);
+
+        // Recent activity.
+        auto activity_card = Border{};
+        ApplyCompactCardStyle(activity_card);
+        auto activity_stack = StackPanel{};
+        activity_stack.Spacing(6.0);
+        activity_stack.Children().Append(MakeCardTitle(L"Recent activity"));
+        auto add_activity_line = [&](std::wstring const& line) {
+            if (line.empty()) {
+                return;
+            }
+            auto activity_text = TextBlock{};
+            activity_text.Text(winrt::hstring(line));
+            activity_text.Foreground(MakeBrush(theme.text_secondary));
+            activity_text.TextWrapping(TextWrapping::WrapWholeWords);
+            activity_stack.Children().Append(activity_text);
+        };
+        add_activity_line(m_last_scan_duration_text);
+        add_activity_line(m_last_cache_load_text);
+        if (TreeArenaActive() && !m_tree_nodes.empty()) {
+            add_activity_line(
+                L"Indexed tree: " + FormatBytes(m_tree_nodes[0].physical_bytes) +
+                L" across " + std::to_wstring(m_tree_nodes[0].item_count) + L" items.");
+        }
+        activity_card.Child(activity_stack);
+        content.Children().Append(activity_card);
+    }
+
+    void MainWindow::PopulateInsightsView()
+    {
+        using namespace Microsoft::UI::Xaml;
+        using namespace Microsoft::UI::Xaml::Controls;
+        if (!m_insights_content) {
+            return;
+        }
+        auto const& theme = ActiveShellTheme();
+        auto& content = m_insights_content;
+        content.Children().Clear();
+
+        content.Children().Append(MakeCardTitle(L"Storage insights"));
+
+        // Top directories from the loaded tree root.
+        auto top_card = Border{};
+        ApplyCompactCardStyle(top_card);
+        auto top_stack = StackPanel{};
+        top_stack.Spacing(6.0);
+        top_stack.Children().Append(MakeCardTitle(L"Top directories"));
+        if (!TreeArenaActive() || m_tree_nodes.empty() || m_tree_nodes[0].children.empty()) {
+            auto empty_text = TextBlock{};
+            empty_text.Text(L"Run a scan to analyze the largest directories.");
+            empty_text.Foreground(MakeBrush(theme.text_secondary));
+            top_stack.Children().Append(empty_text);
+        } else {
+            const uint64_t root_physical =
+                (std::max)(static_cast<uint64_t>(1), m_tree_nodes[0].physical_bytes);
+            size_t shown = 0;
+            for (size_t child_index : m_tree_nodes[0].children) {
+                if (shown >= 12 || child_index >= m_tree_nodes.size()) {
+                    break;
+                }
+                auto const& node = m_tree_nodes[child_index];
+                if (node.is_more_row) {
+                    continue;
+                }
+                const double percent =
+                    100.0 * static_cast<double>(node.physical_bytes) / static_cast<double>(root_physical);
+                auto row = StackPanel{};
+                row.Orientation(Orientation::Horizontal);
+                row.Spacing(12.0);
+                auto name_text = TextBlock{};
+                name_text.Text(winrt::hstring(node.name));
+                name_text.Width(240.0);
+                name_text.TextTrimming(TextTrimming::CharacterEllipsis);
+                name_text.Foreground(MakeBrush(theme.text_primary));
+                row.Children().Append(name_text);
+                auto track = Border{};
+                track.Width(180.0);
+                track.Height(8.0);
+                track.VerticalAlignment(VerticalAlignment::Center);
+                track.CornerRadius(UniformRadius(theme.progress_radius));
+                track.Background(MakeBrush(theme.progress_track));
+                auto fill = Border{};
+                fill.Height(8.0);
+                fill.Width(1.8 * percent);
+                fill.HorizontalAlignment(HorizontalAlignment::Left);
+                fill.CornerRadius(UniformRadius(theme.progress_radius));
+                fill.Background(MakeBrush(theme.progress_fill));
+                track.Child(fill);
+                row.Children().Append(track);
+                wchar_t percent_text[16]{};
+                swprintf_s(percent_text, L"%.1f%%", percent);
+                auto percent_block = TextBlock{};
+                percent_block.Text(winrt::hstring(percent_text));
+                percent_block.MinWidth(56.0);
+                percent_block.Foreground(MakeBrush(theme.text_secondary));
+                row.Children().Append(percent_block);
+                auto size_block = TextBlock{};
+                size_block.Text(winrt::hstring(FormatBytes(node.physical_bytes)));
+                size_block.MinWidth(90.0);
+                size_block.Foreground(MakeBrush(theme.text_primary));
+                row.Children().Append(size_block);
+                auto items_block = TextBlock{};
+                items_block.Text(winrt::hstring(std::to_wstring(node.item_count) + L" items"));
+                items_block.Foreground(MakeBrush(theme.text_secondary));
+                row.Children().Append(items_block);
+                top_stack.Children().Append(row);
+                ++shown;
+            }
+        }
+        top_card.Child(top_stack);
+        content.Children().Append(top_card);
+
+        // Extension breakdown table.
+        auto extension_card = Border{};
+        ApplyCompactCardStyle(extension_card);
+        auto extension_stack = StackPanel{};
+        extension_stack.Spacing(6.0);
+        extension_stack.Children().Append(MakeCardTitle(L"Extension breakdown"));
+        if (m_extension_stats.empty()) {
+            auto empty_text = TextBlock{};
+            empty_text.Text(L"Run a scan to populate extension statistics.");
+            empty_text.Foreground(MakeBrush(theme.text_secondary));
+            extension_stack.Children().Append(empty_text);
+        } else {
+            uint64_t total_bytes = 0;
+            for (auto const& stat : m_extension_stats) {
+                total_bytes += stat.bytes;
+            }
+            const size_t rows = (std::min)(static_cast<size_t>(15), m_extension_stats.size());
+            for (size_t index = 0; index < rows; ++index) {
+                auto const& stat = m_extension_stats[index];
+                auto row = StackPanel{};
+                row.Orientation(Orientation::Horizontal);
+                row.Spacing(10.0);
+                auto swatch = Border{};
+                swatch.Width(10.0);
+                swatch.Height(10.0);
+                swatch.CornerRadius(CornerRadius{ 2.0, 2.0, 2.0, 2.0 });
+                swatch.Background(MakeBrush(ExtensionSwatchColor(stat.extension)));
+                swatch.VerticalAlignment(VerticalAlignment::Center);
+                row.Children().Append(swatch);
+                auto extension_text = TextBlock{};
+                extension_text.Text(winrt::hstring(
+                    stat.extension.empty() ? L"(none)" : L"." + stat.extension));
+                extension_text.Width(84.0);
+                extension_text.Foreground(MakeBrush(theme.text_primary));
+                row.Children().Append(extension_text);
+                auto size_text = TextBlock{};
+                size_text.Text(winrt::hstring(FormatBytes(stat.bytes)));
+                size_text.Width(96.0);
+                size_text.Foreground(MakeBrush(theme.text_primary));
+                row.Children().Append(size_text);
+                auto ratio_text = TextBlock{};
+                const double ratio = total_bytes > 0
+                    ? 100.0 * static_cast<double>(stat.bytes) / static_cast<double>(total_bytes)
+                    : 0.0;
+                wchar_t ratio_buffer[16]{};
+                swprintf_s(ratio_buffer, L"%.2f%%", ratio);
+                ratio_text.Text(winrt::hstring(ratio_buffer));
+                ratio_text.Width(72.0);
+                ratio_text.Foreground(MakeBrush(theme.folder_accent));
+                row.Children().Append(ratio_text);
+                auto files_text = TextBlock{};
+                files_text.Text(winrt::hstring(std::to_wstring(stat.files) + L" files"));
+                files_text.Foreground(MakeBrush(theme.text_secondary));
+                row.Children().Append(files_text);
+                extension_stack.Children().Append(row);
+            }
+        }
+        extension_card.Child(extension_stack);
+        content.Children().Append(extension_card);
+    }
+
+    void MainWindow::PopulateCleanupView()
+    {
+        using namespace Microsoft::UI::Xaml;
+        using namespace Microsoft::UI::Xaml::Controls;
+        if (!m_cleanup_content) {
+            return;
+        }
+        auto const& theme = ActiveShellTheme();
+        auto& content = m_cleanup_content;
+        content.Children().Clear();
+
+        content.Children().Append(MakeCardTitle(L"Cleanup center"));
+
+        auto intro = TextBlock{};
+        intro.Text(L"Reclaim space by reviewing the biggest opportunities below. WinBlaze never deletes anything; use Open to inspect items in File Explorer.");
+        intro.Foreground(MakeBrush(theme.text_secondary));
+        intro.TextWrapping(TextWrapping::WrapWholeWords);
+        content.Children().Append(intro);
+
+        // Temp/log potential from extension stats.
+        auto temp_card = Border{};
+        ApplyCompactCardStyle(temp_card);
+        auto temp_stack = StackPanel{};
+        temp_stack.Spacing(6.0);
+        temp_stack.Children().Append(MakeCardTitle(L"Temporary and log files"));
+        uint64_t temp_bytes = 0;
+        uint64_t temp_files = 0;
+        for (auto const& stat : m_extension_stats) {
+            if (stat.extension == L"tmp" || stat.extension == L"log" || stat.extension == L"bak" ||
+                stat.extension == L"old" || stat.extension == L"dmp" || stat.extension == L"cache") {
+                temp_bytes += stat.bytes;
+                temp_files += stat.files;
+            }
+        }
+        auto temp_value = TextBlock{};
+        temp_value.Text(winrt::hstring(
+            L"Potential gain: " + FormatBytes(temp_bytes) + L" across " +
+            std::to_wstring(temp_files) + L" .tmp/.log/.bak/.old/.dmp/.cache files"));
+        temp_value.Foreground(MakeBrush(theme.folder_accent));
+        temp_value.FontWeight({ 600 });
+        temp_stack.Children().Append(temp_value);
+        temp_card.Child(temp_stack);
+        content.Children().Append(temp_card);
+
+        // Largest files with Open actions.
+        auto large_card = Border{};
+        ApplyCompactCardStyle(large_card);
+        auto large_stack = StackPanel{};
+        large_stack.Spacing(6.0);
+        large_stack.Children().Append(MakeCardTitle(L"Largest files"));
+        std::vector<std::pair<std::wstring, uint64_t>> largest;
+        try {
+            ::WinBlaze::UI::NativeBridge::TreeLargestFiles(10, [&largest](WbTreeNode const& node) {
+                const std::wstring path = node.name.ptr == nullptr
+                    ? std::wstring{}
+                    : Utf8ToWide(std::string_view{ node.name.ptr, node.name.len });
+                largest.emplace_back(path, node.physical_bytes);
+            });
+        } catch (...) {
+        }
+        if (largest.empty()) {
+            auto empty_text = TextBlock{};
+            empty_text.Text(L"Run a scan to identify the largest files.");
+            empty_text.Foreground(MakeBrush(theme.text_secondary));
+            large_stack.Children().Append(empty_text);
+        } else {
+            for (auto const& [file_path, bytes] : largest) {
+                auto row = StackPanel{};
+                row.Orientation(Orientation::Horizontal);
+                row.Spacing(10.0);
+                auto size_text = TextBlock{};
+                size_text.Text(winrt::hstring(FormatBytes(bytes)));
+                size_text.MinWidth(88.0);
+                size_text.FontWeight({ 600 });
+                size_text.Foreground(MakeBrush(theme.text_primary));
+                size_text.VerticalAlignment(VerticalAlignment::Center);
+                row.Children().Append(size_text);
+                auto path_text = TextBlock{};
+                path_text.Text(winrt::hstring(file_path));
+                path_text.Width(620.0);
+                path_text.TextTrimming(TextTrimming::CharacterEllipsis);
+                path_text.Foreground(MakeBrush(theme.text_secondary));
+                path_text.VerticalAlignment(VerticalAlignment::Center);
+                row.Children().Append(path_text);
+                auto open_button = Button{};
+                open_button.Content(box_value(L"Open"));
+                open_button.FontSize(12.0);
+                const std::wstring captured_path = file_path;
+                open_button.Click([captured_path](auto const&, auto const&) {
+                    ShellExecuteW(nullptr, L"open", L"explorer.exe",
+                        (L"/select,\"" + captured_path + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
+                });
+                row.Children().Append(open_button);
+                large_stack.Children().Append(row);
+            }
+        }
+        large_card.Child(large_stack);
+        content.Children().Append(large_card);
+    }
+
+    void MainWindow::PopulateSettingsView()
+    {
+        using namespace Microsoft::UI::Xaml;
+        using namespace Microsoft::UI::Xaml::Controls;
+        if (!m_settings_content) {
+            return;
+        }
+        auto const& theme = ActiveShellTheme();
+        auto& content = m_settings_content;
+        content.Children().Clear();
+
+        content.Children().Append(MakeCardTitle(L"Settings"));
+
+        auto add_setting = [&](std::wstring_view label, std::wstring const& value) {
+            auto card = Border{};
+            ApplyCompactCardStyle(card);
+            auto stack = StackPanel{};
+            stack.Spacing(4.0);
+            stack.Children().Append(MakeCardTitle(label));
+            auto value_text = TextBlock{};
+            value_text.Text(winrt::hstring(value));
+            value_text.Foreground(MakeBrush(theme.text_primary));
+            value_text.TextWrapping(TextWrapping::WrapWholeWords);
+            stack.Children().Append(value_text);
+            card.Child(stack);
+            content.Children().Append(card);
+            return stack;
+        };
+
+        add_setting(L"Theme", L"High Velocity (red on black, from the Stitch design system)");
+        add_setting(L"Reparse points",
+            L"Skipped by default: junction and symlink targets are counted at their real location, which prevents double counting.");
+        add_setting(L"Scanning",
+            L"Raw NTFS MFT fast path when running as Administrator; parallel directory walk otherwise.");
+
+        auto data_stack = add_setting(L"Data locations",
+            L"Logs and the scan index are stored locally; WinBlaze has no telemetry.");
+        auto open_row = StackPanel{};
+        open_row.Orientation(Orientation::Horizontal);
+        open_row.Spacing(10.0);
+        auto make_open_button = [&](std::wstring_view label, std::wstring const& path) {
+            auto button = Button{};
+            button.Content(box_value(winrt::hstring(label)));
+            const std::wstring captured = path;
+            button.Click([captured](auto const&, auto const&) {
+                ShellExecuteW(nullptr, L"open", captured.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            });
+            open_row.Children().Append(button);
+        };
+        wchar_t local_app_data[MAX_PATH]{};
+        if (GetEnvironmentVariableW(L"LOCALAPPDATA", local_app_data, MAX_PATH) > 0) {
+            const std::wstring base = std::wstring(local_app_data) + L"\\WinBlaze";
+            make_open_button(L"Open logs folder", base + L"\\logs");
+            make_open_button(L"Open index folder", base + L"\\index");
+        }
+        data_stack.Children().Append(open_row);
+    }
+
+    void MainWindow::PopulateSupportView()
+    {
+        using namespace Microsoft::UI::Xaml;
+        using namespace Microsoft::UI::Xaml::Controls;
+        if (!m_support_content) {
+            return;
+        }
+        auto const& theme = ActiveShellTheme();
+        auto& content = m_support_content;
+        content.Children().Clear();
+
+        content.Children().Append(MakeCardTitle(L"Support"));
+
+        auto blurb = TextBlock{};
+        blurb.Text(L"WinBlaze is open source. Bug reports and feature requests are welcome on GitHub; logs live under %LOCALAPPDATA%\\WinBlaze\\logs if you need to attach evidence.");
+        blurb.Foreground(MakeBrush(theme.text_secondary));
+        blurb.TextWrapping(TextWrapping::WrapWholeWords);
+        content.Children().Append(blurb);
+
+        auto link_row = StackPanel{};
+        link_row.Orientation(Orientation::Horizontal);
+        link_row.Spacing(10.0);
+        auto make_link_button = [&](std::wstring_view label, std::wstring const& url, bool primary) {
+            auto button = Button{};
+            button.Content(box_value(winrt::hstring(label)));
+            if (primary) {
+                button.Background(MakeBrush(theme.chip_active_background));
+                button.Foreground(MakeBrush(theme.text_on_accent));
+                button.FontWeight({ 700 });
+            }
+            const std::wstring captured = url;
+            button.Click([captured](auto const&, auto const&) {
+                OpenExternal(captured);
+            });
+            link_row.Children().Append(button);
+        };
+        make_link_button(L"GitHub repository", L"https://github.com/marksmayo/WinBlaze", true);
+        make_link_button(L"Report an issue", L"https://github.com/marksmayo/WinBlaze/issues", false);
+        make_link_button(L"Discussions", L"https://github.com/marksmayo/WinBlaze/discussions", false);
+        content.Children().Append(link_row);
     }
 
     MainWindow::ExtensionStatEntry MainWindow::ExtensionStatFromNative(WbExtensionStat const& entry)

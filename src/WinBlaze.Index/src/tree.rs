@@ -289,6 +289,29 @@ impl TreeIndex {
         Some(&self.nodes[index].rollup)
     }
 
+    /// Visits the `limit` largest files on the volume by allocation size,
+    /// descending. Powers "large files" cleanup views.
+    pub fn for_each_largest_file(&self, limit: usize, mut visit: impl FnMut(&FileRecord)) {
+        let take = limit.min(self.files.len());
+        if take == 0 {
+            return;
+        }
+        let mut order: Vec<u32> = (0..self.files.len() as u32).collect();
+        let compare = |a: &u32, b: &u32| {
+            self.files[*b as usize]
+                .allocation_bytes
+                .cmp(&self.files[*a as usize].allocation_bytes)
+        };
+        if take < order.len() {
+            order.select_nth_unstable_by(take - 1, compare);
+            order.truncate(take);
+        }
+        order.sort_unstable_by(compare);
+        for index in order {
+            visit(&self.files[index as usize]);
+        }
+    }
+
     pub fn directory_full_path(&self, directory_id: u64) -> Option<&str> {
         let index = *self.dir_index_by_id.get(&directory_id)? as usize;
         Some(self.directories[index].full_path.as_str())

@@ -1516,6 +1516,39 @@ pub extern "C" fn wb_tree_children(
     WbTreeChildrenResult { emitted, total }
 }
 
+/// Emits the `limit` largest files by allocation size, descending, with
+/// derived full paths. Powers cleanup/large-file views.
+#[no_mangle]
+pub extern "C" fn wb_tree_largest_files(
+    limit: u64,
+    callback: WbTreeNodeCallback,
+    user_data: *mut core::ffi::c_void,
+) {
+    let Some(cb) = callback else {
+        return;
+    };
+    let model = get_or_load_index_model();
+    model
+        .tree
+        .for_each_largest_file(limit as usize, |file| {
+            let mut strings = Vec::new();
+            let node = WbTreeNode {
+                id: file.id.0,
+                is_directory: 0,
+                // Full display path rather than the bare name: cleanup rows
+                // need to show and open the actual location.
+                name: c_view(model.tree.file_display_path(file), &mut strings),
+                logical_bytes: file.size_bytes,
+                physical_bytes: file.allocation_bytes,
+                file_count: 0,
+                item_count: 0,
+                modified_utc: file.modified_utc.unwrap_or_default(),
+                has_modified_utc: u8::from(file.modified_utc.is_some()),
+            };
+            cb(&node as *const WbTreeNode, user_data);
+        });
+}
+
 #[no_mangle]
 pub extern "C" fn wb_scan_session_cancel(handle: WbScanSessionHandle) {
     if handle._private.is_null() {

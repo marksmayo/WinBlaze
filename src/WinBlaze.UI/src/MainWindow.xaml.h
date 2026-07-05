@@ -17,6 +17,17 @@ namespace winrt::WinBlaze::UI::implementation
         Diagnostics,
     };
 
+    // Top-level views selected from the sidebar rail (High Velocity design).
+    enum class AppView
+    {
+        Explorer,
+        Dashboard,
+        Insights,
+        Cleanup,
+        Settings,
+        Support,
+    };
+
     struct MainWindow : Microsoft::UI::Xaml::WindowT<MainWindow>
     {
         MainWindow();
@@ -198,6 +209,14 @@ namespace winrt::WinBlaze::UI::implementation
         void RefreshTreeListView();
         void ToggleTreeNodeExpansion(size_t node_index);
         void LoadMoreTreeChildren(size_t more_index);
+        void SwitchView(AppView view);
+        void ApplyViewVisibility();
+        void PopulateDashboardView();
+        void PopulateInsightsView();
+        void PopulateCleanupView();
+        void PopulateSettingsView();
+        void PopulateSupportView();
+        static void OpenExternal(std::wstring const& target);
         std::wstring TreeNodePath(size_t node_index) const;
         Microsoft::UI::Xaml::Controls::ListViewItem CreateTreeNodeListItem(size_t node_index);
         bool TreeArenaActive() const { return !m_tree_nodes.empty(); }
@@ -281,6 +300,20 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::TextBlock m_status_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_selection_status_text{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_sidebar_status_text{ nullptr };
+        AppView m_active_view{ AppView::Explorer };
+        std::map<AppView, Microsoft::UI::Xaml::Controls::Button> m_sidebar_items;
+        Microsoft::UI::Xaml::Controls::Border m_summary_card{ nullptr };
+        Microsoft::UI::Xaml::Controls::Border m_dashboard_card{ nullptr };
+        Microsoft::UI::Xaml::Controls::StackPanel m_dashboard_content{ nullptr };
+        Microsoft::UI::Xaml::Controls::Border m_insights_card{ nullptr };
+        Microsoft::UI::Xaml::Controls::StackPanel m_insights_content{ nullptr };
+        Microsoft::UI::Xaml::Controls::Border m_cleanup_card{ nullptr };
+        Microsoft::UI::Xaml::Controls::StackPanel m_cleanup_content{ nullptr };
+        Microsoft::UI::Xaml::Controls::Border m_settings_card{ nullptr };
+        Microsoft::UI::Xaml::Controls::StackPanel m_settings_content{ nullptr };
+        Microsoft::UI::Xaml::Controls::Border m_support_card{ nullptr };
+        Microsoft::UI::Xaml::Controls::StackPanel m_support_content{ nullptr };
+        Microsoft::UI::Xaml::Controls::Grid m_explorer_lower_grid{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_root_path_box{ nullptr };
         Microsoft::UI::Xaml::Controls::Button m_start_scan_button{ nullptr };
         Microsoft::UI::Xaml::Controls::Button m_incremental_scan_button{ nullptr };
@@ -380,7 +413,7 @@ namespace winrt::WinBlaze::UI::implementation
         // panel hidden) and search stays tucked away until revealed.
         bool m_show_folder_view{ false };
         bool m_show_folder_tree{ true };
-        bool m_show_runtime_metrics{ true };
+        bool m_show_runtime_metrics{ false };
         bool m_show_search{ false };
         ShellSection m_active_section{ ShellSection::Overview };
         std::chrono::steady_clock::time_point m_scan_started_at{};

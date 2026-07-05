@@ -154,6 +154,9 @@ try {
     Invoke-Button -Window $window -Name "Start scan" | Out-Null
     Start-Sleep -Seconds $ScanWaitSeconds
 
+    # Diagnostics are hidden by default in the High Velocity layout;
+    # reveal them before asserting on their text.
+    Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
     $correctness = Find-TextLike -Window $window -Pattern "Correctness:*totals*" -TimeoutSeconds 8
     Assert-True ($correctness -like "*issues=0*") "Correctness diagnostics did not report zero issues: $correctness"
 

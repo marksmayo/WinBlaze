@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <psapi.h>
+#include <shellapi.h>
 #include <d2d1_3.h>
 #include <d3d11_4.h>
 #include <dwrite_3.h>

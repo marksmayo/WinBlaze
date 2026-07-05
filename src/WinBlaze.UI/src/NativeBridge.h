@@ -32,4 +32,6 @@ namespace WinBlaze::UI::NativeBridge
     // starting at `offset`); `total` reports how many exist so callers can
     // page and show a "+N more" row.
     WbTreeChildrenResult TreeChildren(uint64_t parentId, uint64_t offset, TreeNodeHandler handler);
+    // Emits the largest files by allocation size (name = full path).
+    void TreeLargestFiles(uint64_t limit, TreeNodeHandler handler);
 }

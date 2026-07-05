@@ -130,6 +130,7 @@ try {
     $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($MissingPath)
 
     Invoke-Button -Window $window -Name "Start scan" | Out-Null
+    Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
     try {
         $correctness = Find-TextLike -Window $window -Pattern "Correctness:*issues=1*last issue=*$MissingPath*" -TimeoutSeconds $ScanWaitSeconds
         $recentIssues = Find-TextLike -Window $window -Pattern "Recent issues:*$MissingPath*" -TimeoutSeconds $ScanWaitSeconds
@@ -142,6 +143,7 @@ try {
 
     $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($FileRootPath)
     Invoke-Button -Window $window -Name "Start scan" | Out-Null
+    Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
     try {
         $fileRootCorrectness = Find-TextLike -Window $window -Pattern "Correctness:*issues=1*last issue=*$FileRootPath*" -TimeoutSeconds $ScanWaitSeconds
         $fileRootRecentIssues = Find-TextLike -Window $window -Pattern "Recent issues:*$FileRootPath*" -TimeoutSeconds $ScanWaitSeconds

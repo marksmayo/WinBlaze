@@ -82,6 +82,7 @@ $startTime = Get-Date
 $app = Start-Process -FilePath $resolvedAppPath -PassThru
 try {
     $window = Get-WinBlazeWindow -TimeoutSeconds $TimeoutSeconds
+    $runtime = Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
     $runtime = Find-TextLike -Window $window -Pattern "*results=loaded*" -TimeoutSeconds $TimeoutSeconds
     $loadedAt = Get-Date
     $catalog = Find-TextLike -Window $window -Pattern "Catalog entries: *" -TimeoutSeconds 5

@@ -128,6 +128,7 @@ try {
     $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($datasetPath)
 
     Invoke-Button -Window $window -Name "Start scan"
+    Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
     $initialPattern = "Correctness:*files=$($manifest.files)*directories=$($manifest.directories)*"
     $initialCorrectness = Find-TextLike -Window $window -Pattern $initialPattern -TimeoutSeconds $TimeoutSeconds
 
