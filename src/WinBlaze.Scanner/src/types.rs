@@ -19,6 +19,10 @@ pub struct ScanRuntimeConfig {
     pub root_path: PathBuf,
     pub reparse_policy: ReparseTraversalPolicy,
     pub pipeline: ScanPipelineConfig,
+    /// Directory-walk enumeration via raw FindFirstFileExW with
+    /// FIND_FIRST_EX_LARGE_FETCH (falls back to fs::read_dir per directory
+    /// on open failure). Off switches the walk wholly onto fs::read_dir.
+    pub fast_enumeration: bool,
 }
 
 impl Default for ScanRuntimeConfig {
@@ -35,6 +39,7 @@ impl Default for ScanRuntimeConfig {
             root_path: PathBuf::new(),
             reparse_policy: ReparseTraversalPolicy::default(),
             pipeline: ScanPipelineConfig::default(),
+            fast_enumeration: true,
         }
     }
 }

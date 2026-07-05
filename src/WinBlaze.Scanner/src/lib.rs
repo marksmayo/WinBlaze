@@ -9,6 +9,7 @@ pub mod scheduler;
 #[cfg(test)]
 mod tests;
 pub mod types;
+mod winfind;
 
 pub use controller::{ScanController, ScanHandle, ScanRequest};
 pub use errors::{

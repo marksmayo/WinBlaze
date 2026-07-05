@@ -15,6 +15,7 @@ use winblaze_core::{FileAttributes, ScanEvent, ScanIssueKind, ScanIssueRecord};
 
 use crate::errors::{classify_io_error, ScanErrorKind};
 use crate::filesystem::build_scan_access_plan;
+use crate::winfind;
 use crate::ntfs::{enumerate_ntfs_volume_parallel_streaming_summary, NtfsEnumerationError};
 use crate::performance::ScanPipelineConfig;
 use crate::pipeline::ScanEventPipeline;
@@ -71,6 +72,7 @@ impl ScanController {
         let pipeline_config = request.config.pipeline;
         let worker_count = request.config.max_parallelism.max(1);
         let reparse_policy = request.config.reparse_policy;
+        let fast_enumeration = request.config.fast_enumeration;
 
         let join = thread::spawn(move || {
             let mut pipeline = ScanEventPipeline::new(event_tx, pipeline_config);
@@ -104,6 +106,7 @@ impl ScanController {
                             &mut issue_keys,
                             reparse_policy,
                             worker_count,
+                            fast_enumeration,
                         );
                     }
                 }
@@ -115,6 +118,7 @@ impl ScanController {
                     &mut issue_keys,
                     reparse_policy,
                     worker_count,
+                    fast_enumeration,
                 );
             }
         });
@@ -138,6 +142,7 @@ fn run_fallback_scan(
     issue_keys: &mut HashSet<String>,
     reparse_policy: ReparseTraversalPolicy,
     worker_count: usize,
+    fast_enumeration: bool,
 ) {
     pipeline.emit_session_started(winblaze_core::VolumeRecord {
         id: winblaze_core::VolumeId(0),
@@ -175,12 +180,18 @@ fn run_fallback_scan(
         total_entries: 0,
     });
 
-    // The walker only needs a resolved identity for the handful of
-    // directories actually reached through a reparse point, so a single
-    // canonicalize() call for the root is the only unconditional cost.
-    let root_canonical = fs::canonicalize(selected_root)
-        .map(|resolved| strip_verbatim_prefix(&resolved))
-        .unwrap_or_else(|_| selected_root.to_path_buf());
+    // The walker only needs canonical ancestor identities for cycle checks
+    // on followed reparse points; under a skip-all policy the chain is never
+    // read, so it is never built (and the root canonicalize never happens).
+    let root_ancestors = if matches!(reparse_policy, ReparseTraversalPolicy::SkipAll) {
+        AncestorChain::disabled()
+    } else {
+        AncestorChain::root(
+            fs::canonicalize(selected_root)
+                .map(|resolved| strip_verbatim_prefix(&resolved))
+                .unwrap_or_else(|_| selected_root.to_path_buf()),
+        )
+    };
 
     // Force an initial progress tick regardless of which branch runs below:
     // the parallel walker only reports progress on a shared item-count
@@ -199,7 +210,8 @@ fn run_fallback_scan(
                 root_id,
                 reparse_policy,
                 worker_count,
-                root_canonical,
+                root_ancestors,
+                fast_enumeration,
             )
         } else {
             let mut walk_state = DirectoryWalkState::new();
@@ -207,7 +219,6 @@ fn run_fallback_scan(
 
             let mut directory_ids = HashMap::new();
             directory_ids.insert(selected_root.to_path_buf(), root_id);
-            let mut ancestor_canonical_stack = vec![root_canonical];
 
             walk_directory_tree(
                 pipeline,
@@ -218,7 +229,7 @@ fn run_fallback_scan(
                 &mut directory_ids,
                 issue_keys,
                 reparse_policy,
-                &mut ancestor_canonical_stack,
+                &root_ancestors,
             );
 
             (
@@ -319,17 +330,64 @@ fn strip_verbatim_prefix(path: &Path) -> PathBuf {
     }
 }
 
-fn is_ancestor_cycle(ancestor_canonical_stack: &[PathBuf], resolved_target: &Path) -> bool {
-    ancestor_canonical_stack
-        .iter()
-        .any(|ancestor| ancestor.as_path() == resolved_target)
+/// Immutable chain of canonical ancestor paths shared across walk tasks.
+/// Extending it for a child is one Arc allocation and handing it to a
+/// sibling task is a refcount bump, where the previous Vec-of-PathBuf stack
+/// deep-copied every ancestor for every descended directory. Disabled (and
+/// never allocated) when the reparse policy skips all reparse points - the
+/// chain is only ever read for cycle checks on followed reparse targets.
+#[derive(Clone)]
+struct AncestorChain(Option<Arc<AncestorNode>>);
+
+struct AncestorNode {
+    canonical: PathBuf,
+    parent: Option<Arc<AncestorNode>>,
+}
+
+impl AncestorChain {
+    fn disabled() -> Self {
+        AncestorChain(None)
+    }
+
+    fn root(canonical: PathBuf) -> Self {
+        AncestorChain(Some(Arc::new(AncestorNode {
+            canonical,
+            parent: None,
+        })))
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.0.is_some()
+    }
+
+    fn child(&self, canonical: PathBuf) -> Self {
+        AncestorChain(Some(Arc::new(AncestorNode {
+            canonical,
+            parent: self.0.clone(),
+        })))
+    }
+
+    fn last(&self) -> Option<&Path> {
+        self.0.as_deref().map(|node| node.canonical.as_path())
+    }
+
+    fn contains(&self, resolved_target: &Path) -> bool {
+        let mut cursor = self.0.as_deref();
+        while let Some(node) = cursor {
+            if node.canonical.as_path() == resolved_target {
+                return true;
+            }
+            cursor = node.parent.as_deref();
+        }
+        false
+    }
 }
 
 enum ReparseDecision {
-    /// Safe to descend; carries the canonical identity to push onto the
-    /// ancestor stack (a cheap path join for plain directories, or a
-    /// resolved target for an actual reparse point).
-    Follow(PathBuf),
+    /// Safe to descend; carries the child's ancestor chain (extended by a
+    /// cheap path join for plain directories, or by the resolved target for
+    /// an actual reparse point; not extended at all when tracking is off).
+    Follow(AncestorChain),
     SkippedByPolicy,
     SkippedCycle,
     SkippedUnresolvable,
@@ -345,14 +403,19 @@ fn evaluate_reparse_descent(
     entry_name: &str,
     attributes: FileAttributes,
     policy: ReparseTraversalPolicy,
-    ancestor_canonical_stack: &[PathBuf],
+    ancestors: &AncestorChain,
 ) -> ReparseDecision {
     if !attributes.is_reparse_point() {
-        let canonical = ancestor_canonical_stack
+        if !ancestors.is_enabled() {
+            // Chain tracking is off (the policy never follows reparse
+            // points), so skip the canonical path join entirely.
+            return ReparseDecision::Follow(AncestorChain::disabled());
+        }
+        let canonical = ancestors
             .last()
             .map(|parent| parent.join(entry_name))
             .unwrap_or_else(|| directory.join(entry_name));
-        return ReparseDecision::Follow(canonical);
+        return ReparseDecision::Follow(ancestors.child(canonical));
     }
 
     if !should_descend_into_reparse_target(entry_path, attributes, policy) {
@@ -362,10 +425,10 @@ fn evaluate_reparse_descent(
     match fs::canonicalize(entry_path) {
         Ok(resolved) => {
             let resolved = strip_verbatim_prefix(&resolved);
-            if is_ancestor_cycle(ancestor_canonical_stack, &resolved) {
+            if ancestors.contains(&resolved) {
                 ReparseDecision::SkippedCycle
             } else {
-                ReparseDecision::Follow(resolved)
+                ReparseDecision::Follow(ancestors.child(resolved))
             }
         }
         Err(_) => ReparseDecision::SkippedUnresolvable,
@@ -390,7 +453,7 @@ fn walk_directory_tree(
     directory_ids: &mut HashMap<PathBuf, winblaze_core::DirectoryId>,
     issue_keys: &mut HashSet<String>,
     reparse_policy: ReparseTraversalPolicy,
-    ancestor_canonical_stack: &mut Vec<PathBuf>,
+    ancestors: &AncestorChain,
 ) {
     let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
@@ -421,8 +484,10 @@ fn walk_directory_tree(
             }
         };
 
-        let entry_path = entry.path();
-        let entry_name = entry.file_name().to_string_lossy().to_string();
+        let entry_name = entry
+            .file_name()
+            .into_string()
+            .unwrap_or_else(|name| name.to_string_lossy().into_owned());
 
         // Free on Windows: DirEntry::metadata() is built from the
         // WIN32_FIND_DATAW the directory enumeration already cached.
@@ -432,7 +497,7 @@ fn walk_directory_tree(
                 emit_deduplicated_issue(
                     pipeline,
                     issue_keys,
-                    convert_io_error(&error, entry_path.display().to_string()),
+                    convert_io_error(&error, entry.path().display().to_string()),
                 );
                 continue;
             }
@@ -443,14 +508,18 @@ fn walk_directory_tree(
         // std reports directory symlinks/junctions as non-directories, which
         // routed every reparse directory through the file path and made the
         // cycle detection below unreachable.
+        //
+        // Only directories materialize entry.path(): file records carry a
+        // parent id, not a path, so the per-file PathBuf was pure overhead.
         if attributes.is_directory() {
+            let entry_path = entry.path();
             let decision = evaluate_reparse_descent(
                 directory,
                 &entry_path,
                 &entry_name,
                 attributes,
                 reparse_policy,
-                ancestor_canonical_stack,
+                ancestors,
             );
 
             let directory_id = walk_state.next_directory_id();
@@ -466,8 +535,7 @@ fn walk_directory_tree(
             );
 
             match decision {
-                ReparseDecision::Follow(canonical) => {
-                    ancestor_canonical_stack.push(canonical);
+                ReparseDecision::Follow(child_ancestors) => {
                     walk_directory_tree(
                         pipeline,
                         cancelled,
@@ -477,9 +545,8 @@ fn walk_directory_tree(
                         directory_ids,
                         issue_keys,
                         reparse_policy,
-                        ancestor_canonical_stack,
+                        &child_ancestors,
                     );
-                    ancestor_canonical_stack.pop();
                 }
                 ReparseDecision::SkippedCycle => {
                     emit_deduplicated_issue(pipeline, issue_keys, reparse_cycle_issue(&entry_path));
@@ -673,7 +740,7 @@ fn provisional_volume_record(
 struct FallbackTask {
     path: PathBuf,
     directory_id: winblaze_core::DirectoryId,
-    ancestor_canonical_stack: Vec<PathBuf>,
+    ancestors: AncestorChain,
 }
 
 struct FallbackQueue {
@@ -685,6 +752,7 @@ struct FallbackSharedState {
     queue: Mutex<FallbackQueue>,
     work_available: Condvar,
     reparse_policy: ReparseTraversalPolicy,
+    fast_enumeration: bool,
     issue_keys: Mutex<HashSet<String>>,
     next_directory_id: AtomicU64,
     next_file_id: AtomicU64,
@@ -708,19 +776,21 @@ fn run_fallback_scan_parallel(
     root_id: winblaze_core::DirectoryId,
     reparse_policy: ReparseTraversalPolicy,
     worker_count: usize,
-    root_canonical: PathBuf,
+    root_ancestors: AncestorChain,
+    fast_enumeration: bool,
 ) -> (u64, u64, u64, u64) {
     let shared = FallbackSharedState {
         queue: Mutex::new(FallbackQueue {
             tasks: VecDeque::from(vec![FallbackTask {
                 path: selected_root.to_path_buf(),
                 directory_id: root_id,
-                ancestor_canonical_stack: vec![root_canonical],
+                ancestors: root_ancestors,
             }]),
             outstanding: 1,
         }),
         work_available: Condvar::new(),
         reparse_policy,
+        fast_enumeration,
         issue_keys: Mutex::new(HashSet::new()),
         next_directory_id: AtomicU64::new(6),
         next_file_id: AtomicU64::new(1),
@@ -803,6 +873,14 @@ fn process_fallback_directory(
     task: &FallbackTask,
     cancelled: &AtomicBool,
 ) -> Vec<FallbackTask> {
+    if shared.fast_enumeration {
+        // Fall through to fs::read_dir on open failure so exotic paths keep
+        // working; the error dirs then fail (and report) through one path.
+        if let Ok(entries) = winfind::read_dir_fast(&task.path) {
+            return process_fallback_entries_fast(shared, pipeline, task, cancelled, entries);
+        }
+    }
+
     let entries = match fs::read_dir(&task.path) {
         Ok(entries) => entries,
         Err(error) => {
@@ -833,8 +911,10 @@ fn process_fallback_directory(
             }
         };
 
-        let entry_path = entry.path();
-        let entry_name = entry.file_name().to_string_lossy().to_string();
+        let entry_name = entry
+            .file_name()
+            .into_string()
+            .unwrap_or_else(|name| name.to_string_lossy().into_owned());
 
         let metadata = match entry.metadata() {
             Ok(metadata) => metadata,
@@ -842,7 +922,7 @@ fn process_fallback_directory(
                 emit_deduplicated_issue_shared(
                     pipeline,
                     shared,
-                    convert_io_error(&error, entry_path.display().to_string()),
+                    convert_io_error(&error, entry.path().display().to_string()),
                 );
                 continue;
             }
@@ -853,14 +933,18 @@ fn process_fallback_directory(
         // std reports directory symlinks/junctions as non-directories, which
         // routed every reparse directory through the file path and made the
         // cycle detection below unreachable.
+        //
+        // Only directories materialize entry.path(): file records carry a
+        // parent id, not a path, so the per-file PathBuf was pure overhead.
         if attributes.is_directory() {
+            let entry_path = entry.path();
             let decision = evaluate_reparse_descent(
                 &task.path,
                 &entry_path,
                 &entry_name,
                 attributes,
                 shared.reparse_policy,
-                &task.ancestor_canonical_stack,
+                &task.ancestors,
             );
 
             let directory_id =
@@ -875,13 +959,11 @@ fn process_fallback_directory(
             );
 
             match decision {
-                ReparseDecision::Follow(canonical) => {
-                    let mut ancestor_canonical_stack = task.ancestor_canonical_stack.clone();
-                    ancestor_canonical_stack.push(canonical);
+                ReparseDecision::Follow(ancestors) => {
                     new_tasks.push(FallbackTask {
                         path: entry_path,
                         directory_id,
-                        ancestor_canonical_stack,
+                        ancestors,
                     });
                 }
                 ReparseDecision::SkippedCycle => {
@@ -891,6 +973,95 @@ fn process_fallback_directory(
             }
         } else {
             emit_file_record_shared(pipeline, shared, task.directory_id, entry_name, &metadata);
+        }
+    }
+
+    maybe_emit_progress_shared(shared, pipeline);
+    new_tasks
+}
+
+fn process_fallback_entries_fast(
+    shared: &FallbackSharedState,
+    pipeline: &mut ScanEventPipeline,
+    task: &FallbackTask,
+    cancelled: &AtomicBool,
+    entries: winfind::FindIterator,
+) -> Vec<FallbackTask> {
+    let mut new_tasks = Vec::new();
+    for entry_result in entries {
+        if cancelled.load(Ordering::SeqCst) {
+            break;
+        }
+
+        let entry = match entry_result {
+            Ok(entry) => entry,
+            Err(error) => {
+                emit_deduplicated_issue_shared(
+                    pipeline,
+                    shared,
+                    convert_io_error(&error, task.path.display().to_string()),
+                );
+                continue;
+            }
+        };
+        let attributes = FileAttributes(entry.attributes);
+
+        if attributes.is_directory() {
+            let entry_path = task.path.join(&entry.name);
+            let decision = evaluate_reparse_descent(
+                &task.path,
+                &entry_path,
+                &entry.name,
+                attributes,
+                shared.reparse_policy,
+                &task.ancestors,
+            );
+
+            let directory_id =
+                winblaze_core::DirectoryId(shared.next_directory_id.fetch_add(1, Ordering::Relaxed));
+            emit_directory_record_shared(
+                pipeline,
+                shared,
+                directory_id,
+                task.directory_id,
+                &entry_path,
+                entry.name,
+            );
+
+            match decision {
+                ReparseDecision::Follow(ancestors) => {
+                    new_tasks.push(FallbackTask {
+                        path: entry_path,
+                        directory_id,
+                        ancestors,
+                    });
+                }
+                ReparseDecision::SkippedCycle => {
+                    emit_deduplicated_issue_shared(pipeline, shared, reparse_cycle_issue(&entry_path));
+                }
+                ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
+            }
+        } else {
+            let size_bytes = entry.size_bytes;
+            shared.files_seen.fetch_add(1, Ordering::Relaxed);
+            shared.total_size_bytes.fetch_add(size_bytes, Ordering::Relaxed);
+            shared
+                .total_allocation_bytes
+                .fetch_add(size_bytes, Ordering::Relaxed);
+            let file_id = shared.next_file_id.fetch_add(1, Ordering::Relaxed);
+            pipeline.emit_file(winblaze_core::FileRecord {
+                id: winblaze_core::FileId(file_id),
+                parent_directory_id: task.directory_id,
+                name: entry.name,
+                // Derived on demand from the parent directory (see FileRecord docs).
+                full_path: String::new(),
+                size_bytes,
+                allocation_bytes: size_bytes,
+                attributes: winblaze_core::FileAttributes::ARCHIVE,
+                created_utc: filetime_or_none(entry.created_utc),
+                modified_utc: filetime_or_none(entry.modified_utc),
+                accessed_utc: filetime_or_none(entry.accessed_utc),
+            });
         }
     }
 
@@ -990,20 +1161,12 @@ mod tests {
 
     #[test]
     fn is_ancestor_cycle_detects_exact_and_nested_matches() {
-        let ancestors = vec![
-            PathBuf::from(r"C:\Users\markm"),
-            PathBuf::from(r"C:\Users\markm\AppData\Local"),
-        ];
+        let ancestors = AncestorChain::root(PathBuf::from(r"C:\Users\markm"))
+            .child(PathBuf::from(r"C:\Users\markm\AppData\Local"));
 
-        assert!(is_ancestor_cycle(
-            &ancestors,
-            Path::new(r"C:\Users\markm\AppData\Local")
-        ));
-        assert!(is_ancestor_cycle(&ancestors, Path::new(r"C:\Users\markm")));
-        assert!(!is_ancestor_cycle(
-            &ancestors,
-            Path::new(r"C:\Users\markm\AppData\Roaming")
-        ));
+        assert!(ancestors.contains(Path::new(r"C:\Users\markm\AppData\Local")));
+        assert!(ancestors.contains(Path::new(r"C:\Users\markm")));
+        assert!(!ancestors.contains(Path::new(r"C:\Users\markm\AppData\Roaming")));
     }
 
     #[test]
@@ -1022,15 +1185,10 @@ mod tests {
     fn evaluate_reparse_descent_skips_self_referential_junction() {
         // Mirrors the stock `AppData\Local\Application Data` junction,
         // which points back at its own parent directory.
-        let ancestors = vec![
-            PathBuf::from(r"C:\Users\markm"),
-            PathBuf::from(r"C:\Users\markm\AppData\Local"),
-        ];
+        let ancestors = AncestorChain::root(PathBuf::from(r"C:\Users\markm"))
+            .child(PathBuf::from(r"C:\Users\markm\AppData\Local"));
 
-        assert!(is_ancestor_cycle(
-            &ancestors,
-            Path::new(r"C:\Users\markm\AppData\Local")
-        ));
+        assert!(ancestors.contains(Path::new(r"C:\Users\markm\AppData\Local")));
 
         let decision = should_descend_into_reparse_target(
             Path::new(r"C:\Users\markm\AppData\Local\Application Data"),
