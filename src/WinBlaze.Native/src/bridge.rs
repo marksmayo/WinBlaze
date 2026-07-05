@@ -472,7 +472,7 @@ impl NativeSession {
 }
 
 fn forward_events(
-    rx: mpsc::Receiver<ScanEvent>,
+    rx: mpsc::Receiver<Vec<ScanEvent>>,
     callback: WbEventCallback,
     user_data: usize,
     index_root: PathBuf,
@@ -498,7 +498,7 @@ fn forward_events(
     let mut model_published = false;
     let mut ui_forwarder = UiEventForwarder::new(callback, user_data);
 
-    for event in rx {
+    for event in rx.into_iter().flatten() {
         log.append_scan_event(&event);
 
         // Publish the read model BEFORE the UI learns the scan ended: its

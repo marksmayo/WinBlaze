@@ -11,6 +11,34 @@ use crate::{
     ScanController, ScanRequest, ScanRuntimeConfig,
 };
 
+/// Flattens the batched scan channel back to per-event receives so the
+/// event-order assertions below stay readable.
+struct FlatReceiver {
+    rx: std::sync::mpsc::Receiver<Vec<ScanEvent>>,
+    pending: std::collections::VecDeque<ScanEvent>,
+}
+
+impl FlatReceiver {
+    fn new(rx: std::sync::mpsc::Receiver<Vec<ScanEvent>>) -> Self {
+        Self {
+            rx,
+            pending: std::collections::VecDeque::new(),
+        }
+    }
+
+    fn recv_timeout(
+        &mut self,
+        timeout: Duration,
+    ) -> Result<ScanEvent, std::sync::mpsc::RecvTimeoutError> {
+        loop {
+            if let Some(event) = self.pending.pop_front() {
+                return Ok(event);
+            }
+            self.pending.extend(self.rx.recv_timeout(timeout)?);
+        }
+    }
+}
+
 #[test]
 fn scanner_emits_progress_and_summary_events() {
     let unique = SystemTime::now()
@@ -23,6 +51,7 @@ fn scanner_emits_progress_and_summary_events() {
     fs::write(nested.join("sample.txt"), b"sample").expect("write event fixture file");
 
     let (controller, rx) = ScanController::channel();
+    let mut rx = FlatReceiver::new(rx);
     let request = ScanRequest {
         root_path: root.clone(),
         config: ScanRuntimeConfig {
@@ -83,6 +112,7 @@ fn directory_walk_scans_real_fixture_with_expected_totals() {
     fs::write(nested.join("leaf.log"), [3_u8; 17]).expect("write nested file");
 
     let (controller, rx) = ScanController::channel();
+    let mut rx = FlatReceiver::new(rx);
     let request = ScanRequest {
         root_path: root.clone(),
         config: ScanRuntimeConfig {
@@ -156,6 +186,7 @@ fn directory_walk_handles_large_single_directory_fanout() {
     }
 
     let (controller, rx) = ScanController::channel();
+    let mut rx = FlatReceiver::new(rx);
     let request = ScanRequest {
         root_path: root.clone(),
         config: ScanRuntimeConfig {
@@ -203,6 +234,7 @@ fn directory_walk_reports_missing_root_without_fake_directory_record() {
     let root = std::env::temp_dir().join(format!("winblaze-scanner-missing-{unique}"));
 
     let (controller, rx) = ScanController::channel();
+    let mut rx = FlatReceiver::new(rx);
     let request = ScanRequest {
         root_path: root.clone(),
         config: ScanRuntimeConfig {
@@ -261,6 +293,7 @@ fn directory_walk_reports_file_root_without_fake_directory_record() {
     fs::write(&root, b"not a directory").expect("write file root");
 
     let (controller, rx) = ScanController::channel();
+    let mut rx = FlatReceiver::new(rx);
     let request = ScanRequest {
         root_path: root.clone(),
         config: ScanRuntimeConfig {
@@ -329,6 +362,7 @@ fn directory_walk_breaks_self_referential_reparse_cycle() {
     }
 
     let (controller, rx) = ScanController::channel();
+    let mut rx = FlatReceiver::new(rx);
     let request = ScanRequest {
         root_path: root.clone(),
         config: ScanRuntimeConfig {
@@ -402,6 +436,7 @@ fn directory_walk_parallel_matches_sequential_totals() {
     }
 
     let (controller, rx) = ScanController::channel();
+    let mut rx = FlatReceiver::new(rx);
     let request = ScanRequest {
         root_path: root.clone(),
         config: ScanRuntimeConfig {

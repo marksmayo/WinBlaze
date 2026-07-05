@@ -8,8 +8,8 @@ pub struct ScanPipelineConfig {
 impl Default for ScanPipelineConfig {
     fn default() -> Self {
         Self {
-            batch_size: 64,
-            max_in_flight_events: 128,
+            batch_size: 512,
+            max_in_flight_events: 1024,
             max_in_flight_bytes: 8 * 1024 * 1024,
         }
     }
@@ -151,7 +151,7 @@ mod tests {
             treemap_tile_limit: 10,
         };
 
-        assert_eq!(plan.projected_scan_flushes(), 781_250);
+        assert_eq!(plan.projected_scan_flushes(), 97_657);
         assert_eq!(plan.materialized_catalog_rows(), 8_192);
         assert_eq!(plan.visible_tree_rows(), 256);
         assert_eq!(plan.visible_treemap_tiles(), 10);

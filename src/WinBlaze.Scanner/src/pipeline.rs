@@ -9,15 +9,15 @@ use crate::performance::ScanPipelineConfig;
 
 #[derive(Debug)]
 pub struct ScanEventPipeline {
-    sender: Sender<ScanEvent>,
+    sender: Sender<Vec<ScanEvent>>,
     config: ScanPipelineConfig,
-    buffer: Vec<(ScanEvent, usize)>,
+    buffer: Vec<ScanEvent>,
     buffered_bytes: usize,
     progress: ScanProgress,
 }
 
 impl ScanEventPipeline {
-    pub fn new(sender: Sender<ScanEvent>, config: ScanPipelineConfig) -> Self {
+    pub fn new(sender: Sender<Vec<ScanEvent>>, config: ScanPipelineConfig) -> Self {
         Self {
             sender,
             config,
@@ -29,7 +29,7 @@ impl ScanEventPipeline {
 
     /// Clones the underlying sender so a worker thread can drive its own
     /// pipeline instance while still funneling events into the same channel.
-    pub fn cloned_sender(&self) -> Sender<ScanEvent> {
+    pub fn cloned_sender(&self) -> Sender<Vec<ScanEvent>> {
         self.sender.clone()
     }
 
@@ -121,16 +121,32 @@ impl ScanEventPipeline {
     }
 
     pub fn flush(&mut self) {
-        for (event, _) in self.buffer.drain(..) {
-            let _ = self.sender.send(event);
+        if self.buffer.is_empty() {
+            return;
         }
+        let batch = std::mem::replace(
+            &mut self.buffer,
+            Vec::with_capacity(self.config.batch_size.max(1)),
+        );
+        let _ = self.sender.send(batch);
         self.buffered_bytes = 0;
     }
 
     fn enqueue(&mut self, event: ScanEvent, estimated_bytes: usize) {
-        self.buffer.push((event, estimated_bytes));
+        // Progress must reach the consumer promptly, and terminal events must
+        // not sit in a buffer behind cancellation checks, so both force a
+        // flush of everything queued so far (in order).
+        let force_flush = matches!(
+            event,
+            ScanEvent::Progress(_)
+                | ScanEvent::Summary(_)
+                | ScanEvent::Completed
+                | ScanEvent::Cancelled
+                | ScanEvent::Failed(_)
+        );
+        self.buffer.push(event);
         self.buffered_bytes = self.buffered_bytes.saturating_add(estimated_bytes);
-        if self.should_flush() {
+        if force_flush || self.should_flush() {
             self.flush();
         }
     }
@@ -170,7 +186,30 @@ mod tests {
         pipeline.emit_completed();
         pipeline.flush();
 
-        assert!(matches!(rx.recv().expect("first"), ScanEvent::Progress(_)));
-        assert!(matches!(rx.recv().expect("second"), ScanEvent::Completed));
+        let mut events = rx.try_iter().flatten();
+        assert!(matches!(events.next().expect("first"), ScanEvent::Progress(_)));
+        assert!(matches!(events.next().expect("second"), ScanEvent::Completed));
+        assert!(events.next().is_none());
+    }
+
+    #[test]
+    fn pipeline_batches_records_until_batch_size() {
+        let (tx, rx) = mpsc::channel();
+        let mut pipeline = ScanEventPipeline::new(
+            tx,
+            ScanPipelineConfig {
+                batch_size: 3,
+                max_in_flight_events: 100,
+                max_in_flight_bytes: 1 << 20,
+            },
+        );
+
+        for _ in 0..2 {
+            pipeline.emit_file(FileRecord::default());
+        }
+        assert!(rx.try_recv().is_err(), "records below batch size stay buffered");
+
+        pipeline.emit_file(FileRecord::default());
+        assert_eq!(rx.try_recv().expect("batch at batch_size").len(), 3);
     }
 }

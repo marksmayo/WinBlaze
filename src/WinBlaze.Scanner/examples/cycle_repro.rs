@@ -27,12 +27,14 @@ fn main() {
     };
     let handle = controller.start_scan(request);
 
-    loop {
+    'outer: loop {
         match rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(event) => {
-                println!("{event:?}");
-                if matches!(event, winblaze_core::ScanEvent::Completed) {
-                    break;
+            Ok(batch) => {
+                for event in batch {
+                    println!("{event:?}");
+                    if matches!(event, winblaze_core::ScanEvent::Completed) {
+                        break 'outer;
+                    }
                 }
             }
             Err(_) => {

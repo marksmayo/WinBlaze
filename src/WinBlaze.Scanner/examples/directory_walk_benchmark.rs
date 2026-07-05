@@ -46,7 +46,7 @@ fn main() {
     });
 
     let mut counts = EventCounts::default();
-    for event in rx {
+    for event in rx.into_iter().flatten() {
         if counts.first_event_ms.is_none() {
             counts.first_event_ms = Some(started.elapsed().as_millis());
         }

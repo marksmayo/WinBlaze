@@ -55,11 +55,11 @@ impl ScanHandle {
 }
 
 pub struct ScanController {
-    event_tx: Sender<ScanEvent>,
+    event_tx: Sender<Vec<ScanEvent>>,
 }
 
 impl ScanController {
-    pub fn new(event_tx: Sender<ScanEvent>) -> Self {
+    pub fn new(event_tx: Sender<Vec<ScanEvent>>) -> Self {
         Self { event_tx }
     }
 
@@ -125,7 +125,7 @@ impl ScanController {
         }
     }
 
-    pub fn channel() -> (Self, Receiver<ScanEvent>) {
+    pub fn channel() -> (Self, Receiver<Vec<ScanEvent>>) {
         let (event_tx, event_rx) = mpsc::channel();
         (Self::new(event_tx), event_rx)
     }
@@ -755,7 +755,7 @@ fn run_fallback_scan_parallel(
 fn run_fallback_worker(
     shared: &FallbackSharedState,
     cancelled: &AtomicBool,
-    event_tx: Sender<ScanEvent>,
+    event_tx: Sender<Vec<ScanEvent>>,
     pipeline_config: ScanPipelineConfig,
 ) {
     let mut pipeline = ScanEventPipeline::new(event_tx, pipeline_config);

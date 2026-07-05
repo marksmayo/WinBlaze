@@ -30,7 +30,7 @@ fn main() {
     let mut completed = false;
     let mut failed_message = String::new();
 
-    for event in rx {
+    for event in rx.into_iter().flatten() {
         match event {
             winblaze_core::ScanEvent::FileFound(_) => files += 1,
             winblaze_core::ScanEvent::DirectoryFound(_) => directories += 1,
