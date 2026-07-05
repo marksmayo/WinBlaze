@@ -113,6 +113,31 @@ typedef struct WbEvent
     WbExtensionStatsSnapshot extension_stats;
 } WbEvent;
 
+/* One entry in the display tree. `id` identifies a directory only when
+   is_directory is set - file and directory id counters overlap numerically,
+   so file ids must not be passed back to wb_tree_children. The name view is
+   valid only for the duration of the callback. */
+typedef struct WbTreeNode
+{
+    uint64_t id;
+    uint8_t is_directory;
+    WbCStringView name;
+    uint64_t logical_bytes;
+    uint64_t physical_bytes;
+    uint64_t file_count;
+    uint64_t item_count;
+    int64_t modified_utc;
+    uint8_t has_modified_utc;
+} WbTreeNode;
+
+typedef struct WbTreeChildrenResult
+{
+    uint64_t emitted;
+    uint64_t total;
+} WbTreeChildrenResult;
+
+typedef void(__stdcall* WbTreeNodeCallback)(const WbTreeNode* node, void* user_data);
+
 typedef struct WbScanSessionHandle
 {
     void* _private;
@@ -128,6 +153,12 @@ void wb_index_snapshot_load(WbCatalogCallback callback, void* user_data);
 WbIndexSnapshotStats wb_index_snapshot_load_with_stats(WbCatalogCallback callback, void* user_data);
 WbIndexSnapshotStats wb_index_snapshot_stats(void);
 void wb_index_snapshot_extension_stats(WbExtensionStatCallback callback, void* user_data);
+/* Emits the display-tree root; returns 1 when a root exists, 0 for an empty
+   index. The root node's name is its full mount-point path. */
+uint8_t wb_tree_root(WbTreeNodeCallback callback, void* user_data);
+/* Emits direct children of directory parent_id, largest physical size first,
+   capped at 4096; total lets callers render a "+N more" row. */
+WbTreeChildrenResult wb_tree_children(uint64_t parent_id, WbTreeNodeCallback callback, void* user_data);
 
 #ifdef __cplusplus
 }

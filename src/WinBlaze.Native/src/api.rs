@@ -48,6 +48,34 @@ pub struct WbIndexSnapshotStats {
     pub cache_loaded_from_backup: u8,
 }
 
+/// One entry in the display tree. `id` identifies a directory only when
+/// `is_directory` is set — file and directory id counters overlap
+/// numerically, so file ids must not be passed back to `wb_tree_children`.
+/// The `name` view is valid only for the duration of the callback.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WbTreeNode {
+    pub id: u64,
+    pub is_directory: u8,
+    pub name: WbCStringView,
+    pub logical_bytes: u64,
+    pub physical_bytes: u64,
+    pub file_count: u64,
+    pub item_count: u64,
+    pub modified_utc: i64,
+    pub has_modified_utc: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WbTreeChildrenResult {
+    pub emitted: u64,
+    pub total: u64,
+}
+
+pub type WbTreeNodeCallback =
+    Option<extern "C" fn(node: *const WbTreeNode, user_data: *mut core::ffi::c_void)>;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WbCatalogSnapshotKind {

@@ -5,7 +5,7 @@ use std::{
     io::Write,
     path::PathBuf,
     ptr::null_mut,
-    sync::{mpsc, Mutex},
+    sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -16,14 +16,15 @@ use winblaze_core::{
 };
 use winblaze_index::{
     BufferedIndexTransaction, IndexBackend, IndexRepository, IndexTransaction,
-    SqliteIndexRepository,
+    SqliteIndexRepository, TreeEntry, TreeIndex,
 };
 use winblaze_scanner::{ScanController, ScanRequest, ScanRuntimeConfig};
 
 use crate::api::{
     WbCStringView, WbCatalogCallback, WbCatalogEntry, WbEvent, WbEventCallback, WbEventKind,
     WbExtensionStat, WbExtensionStatCallback, WbExtensionStatsSnapshot, WbIncrementalChangeSummary,
-    WbIndexSnapshotStats, WbNativeError, WbScanSessionHandle, WbScanSummary,
+    WbIndexSnapshotStats, WbNativeError, WbScanSessionHandle, WbScanSummary, WbTreeChildrenResult,
+    WbTreeNode, WbTreeNodeCallback,
 };
 
 const MAX_JSON_LOG_BYTES: u64 = 2 * 1024 * 1024;
@@ -34,6 +35,96 @@ const UI_PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(150);
 const EXTENSION_STATS_MIN_INTERVAL: Duration = Duration::from_millis(400);
 const EXTENSION_STATS_TOP_LIMIT: usize = 40;
 const PROGRESS_LOG_MIN_INTERVAL: Duration = Duration::from_secs(1);
+const TREE_CHILDREN_LIMIT: usize = 4096;
+
+/// Read model shared by the tree/catalog/extension-stats queries: the display
+/// tree plus derived totals, built once per snapshot instead of re-reading
+/// the multi-hundred-MB snapshot file on every FFI call.
+struct IndexModel {
+    tree: TreeIndex,
+    extension_totals: Vec<(String, u64, u64)>,
+    cache_read_bytes: u64,
+    cache_read_millis: u64,
+    cache_decode_millis: u64,
+    cache_loaded_from_backup: bool,
+}
+
+static INDEX_MODEL: Mutex<Option<Arc<IndexModel>>> = Mutex::new(None);
+
+fn build_index_model(
+    transaction: BufferedIndexTransaction,
+    cache_stats: Option<(u64, u64, u64, bool)>,
+) -> IndexModel {
+    let tree = TreeIndex::build(transaction);
+
+    let mut totals: HashMap<String, (u64, u64)> = HashMap::new();
+    for file in tree.files() {
+        let entry = totals.entry(extension_key(&file.name)).or_insert((0, 0));
+        entry.0 = entry.0.saturating_add(file.size_bytes);
+        entry.1 = entry.1.saturating_add(1);
+    }
+    let extension_totals = totals
+        .into_iter()
+        .map(|(extension, (bytes, files))| (extension, bytes, files))
+        .collect();
+
+    let (read_bytes, read_millis, decode_millis, from_backup) =
+        cache_stats.unwrap_or((0, 0, 0, false));
+    IndexModel {
+        tree,
+        extension_totals,
+        cache_read_bytes: read_bytes,
+        cache_read_millis: read_millis,
+        cache_decode_millis: decode_millis,
+        cache_loaded_from_backup: from_backup,
+    }
+}
+
+fn set_index_model(model: IndexModel) {
+    let mut guard = match INDEX_MODEL.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    *guard = Some(Arc::new(model));
+}
+
+fn invalidate_index_model() {
+    let mut guard = match INDEX_MODEL.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    *guard = None;
+}
+
+/// Returns the cached model, loading it from the persisted snapshot when
+/// absent. The lock is held across the disk load so concurrent callers don't
+/// each pay the read.
+fn get_or_load_index_model() -> Arc<IndexModel> {
+    let mut guard = match INDEX_MODEL.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if let Some(model) = guard.as_ref() {
+        return Arc::clone(model);
+    }
+
+    let repository = SqliteIndexRepository::open(&index_storage_root(), IndexBackend::BinaryCache);
+    let cache_stats = {
+        let snapshot = repository.snapshot();
+        (
+            snapshot.cache_read_bytes,
+            snapshot.cache_read_millis,
+            snapshot.cache_decode_millis,
+            snapshot.cache_loaded_from_backup,
+        )
+    };
+    let model = Arc::new(build_index_model(
+        repository.into_transaction(),
+        Some(cache_stats),
+    ));
+    *guard = Some(Arc::clone(&model));
+    model
+}
 
 pub struct NativeSession {
     controller: ScanController,
@@ -249,11 +340,21 @@ impl NativeSession {
 
     fn join(self) {
         self.cancel();
-        if let Some(handle) = self.scan_handle.lock().expect("lock poisoned").take() {
+        let Self {
+            controller,
+            worker,
+            scan_handle,
+        } = self;
+        if let Some(handle) = scan_handle.lock().expect("lock poisoned").take() {
             handle.join();
         }
-        if let Some(worker) = self.worker.lock().expect("lock poisoned").take() {
-            let _ = worker.join();
+        // The event-forwarding worker's `for event in rx` loop only ends once
+        // every Sender is gone; the controller holds the original one, so it
+        // must drop before joining the worker or this blocks forever.
+        drop(controller);
+        let worker_handle = worker.lock().expect("lock poisoned").take();
+        if let Some(worker_handle) = worker_handle {
+            let _ = worker_handle.join();
         }
     }
 }
@@ -312,6 +413,17 @@ fn forward_events(
         }
         log.append_flush("completed", result.is_ok());
     }
+
+    // Publish the read model for tree/catalog/extension queries. For a
+    // replace-snapshot scan the transaction IS the new state; an incremental
+    // rescan merged into the repository, so take its state instead.
+    let model = match persistence_mode {
+        ScanPersistenceMode::ReplaceSnapshot => build_index_model(transaction, None),
+        ScanPersistenceMode::IncrementalRescan => {
+            build_index_model(repository.into_transaction(), None)
+        }
+    };
+    set_index_model(model);
 }
 
 fn should_flush_index(event: &ScanEvent, persistence_mode: ScanPersistenceMode) -> bool {
@@ -881,24 +993,8 @@ fn load_extension_stats_from_snapshot(
         return;
     };
 
-    let repository = SqliteIndexRepository::open(&index_storage_root(), IndexBackend::BinaryCache);
-
-    // Aggregating by extension needs every record, but not a clone of every
-    // record: `for_each_file` visits references into the existing table
-    // instead of cloning ~everything (names, paths, timestamps) into a
-    // throwaway Vec first.
-    let mut totals: HashMap<String, (u64, u64)> = HashMap::new();
-    repository.for_each_file(|file| {
-        let entry = totals.entry(extension_key(&file.name)).or_insert((0, 0));
-        entry.0 = entry.0.saturating_add(file.size_bytes);
-        entry.1 = entry.1.saturating_add(1);
-    });
-
-    let totals: Vec<(String, u64, u64)> = totals
-        .into_iter()
-        .map(|(extension, (bytes, files))| (extension, bytes, files))
-        .collect();
-    let totals = sorted_top_extension_totals(totals);
+    let model = get_or_load_index_model();
+    let totals = sorted_top_extension_totals(model.extension_totals.clone());
 
     for (extension, bytes, files) in totals {
         let mut strings = Vec::new();
@@ -926,55 +1022,46 @@ fn load_catalog_entries_with_stats(
     callback: WbCatalogCallback,
     user_data: *mut core::ffi::c_void,
 ) -> WbIndexSnapshotStats {
-    let repository = SqliteIndexRepository::open(&index_storage_root(), IndexBackend::BinaryCache);
-    let snapshot = repository.snapshot();
-    // Counts come from the cheap `_count()` accessors, and only the first
-    // SNAPSHOT_ENTRY_LIMIT records of each kind are ever cloned: callers of
-    // this snapshot (e.g. the post-scan catalog reload) never display more
-    // than that many rows, so cloning every record in a multi-million-row
-    // index just to throw away all but a few thousand isn't just wasteful,
-    // it can stall the caller long enough to hit an allocator abort.
-    let volume_count = repository.volume_count();
-    let directory_count = repository.directory_count();
-    let file_count = repository.file_count();
-    let volumes = repository.snapshot_volumes_limited(SNAPSHOT_ENTRY_LIMIT);
-    let directories = repository.snapshot_directories_limited(SNAPSHOT_ENTRY_LIMIT);
-    let files = repository.snapshot_files_limited(SNAPSHOT_ENTRY_LIMIT);
+    // Serve from the shared read model: no per-call snapshot re-read, no
+    // cloned record vectors, and at most SNAPSHOT_ENTRY_LIMIT entries emitted
+    // (the UI never displays more).
+    let model = get_or_load_index_model();
+    let tree = &model.tree;
 
     let stats = WbIndexSnapshotStats {
-        volumes: volume_count as u64,
-        directories: directory_count as u64,
-        files: file_count as u64,
+        volumes: tree.volumes().len() as u64,
+        directories: tree.directories().len() as u64,
+        files: tree.files().len() as u64,
         entries_emitted_limit: SNAPSHOT_ENTRY_LIMIT as u64,
-        cache_read_bytes: snapshot.cache_read_bytes,
-        cache_read_millis: snapshot.cache_read_millis,
-        cache_decode_millis: snapshot.cache_decode_millis,
-        cache_loaded_from_backup: u8::from(snapshot.cache_loaded_from_backup),
+        cache_read_bytes: model.cache_read_bytes,
+        cache_read_millis: model.cache_read_millis,
+        cache_decode_millis: model.cache_decode_millis,
+        cache_loaded_from_backup: u8::from(model.cache_loaded_from_backup),
     };
 
     if let Some(cb) = callback {
         let mut emitted = 0usize;
-        for volume in volumes {
+        for volume in tree.volumes() {
             if emitted >= SNAPSHOT_ENTRY_LIMIT {
                 return stats;
             }
-            let entry = catalog_entry_from_volume(&volume);
+            let entry = catalog_entry_from_volume(volume);
             cb(&entry.entry as *const WbCatalogEntry, user_data);
             emitted += 1;
         }
-        for directory in directories {
+        for directory in tree.directories() {
             if emitted >= SNAPSHOT_ENTRY_LIMIT {
                 return stats;
             }
-            let entry = catalog_entry_from_directory(&directory);
+            let entry = catalog_entry_from_directory(directory);
             cb(&entry.entry as *const WbCatalogEntry, user_data);
             emitted += 1;
         }
-        for file in files {
+        for file in tree.files() {
             if emitted >= SNAPSHOT_ENTRY_LIMIT {
                 return stats;
             }
-            let entry = catalog_entry_from_file(&file);
+            let entry = catalog_entry_from_file(file);
             cb(&entry.entry as *const WbCatalogEntry, user_data);
             emitted += 1;
         }
@@ -1133,6 +1220,10 @@ fn start_scan_session(
     })
     .to_string();
 
+    // The scan will replace or mutate the snapshot; drop the cached read
+    // model so queries rebuild against the fresh state when the scan ends.
+    invalidate_index_model();
+
     let session = Box::new(NativeSession::new(
         callback,
         user_data,
@@ -1171,6 +1262,87 @@ pub extern "C" fn wb_index_snapshot_extension_stats(
     user_data: *mut core::ffi::c_void,
 ) {
     load_extension_stats_from_snapshot(callback, user_data);
+}
+
+/// Emits the display-tree root through `callback`. Returns 1 when a root
+/// exists, 0 for an empty index. The root node's name is its full mount-point
+/// path (child names are bare).
+#[no_mangle]
+pub extern "C" fn wb_tree_root(
+    callback: WbTreeNodeCallback,
+    user_data: *mut core::ffi::c_void,
+) -> u8 {
+    let Some(cb) = callback else {
+        return 0;
+    };
+    let model = get_or_load_index_model();
+    let Some((record, rollup)) = model.tree.root() else {
+        return 0;
+    };
+
+    let mut strings = Vec::new();
+    let node = WbTreeNode {
+        id: record.id.0,
+        is_directory: 1,
+        name: c_view(record.full_path.clone(), &mut strings),
+        logical_bytes: rollup.logical_bytes,
+        physical_bytes: rollup.physical_bytes,
+        file_count: rollup.file_count,
+        item_count: rollup.item_count,
+        modified_utc: rollup.modified_utc_max.unwrap_or_default(),
+        has_modified_utc: u8::from(rollup.modified_utc_max.is_some()),
+    };
+    cb(&node as *const WbTreeNode, user_data);
+    1
+}
+
+/// Emits the direct children of directory `parent_id` (largest physical size
+/// first, at most `TREE_CHILDREN_LIMIT`), returning how many were emitted and
+/// how many exist in total so callers can render a "+N more" row.
+#[no_mangle]
+pub extern "C" fn wb_tree_children(
+    parent_id: u64,
+    callback: WbTreeNodeCallback,
+    user_data: *mut core::ffi::c_void,
+) -> WbTreeChildrenResult {
+    let Some(cb) = callback else {
+        return WbTreeChildrenResult::default();
+    };
+    let model = get_or_load_index_model();
+    let total = model.tree.child_count(parent_id).unwrap_or(0);
+    let emitted = model
+        .tree
+        .for_each_child(parent_id, TREE_CHILDREN_LIMIT, |entry| {
+            let mut strings = Vec::new();
+            let node = match entry {
+                TreeEntry::Directory { record, rollup } => WbTreeNode {
+                    id: record.id.0,
+                    is_directory: 1,
+                    name: c_view(record.name.clone(), &mut strings),
+                    logical_bytes: rollup.logical_bytes,
+                    physical_bytes: rollup.physical_bytes,
+                    file_count: rollup.file_count,
+                    item_count: rollup.item_count,
+                    modified_utc: rollup.modified_utc_max.unwrap_or_default(),
+                    has_modified_utc: u8::from(rollup.modified_utc_max.is_some()),
+                },
+                TreeEntry::File(file) => WbTreeNode {
+                    id: file.id.0,
+                    is_directory: 0,
+                    name: c_view(file.name.clone(), &mut strings),
+                    logical_bytes: file.size_bytes,
+                    physical_bytes: file.allocation_bytes,
+                    file_count: 0,
+                    item_count: 0,
+                    modified_utc: file.modified_utc.unwrap_or_default(),
+                    has_modified_utc: u8::from(file.modified_utc.is_some()),
+                },
+            };
+            cb(&node as *const WbTreeNode, user_data);
+        })
+        .unwrap_or(0);
+
+    WbTreeChildrenResult { emitted, total }
 }
 
 #[no_mangle]

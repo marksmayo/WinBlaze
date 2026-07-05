@@ -3,8 +3,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use winblaze_native::api::{WbCStringView, WbEvent, WbEventKind};
-use winblaze_native::bridge::{wb_scan_session_destroy, wb_scan_session_start};
+use winblaze_native::api::{WbCStringView, WbEvent, WbEventKind, WbTreeNode};
+use winblaze_native::bridge::{
+    wb_scan_session_destroy, wb_scan_session_start, wb_tree_children, wb_tree_root,
+};
 
 #[derive(Default)]
 struct Counters {
@@ -85,4 +87,82 @@ fn main() {
     );
 
     wb_scan_session_destroy(handle);
+    walk_tree_api();
+}
+
+#[derive(Default)]
+struct CapturedNode {
+    id: u64,
+    is_directory: bool,
+    name: String,
+    logical_bytes: u64,
+    physical_bytes: u64,
+    file_count: u64,
+    item_count: u64,
+}
+
+extern "C" fn capture_node(node: *const WbTreeNode, user_data: *mut c_void) {
+    if node.is_null() || user_data.is_null() {
+        return;
+    }
+    let nodes = unsafe { &mut *(user_data as *mut Vec<CapturedNode>) };
+    let node = unsafe { &*node };
+    let name = if node.name.ptr.is_null() {
+        String::new()
+    } else {
+        let bytes = unsafe { std::slice::from_raw_parts(node.name.ptr.cast::<u8>(), node.name.len) };
+        String::from_utf8_lossy(bytes).to_string()
+    };
+    nodes.push(CapturedNode {
+        id: node.id,
+        is_directory: node.is_directory != 0,
+        name,
+        logical_bytes: node.logical_bytes,
+        physical_bytes: node.physical_bytes,
+        file_count: node.file_count,
+        item_count: node.item_count,
+    });
+}
+
+/// Exercises wb_tree_root + wb_tree_children against the freshly scanned
+/// index: prints the root, its top children, and asserts the root physical
+/// total equals the sum of its direct children (rollup consistency).
+fn walk_tree_api() {
+    let mut roots: Vec<CapturedNode> = Vec::new();
+    let has_root = wb_tree_root(Some(capture_node), (&mut roots as *mut Vec<CapturedNode>).cast());
+    if has_root == 0 || roots.is_empty() {
+        println!("tree: no root (empty index)");
+        return;
+    }
+    let root = &roots[0];
+    println!(
+        "tree root: \"{}\" physical={} logical={} files={} items={}",
+        root.name, root.physical_bytes, root.logical_bytes, root.file_count, root.item_count
+    );
+
+    let mut children: Vec<CapturedNode> = Vec::new();
+    let result = wb_tree_children(
+        root.id,
+        Some(capture_node),
+        (&mut children as *mut Vec<CapturedNode>).cast(),
+    );
+    println!("tree children: emitted={} total={}", result.emitted, result.total);
+    for child in children.iter().take(10) {
+        println!(
+            "  {} \"{}\" physical={} files={}",
+            if child.is_directory { "dir " } else { "file" },
+            child.name,
+            child.physical_bytes,
+            child.file_count
+        );
+    }
+
+    if result.emitted == result.total {
+        let child_sum: u64 = children.iter().map(|child| child.physical_bytes).sum();
+        assert_eq!(
+            child_sum, root.physical_bytes,
+            "root physical bytes must equal the sum of its direct children"
+        );
+        println!("tree rollup check: OK (children sum == root physical)");
+    }
 }

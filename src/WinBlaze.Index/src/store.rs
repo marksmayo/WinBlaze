@@ -129,39 +129,6 @@ impl SqliteIndexRepository {
         self.state.snapshot_files()
     }
 
-    pub fn volume_count(&self) -> usize {
-        self.state.volume_count()
-    }
-
-    pub fn directory_count(&self) -> usize {
-        self.state.directory_count()
-    }
-
-    pub fn file_count(&self) -> usize {
-        self.state.file_count()
-    }
-
-    /// Like `snapshot_volumes`, but clones only the first `limit` records
-    /// (by id) instead of the whole table. Use this for UI display paths
-    /// that only ever show a bounded number of rows — cloning every record
-    /// (including its strings) in a multi-million-row index just to display
-    /// the first few thousand is expensive enough to stall the caller.
-    pub fn snapshot_volumes_limited(&self, limit: usize) -> Vec<VolumeRecord> {
-        self.state.snapshot_volumes_limited(limit)
-    }
-
-    pub fn snapshot_directories_limited(&self, limit: usize) -> Vec<DirectoryRecord> {
-        self.state.snapshot_directories_limited(limit)
-    }
-
-    pub fn snapshot_files_limited(&self, limit: usize) -> Vec<FileRecord> {
-        self.state.snapshot_files_limited(limit)
-    }
-
-    pub fn for_each_file(&self, f: impl FnMut(&FileRecord)) {
-        self.state.for_each_file(f);
-    }
-
     pub fn apply_transaction(
         &mut self,
         transaction: &BufferedIndexTransaction,
@@ -226,6 +193,13 @@ impl SqliteIndexRepository {
 
     pub fn search(&self, query: &SearchQuery) -> Vec<crate::query::IndexSearchHit> {
         crate::query::IndexCatalog::from_transaction(&self.state).search(query)
+    }
+
+    /// Consumes the repository, yielding its in-memory state. Used to build
+    /// derived read models (e.g. the display tree) without cloning millions
+    /// of records.
+    pub fn into_transaction(self) -> BufferedIndexTransaction {
+        self.state
     }
 }
 
@@ -300,6 +274,16 @@ impl IndexTransaction for BufferedIndexTransaction {
 }
 
 impl BufferedIndexTransaction {
+    /// Consumes the transaction into plain record vectors (unsorted), so
+    /// derived read models can take ownership without cloning.
+    pub fn into_record_vecs(self) -> (Vec<VolumeRecord>, Vec<DirectoryRecord>, Vec<FileRecord>) {
+        (
+            self.volumes.into_values().collect(),
+            self.directories.into_values().collect(),
+            self.files.into_values().collect(),
+        )
+    }
+
     /// By-value counterparts to the trait's `upsert_*` methods, for callers
     /// that own the record: skips the per-record clone, which matters when a
     /// scan session inserts millions of records.
@@ -337,51 +321,6 @@ impl BufferedIndexTransaction {
         let mut files = Vec::from_iter(self.files.values().cloned());
         files.sort_by_key(|file| file.id.0);
         files
-    }
-
-    pub fn volume_count(&self) -> usize {
-        self.volumes.len()
-    }
-
-    pub fn directory_count(&self) -> usize {
-        self.directories.len()
-    }
-
-    pub fn file_count(&self) -> usize {
-        self.files.len()
-    }
-
-    pub fn snapshot_volumes_limited(&self, limit: usize) -> Vec<VolumeRecord> {
-        let mut ids: Vec<VolumeId> = self.volumes.keys().copied().collect();
-        ids.sort_unstable_by_key(|id| id.0);
-        ids.truncate(limit);
-        ids.into_iter()
-            .filter_map(|id| self.volumes.get(&id).cloned())
-            .collect()
-    }
-
-    pub fn snapshot_directories_limited(&self, limit: usize) -> Vec<DirectoryRecord> {
-        let mut ids: Vec<DirectoryId> = self.directories.keys().copied().collect();
-        ids.sort_unstable_by_key(|id| id.0);
-        ids.truncate(limit);
-        ids.into_iter()
-            .filter_map(|id| self.directories.get(&id).cloned())
-            .collect()
-    }
-
-    pub fn snapshot_files_limited(&self, limit: usize) -> Vec<FileRecord> {
-        let mut ids: Vec<FileId> = self.files.keys().copied().collect();
-        ids.sort_unstable_by_key(|id| id.0);
-        ids.truncate(limit);
-        ids.into_iter()
-            .filter_map(|id| self.files.get(&id).cloned())
-            .collect()
-    }
-
-    pub fn for_each_file(&self, mut f: impl FnMut(&FileRecord)) {
-        for file in self.files.values() {
-            f(file);
-        }
     }
 
     pub fn lineage_records(&self) -> &[FileLineageRecord] {

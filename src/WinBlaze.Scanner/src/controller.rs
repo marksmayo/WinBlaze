@@ -501,7 +501,7 @@ fn walk_directory_tree(
                 parent_directory_id,
                 &entry_path,
                 entry_name,
-                metadata.len(),
+                &metadata,
             );
         }
     }
@@ -540,8 +540,9 @@ fn emit_file_record(
     parent_directory_id: winblaze_core::DirectoryId,
     full_path: &std::path::Path,
     name: String,
-    size_bytes: u64,
+    metadata: &fs::Metadata,
 ) {
+    let size_bytes = metadata.len();
     walk_state.files_seen = walk_state.files_seen.saturating_add(1);
     walk_state.total_size_bytes = walk_state.total_size_bytes.saturating_add(size_bytes);
     walk_state.total_allocation_bytes =
@@ -555,11 +556,21 @@ fn emit_file_record(
         size_bytes,
         allocation_bytes: size_bytes,
         attributes: winblaze_core::FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: None,
-        accessed_utc: None,
+        created_utc: filetime_or_none(metadata.creation_time()),
+        modified_utc: filetime_or_none(metadata.last_write_time()),
+        accessed_utc: filetime_or_none(metadata.last_access_time()),
     });
     walk_state.maybe_emit_progress(pipeline, false);
+}
+
+/// Windows metadata timestamps are FILETIME values (100ns ticks since 1601),
+/// the same convention the MFT reader emits; zero means "not available".
+fn filetime_or_none(value: u64) -> Option<i64> {
+    if value == 0 {
+        None
+    } else {
+        Some(value as i64)
+    }
 }
 
 fn convert_io_error(error: &std::io::Error, path: String) -> ScanIssueRecord {
@@ -892,8 +903,8 @@ fn process_fallback_directory(
                 ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
             }
         } else {
-            let size_bytes = match entry.metadata() {
-                Ok(metadata) => metadata.len(),
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
                 Err(error) => {
                     emit_deduplicated_issue_shared(
                         pipeline,
@@ -903,7 +914,14 @@ fn process_fallback_directory(
                     continue;
                 }
             };
-            emit_file_record_shared(pipeline, shared, task.directory_id, &entry_path, entry_name, size_bytes);
+            emit_file_record_shared(
+                pipeline,
+                shared,
+                task.directory_id,
+                &entry_path,
+                entry_name,
+                &metadata,
+            );
         }
     }
 
@@ -938,8 +956,9 @@ fn emit_file_record_shared(
     parent_directory_id: winblaze_core::DirectoryId,
     full_path: &std::path::Path,
     name: String,
-    size_bytes: u64,
+    metadata: &fs::Metadata,
 ) {
+    let size_bytes = metadata.len();
     shared.files_seen.fetch_add(1, Ordering::Relaxed);
     shared.total_size_bytes.fetch_add(size_bytes, Ordering::Relaxed);
     shared
@@ -955,9 +974,9 @@ fn emit_file_record_shared(
         size_bytes,
         allocation_bytes: size_bytes,
         attributes: winblaze_core::FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: None,
-        accessed_utc: None,
+        created_utc: filetime_or_none(metadata.creation_time()),
+        modified_utc: filetime_or_none(metadata.last_write_time()),
+        accessed_utc: filetime_or_none(metadata.last_access_time()),
     });
 }
 
