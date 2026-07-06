@@ -52,6 +52,17 @@ These are the remaining checks and hardening tasks before WinBlaze should be tre
 - [x] DONE-DONE: Production telemetry stance decided: WinBlaze has no telemetry and writes only local logs (`%LOCALAPPDATA%\WinBlaze\logs`) and cache (`%LOCALAPPDATA%\WinBlaze\index`) by default, stated in `README.md` (Privacy) and `docs\PRODUCTION_SECURITY_REVIEW.md`; any future telemetry must be opt-in with privacy copy and failure-safe upload handling.
 - [x] DONE-DONE: Clean up warning debt before release gates are strict; the unused `std::sync::Arc` import in `src\WinBlaze.Scanner\src\ntfs.rs` is removed.
 
+### Added 2026-07-07: hardening, CI, and release polish
+
+- [ ] TODO: Run `cargo clippy --workspace --all-targets --all-features -- -D warnings` in `scripts\check-local.ps1` so lint failures surface locally before CI. CI runs this gate but the local gate did not, so a `redundant_closure`/`writeln!` lint shipped to `main` and only failed in Actions.
+- [ ] TODO: Pin the Rust toolchain (`rust-toolchain.toml`, or a version input on the CI `dtolnay/rust-toolchain` step) so a newer `@stable` clippy release cannot spontaneously red the build with new lints; bump the pin deliberately. A floating stable is what broke CI on 2026-07-06 (1.94 -> 1.96 added `collapsible_match`/`large_enum_variant`).
+- [ ] TODO: Broaden native-boundary fuzz/corpus coverage (extends the existing PARTIAL item): fuzz the `wb_*` FFI entry points and add an all-section truncation/garbage corpus for the binary-cache decoder, not just the current length/enum/truncation regressions.
+- [ ] TODO: Tighten release CI once a signing/installer environment exists: verify signed artifacts, validate the MSI, verify the update-manifest SHA-256 hashes, run the Release benchmark-budget suite as a gate, and upload release-evidence artifacts.
+- [ ] TODO: Release version/branding polish: move off `0.1.0` to a deliberate release version, add an application icon (none is present under `src\WinBlaze.UI`), and confirm `Package.appxmanifest` identity/publisher/display metadata are release-ready.
+- [ ] TODO (product decision): Decide the post-v0.1.0 update story — stay manual-distribution (current `write-update-manifest.ps1` is metadata only) or build in-app update consumption. Manual distribution is fine short-term but scales poorly.
+- [ ] TODO (product decision): Decide the default elevation UX — prompt-for-admin on launch (to get the fast MFT path) vs. run the directory-walk fallback with a visible upgrade nudge. This is the first thing every new, non-elevated user hits.
+- [~] PARTIAL: Capture competitor performance evidence vs WizTree and WinDirStat on real datasets (see also the release-gate competitor item above): tooling exists (`benchmarks\record-competitor-baselines.ps1`, `write-competitor-report.ps1`; WizTree 4.31 and WinDirStat 2.6.0 installed). Initial C:\ run recorded 2026-07-07 in `benchmarks\competitor-report.md`; broaden across profiles/machines for release.
+
 ## Priority 0: Recovery Shell To Stable UI
 
 Historical rebuild track. These items are complete, and the active executable is now the stable MVP shell.

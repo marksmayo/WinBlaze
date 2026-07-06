@@ -148,3 +148,34 @@ breaks the nested draw order).
 Numbers are warm-cache, best-of-3, and swing ±20-40 % with desktop load
 (a mid-work run under ~20 % higher background load showed the same producer
 at ~3.95 s) — compare rounds only from a quiet machine.
+
+## Competitor comparison — live C:\ (2026-07-07)
+
+Same volume and machine as above (C:\, ~2.9M MFT records / ~2.3M files /
+547k dirs / 464 GB, warm cache, elevated). GUI tools were timed by a
+CPU-plateau probe (`scratchpad\time_gui_scan.ps1`: launch → sustained
+CPU-idle = scan finished and the view is populated); WinBlaze uses its own
+reported scan duration plus UIA idle detection.
+
+| Tool | Backend | Scan → interactive (warm C:\) | Notes |
+| --- | --- | --- | --- |
+| **WinBlaze** (engine) | NTFS MFT | **~2.7 s** | `mft_scan_repro`, scan → summary; 3 runs 2.73/2.73/2.75 s |
+| **WinBlaze** (in-app) | NTFS MFT | **~4.0 s** | Release UI idle→idle incl. tree + treemap; app-reported ~3.5 s |
+| WinDirStat 2.6.0 | directory walk (multithreaded) | ~10.5 s | 3 runs 9.9/10.6/10.6 s, ~60 s CPU across cores |
+| WizTree 4.31 | NTFS MFT | raw scan ~2–3 s; scan→interactive ~14–55 s | see caveat |
+
+**WizTree caveat:** its raw MFT read is fast and architecturally comparable
+to WinBlaze's, but the GUI then materializes the full 2.9M-file list + treemap
+up front, so scan-to-interactive is much higher and very noisy (CPU-plateau
+runs: 13.6 / 39.1 / 56.6 s). Its CLI (`/export`) scan **+ CSV export** of all
+files was 28–35 s, but that is dominated by writing a 437 MB / 2.9M-row CSV,
+not scanning. WizTree's own status-bar scan time is the fair figure but is not
+UIA-exposed, so a precise number needs a manual stopwatch — the repo recorder
+accepts it via `record-competitor-baselines.ps1 -WizTreeElapsedMs`.
+
+**Takeaway:** WinBlaze reaches a rendered, interactive view of C:\ in ~4 s —
+faster than WinDirStat's ~10.5 s walk, and competitive with WizTree on the
+raw MFT read while getting to interactive sooner because it pages/caps the UI
+(8,192-entry catalog, paged tree, deferred snapshot) instead of materializing
+every file. These are single-machine, warm-cache figures; broaden across
+machines and cold-cache for release-grade competitor evidence.
