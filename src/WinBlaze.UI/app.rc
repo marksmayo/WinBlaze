@@ -1,0 +1,5 @@
+#include "resource.h"
+
+// Embeds the WinBlaze application icon. Resource id 1 (the lowest) so Explorer
+// picks it as the exe icon; also loaded at runtime for the window/taskbar.
+IDI_WINBLAZE ICON "Assets\\WinBlaze.ico"

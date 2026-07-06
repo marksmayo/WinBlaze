@@ -75,6 +75,10 @@
     <ClInclude Include="src\ShellTheme.h" />
     <ClInclude Include="src\XamlMetaDataProvider.h" />
     <ClInclude Include="include\winblaze_native.h" />
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="app.rc" />
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest" />

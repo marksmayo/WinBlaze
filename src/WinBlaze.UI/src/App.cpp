@@ -2,6 +2,7 @@
 #include "App.h"
 #include "MainWindow.h"
 #include "StartupTrace.h"
+#include "../resource.h"
 
 #include <winrt/Microsoft.UI.Windowing.h>
 #include <winrt/Windows.Graphics.h>
@@ -64,6 +65,20 @@ namespace winrt::WinBlaze::UI::implementation
                     ::SetWindowTextW(hwnd, L"WinBlaze");
                     ::ShowWindow(hwnd, SW_MAXIMIZE);
                     ::SetForegroundWindow(hwnd);
+                    // Set the title-bar (small) and alt-tab/taskbar (big) icons
+                    // from the embedded resource so the window carries the
+                    // WinBlaze mark instead of the default WinUI icon.
+                    HMODULE icon_module = ::GetModuleHandleW(nullptr);
+                    if (HICON icon_big = static_cast<HICON>(::LoadImageW(
+                            icon_module, MAKEINTRESOURCEW(IDI_WINBLAZE), IMAGE_ICON,
+                            ::GetSystemMetrics(SM_CXICON), ::GetSystemMetrics(SM_CYICON), 0))) {
+                        ::SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(icon_big));
+                    }
+                    if (HICON icon_small = static_cast<HICON>(::LoadImageW(
+                            icon_module, MAKEINTRESOURCEW(IDI_WINBLAZE), IMAGE_ICON,
+                            ::GetSystemMetrics(SM_CXSMICON), ::GetSystemMetrics(SM_CYSMICON), 0))) {
+                        ::SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(icon_small));
+                    }
                     TraceStartup(L"App::OnLaunched forced HWND maximized");
                 } else {
                     TraceStartup(L"App::OnLaunched no HWND from IWindowNative");
