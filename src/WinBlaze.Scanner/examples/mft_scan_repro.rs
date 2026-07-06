@@ -1,8 +1,4 @@
-use std::{
-    env,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use std::{env, path::PathBuf, time::Instant};
 
 use winblaze_scanner::{ScanController, ScanRequest, ScanRuntimeConfig};
 
@@ -63,7 +59,7 @@ fn main() {
 
     handle.join();
 
-    let elapsed = Duration::from(started.elapsed());
+    let elapsed = started.elapsed();
     println!(
         "{{\"root\":\"{}\",\"elapsed_ms\":{},\"files\":{},\"directories\":{},\"completed\":{},\"failed_message\":\"{}\"}}",
         root.display(),

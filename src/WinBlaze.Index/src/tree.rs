@@ -483,7 +483,7 @@ fn choose_root(
 
     directories
         .iter()
-        .position(|directory| is_root_like(directory))
+        .position(is_root_like)
         .map(|index| index as u32)
 }
 

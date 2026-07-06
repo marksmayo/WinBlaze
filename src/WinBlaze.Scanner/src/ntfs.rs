@@ -1686,8 +1686,11 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
             }
             ATTRIBUTE_DATA if non_resident != 0 && attribute_name_length == 0 => {
                 // Allocated/real sizes are only valid on the fragment whose
-                // starting VCN is zero.
-                if read_u64(record, cursor + 16)? == 0 {
+                // starting VCN is zero. (The starting VCN is read first rather
+                // than folded into the match guard because guards cannot use
+                // `?`, and the checked read must still skip malformed records.)
+                let starting_vcn = read_u64(record, cursor + 16)?;
+                if starting_vcn == 0 {
                     allocation_bytes = read_u64(record, cursor + 40)?;
                     size_bytes = read_u64(record, cursor + 48)?;
                 }
@@ -2462,7 +2465,6 @@ mod tests {
         );
         state.ingest_entry(parsed_entry(61, 5, "later.bin", false, 10), &mut sink);
         state.finish(&mut sink);
-        drop(sink);
         let summary = state.into_summary();
         assert_eq!(summary.total_size_bytes, 7_000);
         assert_eq!(summary.files_seen, 1);

@@ -51,6 +51,15 @@ struct IndexModel {
     cache_loaded_from_backup: bool,
 }
 
+/// Deferred post-Completed snapshot payload: the published model plus the
+/// auxiliary records a full snapshot write still needs.
+type DeferredPersist = (
+    Arc<IndexModel>,
+    Vec<ScanSession>,
+    Vec<FileLineageRecord>,
+    Vec<FileChangeSet>,
+);
+
 static INDEX_MODEL: Mutex<Option<Arc<IndexModel>>> = Mutex::new(None);
 
 /// Serializes the deferred post-Completed snapshot write against the next
@@ -576,12 +585,7 @@ fn forward_events(
     let mut model_published = false;
     // Full-scan snapshots write AFTER Completed reaches the UI: the write is
     // ~1.6s for a full C:\ index and the UI only needs the in-memory model.
-    let mut deferred_persist: Option<(
-        Arc<IndexModel>,
-        Vec<ScanSession>,
-        Vec<FileLineageRecord>,
-        Vec<FileChangeSet>,
-    )> = None;
+    let mut deferred_persist: Option<DeferredPersist> = None;
     // Acquired BEFORE Completed is forwarded and held until the deferred
     // write finishes, so a session started the instant the UI sees
     // Completed blocks on the gate instead of reading the stale snapshot.
@@ -852,7 +856,7 @@ struct OwnedExtensionStats {
 /// the FFI payload (and the UI table) stay bounded regardless of how many
 /// distinct extensions a scan encounters.
 fn sorted_top_extension_totals(mut totals: Vec<(String, u64, u64)>) -> Vec<(String, u64, u64)> {
-    totals.sort_by(|a, b| b.1.cmp(&a.1));
+    totals.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     totals.truncate(EXTENSION_STATS_TOP_LIMIT);
     totals
 }
@@ -1062,9 +1066,9 @@ impl EventLog {
 
         use std::fmt::Write as _;
         self.line_buf.clear();
-        let _ = write!(
+        let _ = writeln!(
             self.line_buf,
-            "{{\"ts_ms\":{},\"component\":\"native\",{} }}\n",
+            "{{\"ts_ms\":{},\"component\":\"native\",{} }}",
             now_ms(),
             payload
         );

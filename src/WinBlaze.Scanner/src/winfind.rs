@@ -209,7 +209,9 @@ fn filetime(parts: [u32; 2]) -> u64 {
 /// walk loop exists exactly once per walker.
 pub enum DirEntries {
     Fast(FindIterator),
-    Std(fs::ReadDir),
+    // Boxed: fs::ReadDir is ~600 bytes vs the Fast variant's ~24, so an
+    // unboxed enum would size every DirEntries to the larger variant.
+    Std(Box<fs::ReadDir>),
 }
 
 /// Opens `directory` honoring the fast-enumeration preference.
@@ -221,7 +223,7 @@ pub fn read_dir_auto(directory: &Path, fast: bool) -> io::Result<DirEntries> {
             return Ok(DirEntries::Fast(entries));
         }
     }
-    fs::read_dir(directory).map(DirEntries::Std)
+    fs::read_dir(directory).map(|entries| DirEntries::Std(Box::new(entries)))
 }
 
 impl Iterator for DirEntries {
