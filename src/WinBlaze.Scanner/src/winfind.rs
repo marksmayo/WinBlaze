@@ -7,9 +7,10 @@
 //! the `WIN32_FIND_DATAW` the enumeration already produced, so the walker
 //! needs no per-entry `metadata()` call at all.
 
-use std::ffi::c_void;
+use std::ffi::{c_void, OsString};
+use std::fs;
 use std::io;
-use std::os::windows::ffi::OsStrExt;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::Path;
 
 #[repr(C)]
@@ -32,6 +33,11 @@ const FIND_EX_INFO_BASIC: u32 = 1;
 const FIND_EX_SEARCH_NAME_MATCH: u32 = 0;
 const FIND_FIRST_EX_LARGE_FETCH: u32 = 2;
 const ERROR_NO_MORE_FILES: i32 = 18;
+/// How many mid-directory `FindNextFileW` failures to surface (and skip
+/// past) before giving up on the handle: preserves the per-entry error
+/// recovery of the `fs::read_dir` loop this replaced, while still
+/// guaranteeing termination if the handle is persistently broken.
+const FIND_ERROR_BUDGET: u8 = 8;
 
 #[link(name = "kernel32")]
 extern "system" {
@@ -50,8 +56,12 @@ extern "system" {
 }
 
 /// One directory entry, fully described by the enumeration itself.
+///
+/// `name` is the exact on-disk name (`OsString` round-trips unpaired UTF-16
+/// surrogates, which are legal on NTFS); anything that joins paths or reopens
+/// the entry must use it verbatim and only lossy-convert for display.
 pub struct FindEntry {
-    pub name: String,
+    pub name: OsString,
     pub attributes: u32,
     pub size_bytes: u64,
     /// FILETIME (100ns ticks since 1601); zero means "not available".
@@ -62,7 +72,13 @@ pub struct FindEntry {
 
 pub struct FindIterator {
     handle: isize,
-    pending: Option<Box<Win32FindDataW>>,
+    /// Reusable find-data buffer: `FindEntry` copies everything out before
+    /// the next `FindNextFileW` call, so one allocation serves the whole
+    /// directory instead of one per entry.
+    buffer: Box<Win32FindDataW>,
+    /// The first entry (filled by `FindFirstFileExW`) is pending in `buffer`.
+    first_pending: bool,
+    error_budget: u8,
     done: bool,
 }
 
@@ -89,12 +105,12 @@ pub fn read_dir_fast(directory: &Path) -> io::Result<FindIterator> {
     pattern.push(u16::from(b'*'));
     pattern.push(0);
 
-    let mut data: Box<Win32FindDataW> = Box::new(unsafe { std::mem::zeroed() });
+    let mut buffer: Box<Win32FindDataW> = Box::new(unsafe { std::mem::zeroed() });
     let handle = unsafe {
         FindFirstFileExW(
             pattern.as_ptr(),
             FIND_EX_INFO_BASIC,
-            data.as_mut(),
+            buffer.as_mut(),
             FIND_EX_SEARCH_NAME_MATCH,
             std::ptr::null_mut(),
             FIND_FIRST_EX_LARGE_FETCH,
@@ -105,7 +121,9 @@ pub fn read_dir_fast(directory: &Path) -> io::Result<FindIterator> {
     }
     Ok(FindIterator {
         handle,
-        pending: Some(data),
+        buffer,
+        first_pending: true,
+        error_budget: FIND_ERROR_BUDGET,
         done: false,
     })
 }
@@ -115,26 +133,29 @@ impl Iterator for FindIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let data = match self.pending.take() {
-                Some(data) => data,
-                None => {
-                    if self.done {
-                        return None;
-                    }
-                    let mut data: Box<Win32FindDataW> = Box::new(unsafe { std::mem::zeroed() });
-                    if unsafe { FindNextFileW(self.handle, data.as_mut()) } == 0 {
-                        self.done = true;
-                        let error = io::Error::last_os_error();
-                        return if error.raw_os_error() == Some(ERROR_NO_MORE_FILES) {
-                            None
-                        } else {
-                            Some(Err(error))
-                        };
-                    }
-                    data
+            if self.done {
+                return None;
+            }
+            if self.first_pending {
+                self.first_pending = false;
+            } else if unsafe { FindNextFileW(self.handle, self.buffer.as_mut()) } == 0 {
+                let error = io::Error::last_os_error();
+                if error.raw_os_error() == Some(ERROR_NO_MORE_FILES) {
+                    self.done = true;
+                    return None;
                 }
-            };
+                // Transient mid-directory failure: report it and keep
+                // enumerating, up to a budget that bounds a persistently
+                // failing handle.
+                if self.error_budget == 0 {
+                    self.done = true;
+                } else {
+                    self.error_budget -= 1;
+                }
+                return Some(Err(error));
+            }
 
+            let data = self.buffer.as_ref();
             let name_len = data
                 .cFileName
                 .iter()
@@ -146,7 +167,7 @@ impl Iterator for FindIterator {
             }
 
             return Some(Ok(FindEntry {
-                name: String::from_utf16_lossy(name_units),
+                name: OsString::from_wide(name_units),
                 attributes: data.dwFileAttributes,
                 size_bytes: (u64::from(data.nFileSizeHigh) << 32) | u64::from(data.nFileSizeLow),
                 created_utc: filetime(data.ftCreationTime),
@@ -167,11 +188,74 @@ fn filetime(parts: [u32; 2]) -> u64 {
     (u64::from(parts[1]) << 32) | u64::from(parts[0])
 }
 
+/// Directory entry source shared by every walker: the raw large-fetch
+/// enumeration when enabled (falling back to `fs::read_dir` if the open
+/// fails), or `fs::read_dir` outright. Yields one shape either way so the
+/// walk loop exists exactly once per walker.
+pub enum DirEntries {
+    Fast(FindIterator),
+    Std(fs::ReadDir),
+}
+
+/// Opens `directory` honoring the fast-enumeration preference.
+pub fn read_dir_auto(directory: &Path, fast: bool) -> io::Result<DirEntries> {
+    if fast {
+        // Fall through to fs::read_dir on open failure so exotic paths keep
+        // working; error dirs then fail (and report) through one path.
+        if let Ok(entries) = read_dir_fast(directory) {
+            return Ok(DirEntries::Fast(entries));
+        }
+    }
+    fs::read_dir(directory).map(DirEntries::Std)
+}
+
+impl Iterator for DirEntries {
+    type Item = io::Result<FindEntry>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            DirEntries::Fast(entries) => entries.next(),
+            DirEntries::Std(entries) => entries.next().map(|result| {
+                result.and_then(|entry| {
+                    // Free on Windows: DirEntry::metadata() is built from
+                    // the WIN32_FIND_DATAW the enumeration already cached.
+                    let metadata = entry.metadata()?;
+                    use std::os::windows::fs::MetadataExt;
+                    Ok(FindEntry {
+                        name: entry.file_name(),
+                        attributes: metadata.file_attributes(),
+                        size_bytes: metadata.len(),
+                        created_utc: metadata.creation_time(),
+                        modified_utc: metadata.last_write_time(),
+                        accessed_utc: metadata.last_access_time(),
+                    })
+                })
+            }),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn collect_entries(
+        entries: impl Iterator<Item = io::Result<FindEntry>>,
+    ) -> Vec<(String, u64, bool)> {
+        let mut collected: Vec<(String, u64, bool)> = entries
+            .map(|entry| {
+                let entry = entry.expect("entry");
+                (
+                    entry.name.to_string_lossy().into_owned(),
+                    entry.size_bytes,
+                    entry.attributes & 0x10 != 0,
+                )
+            })
+            .collect();
+        collected.sort();
+        collected
+    }
 
     #[test]
     fn raw_enumeration_matches_read_dir() {
@@ -184,18 +268,7 @@ mod tests {
         fs::write(root.join("a.txt"), vec![0u8; 1234]).expect("write a");
         fs::write(root.join("b.bin"), vec![0u8; 42]).expect("write b");
 
-        let mut raw: Vec<(String, u64, bool)> = read_dir_fast(&root)
-            .expect("open")
-            .map(|entry| {
-                let entry = entry.expect("entry");
-                (
-                    entry.name.clone(),
-                    entry.size_bytes,
-                    entry.attributes & 0x10 != 0,
-                )
-            })
-            .collect();
-        raw.sort();
+        let raw = collect_entries(read_dir_fast(&root).expect("open"));
 
         let mut std_entries: Vec<(String, u64, bool)> = fs::read_dir(&root)
             .expect("read_dir")
@@ -212,6 +285,22 @@ mod tests {
         std_entries.sort();
 
         assert_eq!(raw, std_entries);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn auto_source_yields_same_entries_fast_and_std() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("winblaze-winfind-auto-{unique}"));
+        fs::create_dir_all(root.join("inner")).expect("create fixture");
+        fs::write(root.join("c.dat"), vec![0u8; 77]).expect("write c");
+
+        let fast = collect_entries(read_dir_auto(&root, true).expect("fast open"));
+        let slow = collect_entries(read_dir_auto(&root, false).expect("std open"));
+        assert_eq!(fast, slow);
         let _ = fs::remove_dir_all(&root);
     }
 

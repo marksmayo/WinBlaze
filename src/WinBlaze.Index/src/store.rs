@@ -312,8 +312,6 @@ impl IndexTransaction for BufferedIndexTransaction {
 }
 
 impl BufferedIndexTransaction {
-    /// Consumes the transaction into plain record vectors (unsorted), so
-    /// derived read models can take ownership without cloning.
     /// Clones the small non-record parts (sessions, lineage, change sets):
     /// callers that feed the records to `TreeIndex::build` still need these
     /// for a full snapshot write.
@@ -325,6 +323,8 @@ impl BufferedIndexTransaction {
         (sessions, self.lineages.clone(), self.file_changes.clone())
     }
 
+    /// Consumes the transaction into plain record vectors (unsorted), so
+    /// derived read models can take ownership without cloning.
     pub fn into_record_vecs(self) -> (Vec<VolumeRecord>, Vec<DirectoryRecord>, Vec<FileRecord>) {
         (
             self.volumes.into_values().collect(),
@@ -620,10 +620,10 @@ fn write_sorted_records<W: Write>(
 ) -> Result<(), IndexStorageError> {
     writer.write_all(INDEX_MAGIC)?;
     write_u32(writer, INDEX_FORMAT_VERSION)?;
-    write_volume_records(writer, &volumes.iter().collect::<Vec<_>>())?;
-    write_session_records(writer, &sessions.iter().collect::<Vec<_>>())?;
-    write_directory_records(writer, &directories.iter().collect::<Vec<_>>())?;
-    write_file_records(writer, &files.iter().collect::<Vec<_>>())?;
+    write_volume_records(writer, volumes)?;
+    write_session_records(writer, sessions)?;
+    write_directory_records(writer, directories)?;
+    write_file_records(writer, files)?;
     write_lineage_records(writer, lineages)?;
     write_change_sets(writer, file_changes)?;
     Ok(())
@@ -682,12 +682,13 @@ fn deserialize_state(bytes: &[u8]) -> Result<BufferedIndexTransaction, IndexStor
     })
 }
 
-fn write_volume_records<W: Write>(
+fn write_volume_records<W: Write, R: std::borrow::Borrow<VolumeRecord>>(
     writer: &mut W,
-    volumes: &[&VolumeRecord],
+    volumes: &[R],
 ) -> Result<(), IndexStorageError> {
     write_len(writer, volumes.len())?;
     for volume in volumes {
+        let volume = volume.borrow();
         write_u64(writer, volume.id.0)?;
         write_string(writer, &volume.mount_point)?;
         write_option_string(writer, volume.label.as_deref())?;
@@ -699,12 +700,13 @@ fn write_volume_records<W: Write>(
     Ok(())
 }
 
-fn write_session_records<W: Write>(
+fn write_session_records<W: Write, R: std::borrow::Borrow<ScanSession>>(
     writer: &mut W,
-    sessions: &[&ScanSession],
+    sessions: &[R],
 ) -> Result<(), IndexStorageError> {
     write_len(writer, sessions.len())?;
     for session in sessions {
+        let session = session.borrow();
         write_u64(writer, session.session_id)?;
         write_u64(writer, session.volume_id.0)?;
         write_string(writer, &session.root_path)?;
@@ -717,12 +719,13 @@ fn write_session_records<W: Write>(
     Ok(())
 }
 
-fn write_directory_records<W: Write>(
+fn write_directory_records<W: Write, R: std::borrow::Borrow<DirectoryRecord>>(
     writer: &mut W,
-    directories: &[&DirectoryRecord],
+    directories: &[R],
 ) -> Result<(), IndexStorageError> {
     write_len(writer, directories.len())?;
     for directory in directories {
+        let directory = directory.borrow();
         write_u64(writer, directory.id.0)?;
         match directory.parent_directory_id {
             Some(parent) => {
@@ -741,12 +744,13 @@ fn write_directory_records<W: Write>(
     Ok(())
 }
 
-fn write_file_records<W: Write>(
+fn write_file_records<W: Write, R: std::borrow::Borrow<FileRecord>>(
     writer: &mut W,
-    files: &[&FileRecord],
+    files: &[R],
 ) -> Result<(), IndexStorageError> {
     write_len(writer, files.len())?;
     for file in files {
+        let file = file.borrow();
         write_u64(writer, file.id.0)?;
         write_u64(writer, file.parent_directory_id.0)?;
         write_string(writer, &file.name)?;

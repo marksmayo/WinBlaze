@@ -895,9 +895,6 @@ pub(crate) fn apply_mft_fixups(batch: &mut [u8], bytes_per_sector: usize) {
     }
 }
 
-/// Opens the MFT byte stream: raw volume access first (the only method that
-/// works on modern Windows; requires Administrator), then the legacy
-/// metadata-file open as a fallback.
 /// Phase-decomposition profiler for the raw-MFT scan: times each layer of
 /// the pipeline in isolation on the live volume so optimization work chases
 /// the real bottleneck. Dev tooling only (mft_phase_bench example).
@@ -1045,6 +1042,9 @@ pub fn profile_mft_phases(
     ))
 }
 
+/// Opens the MFT byte stream: raw volume access first (the only method that
+/// works on modern Windows; requires Administrator), then the legacy
+/// metadata-file open as a fallback.
 fn open_mft_stream(root: &Path) -> Result<MftStream, NtfsEnumerationError> {
     let volume_error = match open_volume_handle(root) {
         Ok(mut volume) => match read_volume_geometry(&mut volume) {

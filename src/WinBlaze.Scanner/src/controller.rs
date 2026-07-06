@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     fs,
-    os::windows::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -230,6 +229,7 @@ fn run_fallback_scan(
                 issue_keys,
                 reparse_policy,
                 &root_ancestors,
+                fast_enumeration,
             );
 
             (
@@ -454,8 +454,9 @@ fn walk_directory_tree(
     issue_keys: &mut HashSet<String>,
     reparse_policy: ReparseTraversalPolicy,
     ancestors: &AncestorChain,
+    fast_enumeration: bool,
 ) {
-    let entries = match fs::read_dir(directory) {
+    let entries = match winfind::read_dir_auto(directory, fast_enumeration) {
         Ok(entries) => entries,
         Err(error) => {
             emit_deduplicated_issue(
@@ -483,36 +484,17 @@ fn walk_directory_tree(
                 continue;
             }
         };
+        let attributes = FileAttributes(entry.attributes);
 
-        let entry_name = entry
-            .file_name()
-            .into_string()
-            .unwrap_or_else(|name| name.to_string_lossy().into_owned());
-
-        // Free on Windows: DirEntry::metadata() is built from the
-        // WIN32_FIND_DATAW the directory enumeration already cached.
-        let metadata = match entry.metadata() {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                emit_deduplicated_issue(
-                    pipeline,
-                    issue_keys,
-                    convert_io_error(&error, entry.path().display().to_string()),
-                );
-                continue;
-            }
-        };
-        let attributes = FileAttributes(metadata.file_attributes());
-
-        // Branch on the DIRECTORY attribute bit, not FileType::is_dir():
-        // std reports directory symlinks/junctions as non-directories, which
-        // routed every reparse directory through the file path and made the
-        // cycle detection below unreachable.
+        // Branch on the DIRECTORY attribute bit, not file-type inference:
+        // directory symlinks/junctions must route through the directory
+        // path or the cycle detection below is unreachable.
         //
-        // Only directories materialize entry.path(): file records carry a
-        // parent id, not a path, so the per-file PathBuf was pure overhead.
+        // Only directories materialize a path (joined with the exact
+        // on-disk name): file records carry a parent id, not a path.
         if attributes.is_directory() {
-            let entry_path = entry.path();
+            let entry_path = directory.join(&entry.name);
+            let entry_name = display_name(entry.name);
             let decision = evaluate_reparse_descent(
                 directory,
                 &entry_path,
@@ -546,6 +528,7 @@ fn walk_directory_tree(
                         issue_keys,
                         reparse_policy,
                         &child_ancestors,
+                        fast_enumeration,
                     );
                 }
                 ReparseDecision::SkippedCycle => {
@@ -554,13 +537,7 @@ fn walk_directory_tree(
                 ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
             }
         } else {
-            emit_file_record(
-                pipeline,
-                walk_state,
-                parent_directory_id,
-                entry_name,
-                &metadata,
-            );
+            emit_file_record(pipeline, walk_state, parent_directory_id, entry);
         }
     }
 }
@@ -596,10 +573,9 @@ fn emit_file_record(
     pipeline: &mut ScanEventPipeline,
     walk_state: &mut DirectoryWalkState,
     parent_directory_id: winblaze_core::DirectoryId,
-    name: String,
-    metadata: &fs::Metadata,
+    entry: winfind::FindEntry,
 ) {
-    let size_bytes = metadata.len();
+    let size_bytes = entry.size_bytes;
     walk_state.files_seen = walk_state.files_seen.saturating_add(1);
     walk_state.total_size_bytes = walk_state.total_size_bytes.saturating_add(size_bytes);
     walk_state.total_allocation_bytes =
@@ -608,7 +584,7 @@ fn emit_file_record(
     pipeline.emit_file(winblaze_core::FileRecord {
         id: winblaze_core::FileId(walk_state.next_file_id()),
         parent_directory_id,
-        name,
+        name: display_name(entry.name),
         // Derived on demand from the parent directory (see FileRecord docs);
         // materializing one String per file dominated scan-time allocation,
         // index memory, and snapshot size.
@@ -616,11 +592,19 @@ fn emit_file_record(
         size_bytes,
         allocation_bytes: size_bytes,
         attributes: winblaze_core::FileAttributes::ARCHIVE,
-        created_utc: filetime_or_none(metadata.creation_time()),
-        modified_utc: filetime_or_none(metadata.last_write_time()),
-        accessed_utc: filetime_or_none(metadata.last_access_time()),
+        created_utc: filetime_or_none(entry.created_utc),
+        modified_utc: filetime_or_none(entry.modified_utc),
+        accessed_utc: filetime_or_none(entry.accessed_utc),
     });
     walk_state.maybe_emit_progress(pipeline, false);
+}
+
+/// UI/display copy of an on-disk name. Path joins must use the original
+/// `OsString` (it round-trips unpaired UTF-16 surrogates, which are legal
+/// on NTFS); this lossy copy is only for records and messages.
+fn display_name(name: std::ffi::OsString) -> String {
+    name.into_string()
+        .unwrap_or_else(|name| name.to_string_lossy().into_owned())
 }
 
 /// Windows metadata timestamps are FILETIME values (100ns ticks since 1601),
@@ -879,15 +863,7 @@ fn process_fallback_directory(
     task: &FallbackTask,
     cancelled: &AtomicBool,
 ) -> Vec<FallbackTask> {
-    if shared.fast_enumeration {
-        // Fall through to fs::read_dir on open failure so exotic paths keep
-        // working; the error dirs then fail (and report) through one path.
-        if let Ok(entries) = winfind::read_dir_fast(&task.path) {
-            return process_fallback_entries_fast(shared, pipeline, task, cancelled, entries);
-        }
-    }
-
-    let entries = match fs::read_dir(&task.path) {
+    let entries = match winfind::read_dir_auto(&task.path, shared.fast_enumeration) {
         Ok(entries) => entries,
         Err(error) => {
             emit_deduplicated_issue_shared(
@@ -916,34 +892,17 @@ fn process_fallback_directory(
                 continue;
             }
         };
+        let attributes = FileAttributes(entry.attributes);
 
-        let entry_name = entry
-            .file_name()
-            .into_string()
-            .unwrap_or_else(|name| name.to_string_lossy().into_owned());
-
-        let metadata = match entry.metadata() {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                emit_deduplicated_issue_shared(
-                    pipeline,
-                    shared,
-                    convert_io_error(&error, entry.path().display().to_string()),
-                );
-                continue;
-            }
-        };
-        let attributes = FileAttributes(metadata.file_attributes());
-
-        // Branch on the DIRECTORY attribute bit, not FileType::is_dir():
-        // std reports directory symlinks/junctions as non-directories, which
-        // routed every reparse directory through the file path and made the
-        // cycle detection below unreachable.
+        // Branch on the DIRECTORY attribute bit, not file-type inference:
+        // directory symlinks/junctions must route through the directory
+        // path or the cycle detection below is unreachable.
         //
-        // Only directories materialize entry.path(): file records carry a
-        // parent id, not a path, so the per-file PathBuf was pure overhead.
+        // Only directories materialize a path (joined with the exact
+        // on-disk name): file records carry a parent id, not a path.
         if attributes.is_directory() {
-            let entry_path = entry.path();
+            let entry_path = task.path.join(&entry.name);
+            let entry_name = display_name(entry.name);
             let decision = evaluate_reparse_descent(
                 &task.path,
                 &entry_path,
@@ -983,103 +942,7 @@ fn process_fallback_directory(
                 ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
             }
         } else {
-            emit_file_record_shared(pipeline, shared, task.directory_id, entry_name, &metadata);
-        }
-    }
-
-    maybe_emit_progress_shared(shared, pipeline);
-    new_tasks
-}
-
-fn process_fallback_entries_fast(
-    shared: &FallbackSharedState,
-    pipeline: &mut ScanEventPipeline,
-    task: &FallbackTask,
-    cancelled: &AtomicBool,
-    entries: winfind::FindIterator,
-) -> Vec<FallbackTask> {
-    let mut new_tasks = Vec::new();
-    for entry_result in entries {
-        if cancelled.load(Ordering::SeqCst) {
-            break;
-        }
-
-        let entry = match entry_result {
-            Ok(entry) => entry,
-            Err(error) => {
-                emit_deduplicated_issue_shared(
-                    pipeline,
-                    shared,
-                    convert_io_error(&error, task.path.display().to_string()),
-                );
-                continue;
-            }
-        };
-        let attributes = FileAttributes(entry.attributes);
-
-        if attributes.is_directory() {
-            let entry_path = task.path.join(&entry.name);
-            let decision = evaluate_reparse_descent(
-                &task.path,
-                &entry_path,
-                &entry.name,
-                attributes,
-                shared.reparse_policy,
-                &task.ancestors,
-            );
-
-            let directory_id = winblaze_core::DirectoryId(
-                shared.next_directory_id.fetch_add(1, Ordering::Relaxed),
-            );
-            emit_directory_record_shared(
-                pipeline,
-                shared,
-                directory_id,
-                task.directory_id,
-                &entry_path,
-                entry.name,
-            );
-
-            match decision {
-                ReparseDecision::Follow(ancestors) => {
-                    new_tasks.push(FallbackTask {
-                        path: entry_path,
-                        directory_id,
-                        ancestors,
-                    });
-                }
-                ReparseDecision::SkippedCycle => {
-                    emit_deduplicated_issue_shared(
-                        pipeline,
-                        shared,
-                        reparse_cycle_issue(&entry_path),
-                    );
-                }
-                ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
-            }
-        } else {
-            let size_bytes = entry.size_bytes;
-            shared.files_seen.fetch_add(1, Ordering::Relaxed);
-            shared
-                .total_size_bytes
-                .fetch_add(size_bytes, Ordering::Relaxed);
-            shared
-                .total_allocation_bytes
-                .fetch_add(size_bytes, Ordering::Relaxed);
-            let file_id = shared.next_file_id.fetch_add(1, Ordering::Relaxed);
-            pipeline.emit_file(winblaze_core::FileRecord {
-                id: winblaze_core::FileId(file_id),
-                parent_directory_id: task.directory_id,
-                name: entry.name,
-                // Derived on demand from the parent directory (see FileRecord docs).
-                full_path: String::new(),
-                size_bytes,
-                allocation_bytes: size_bytes,
-                attributes: winblaze_core::FileAttributes::ARCHIVE,
-                created_utc: filetime_or_none(entry.created_utc),
-                modified_utc: filetime_or_none(entry.modified_utc),
-                accessed_utc: filetime_or_none(entry.accessed_utc),
-            });
+            emit_file_record_shared(pipeline, shared, task.directory_id, entry);
         }
     }
 
@@ -1112,10 +975,9 @@ fn emit_file_record_shared(
     pipeline: &mut ScanEventPipeline,
     shared: &FallbackSharedState,
     parent_directory_id: winblaze_core::DirectoryId,
-    name: String,
-    metadata: &fs::Metadata,
+    entry: winfind::FindEntry,
 ) {
-    let size_bytes = metadata.len();
+    let size_bytes = entry.size_bytes;
     shared.files_seen.fetch_add(1, Ordering::Relaxed);
     shared
         .total_size_bytes
@@ -1128,15 +990,15 @@ fn emit_file_record_shared(
     pipeline.emit_file(winblaze_core::FileRecord {
         id: winblaze_core::FileId(file_id),
         parent_directory_id,
-        name,
+        name: display_name(entry.name),
         // Derived on demand from the parent directory (see FileRecord docs).
         full_path: String::new(),
         size_bytes,
         allocation_bytes: size_bytes,
         attributes: winblaze_core::FileAttributes::ARCHIVE,
-        created_utc: filetime_or_none(metadata.creation_time()),
-        modified_utc: filetime_or_none(metadata.last_write_time()),
-        accessed_utc: filetime_or_none(metadata.last_access_time()),
+        created_utc: filetime_or_none(entry.created_utc),
+        modified_utc: filetime_or_none(entry.modified_utc),
+        accessed_utc: filetime_or_none(entry.accessed_utc),
     });
 }
 

@@ -539,6 +539,10 @@ fn forward_events(
         Vec<FileLineageRecord>,
         Vec<FileChangeSet>,
     )> = None;
+    // Acquired BEFORE Completed is forwarded and held until the deferred
+    // write finishes, so a session started the instant the UI sees
+    // Completed blocks on the gate instead of reading the stale snapshot.
+    let mut persist_guard: Option<std::sync::MutexGuard<'static, ()>> = None;
     let mut ui_forwarder = UiEventForwarder::new(callback, user_data);
 
     for event in rx.into_iter().flatten() {
@@ -553,9 +557,25 @@ fn forward_events(
         if !model_published && matches!(event, ScanEvent::Completed | ScanEvent::Cancelled) {
             match persistence_mode {
                 ScanPersistenceMode::ReplaceSnapshot => {
+                    // Record the terminal session state before the parts are
+                    // cloned: persist_scan_event applies this same upsert
+                    // later, but into the by-then-emptied transaction, and
+                    // the snapshot must not say the scan is still running.
+                    transaction.upsert_session(&ScanSession {
+                        session_id: 1,
+                        volume_id: Default::default(),
+                        root_path: String::new(),
+                        state: if matches!(event, ScanEvent::Completed) {
+                            ScanState::Completed
+                        } else {
+                            ScanState::Cancelled
+                        },
+                        progress: Default::default(),
+                    });
                     let (sessions, lineages, changes) = transaction.auxiliary_parts();
                     let model = Arc::new(build_index_model(std::mem::take(&mut transaction), None));
                     set_index_model_arc(Arc::clone(&model));
+                    persist_guard = Some(persist_gate_lock());
                     deferred_persist = Some((model, sessions, lineages, changes));
                     records_dirty = false;
                     model_published = true;
@@ -589,7 +609,6 @@ fn forward_events(
     }
 
     if let Some((model, sessions, lineages, changes)) = deferred_persist {
-        let _gate = persist_gate_lock();
         let result = repository.persist_sorted_records(
             model.tree.volumes(),
             &sessions,
@@ -599,8 +618,10 @@ fn forward_events(
             &changes,
         );
         log.append_flush("deferred", result.is_ok());
+        drop(persist_guard);
         return;
     }
+    drop(persist_guard);
 
     if !model_published {
         if !flushed || records_dirty {
