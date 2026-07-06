@@ -22,31 +22,33 @@ Measured on the live `C:\` system volume — **~2.3M files / ~546k directories /
 ```mermaid
 xychart-beta
     title "Raw-MFT full C:\\ scan across the perf overhaul (seconds — lower is better)"
-    x-axis ["baseline", "+ identity hashing", "+ emit rewrite (now)"]
+    x-axis ["baseline", "+ identity hashing", "+ emit rewrite", "+ pipeline overlap", "+ drain/model trim (now)"]
     y-axis "seconds" 0 --> 150
-    bar [143.7, 58.3, 8.5]
+    bar [143.7, 58.3, 8.5, 3.1, 2.7]
 ```
 
 ```mermaid
 xychart-beta
     title "Engine internals across the optimization cycles (lower is better)"
-    x-axis ["end-to-end scan+persist (s)", "post-scan flush (s)", "snapshot (100 MB)", "working set (100 MB)", "worst UI stall (s)"]
+    x-axis ["end-to-end to Completed (s)", "post-scan flush (s)", "snapshot (100 MB)", "working set (100 MB)", "worst UI stall (s)"]
     y-axis "before -> after" 0 --> 130
     bar "before" [125.6, 28.0, 5.62, 14.0, 26.0]
-    bar "after" [10.0, 0.9, 3.23, 10.0, 1.0]
+    bar "after" [3.5, 0.9, 3.23, 10.0, 1.0]
 ```
 
 | Metric (C:\ scan, warm) | Before | After |
 |---|---|---|
-| Raw-MFT backend, session → summary | 143.7 s | **~8.5 s** |
-| End-to-end scan + persist + tree (FFI) | 125.6 s | **~10 s** |
+| Raw-MFT backend, session → summary | 143.7 s | **~2.7 s** |
+| End-to-end scan + tree to Completed (FFI) | 125.6 s | **~3.5 s** |
 | Directory-walk backend (fallback) | ~35 s drain | **~14 s** |
-| In-app scan, idle to idle (Debug UI) | 90–130 s | **~40 s** |
+| In-app Release UI scan, idle to idle | 90–130 s | **~5 s** |
 | Post-scan index flush | 28 s (duplicated) | **&lt;1 s** |
 | Snapshot on disk | 562 MB | **323 MB** |
 | Working set (full model) | ~1.4 GB | **~1.0 GB** |
 | Worst single UI-thread stall | 26 s | **&lt;1 s** |
 | Live tree first folders visible | — | **~2 s** |
+
+The snapshot write (~1.5 s) is deferred until after the UI shows *Completed*, so it falls outside the end-to-end figure above. The producer is now read-bound at the ~2.5 s NVMe sequential floor; remaining engine time is the event drain and the tree-model build.
 
 Generated-dataset budgets (tiny/fanout/fanout-large/scale) are enforced in CI and locally via `benchmarks\performance-budgets*.json`; competitor methodology notes live in `docs\BENCHMARK_METHODOLOGY.md` and `benchmarks\competitor-report.md`.
 
@@ -59,7 +61,7 @@ Generated-dataset budgets (tiny/fanout/fanout-large/scale) are enforced in CI an
 | C++/WinRT | 7,072 lines across 17 files |
 | PowerShell automation | 2,768 lines across 28 scripts |
 | Documentation | 2,544 lines across 38 markdown files |
-| Rust unit/integration tests | 84 (`cargo test`), plus scripted UI smoke, negative smoke, and budgeted benchmarks |
+| Rust unit/integration tests | 89 (`cargo test`), plus scripted UI smoke, negative smoke, and budgeted benchmarks |
 
 ## Installation
 

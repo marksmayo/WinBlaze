@@ -95,3 +95,51 @@ Remaining structure at ~5 s end-to-end: ~3 s producer (I/O-bound), ~0.9 s
 consumer lag (event log + UI forwarding + transaction inserts), ~1.1 s tree
 model build at Completed. The snapshot write (~1.5 s) now lands after the
 UI shows done.
+
+## Round 3 (2026-07-07): squeeze the serial post-producer work
+
+The producer is read-bound (Round 2 established the ~2.5 s device floor, and
+4-thread parallel reads still only gain ~9 %), so Round 3 targeted the serial
+work that runs *after* the producer: the drain, the tree-model build, and the
+snapshot write. 17 changes landed; the load-bearing ones:
+
+- Pre-size the index transaction maps from the first Progress event's total
+  record count (was empty → ~20 rehashes of millions of entries mid-drain).
+- Tree build sorts a decorated `(id, index)` array and gathers each record
+  once, instead of pdqsort swapping ~100-byte records O(n log n) times.
+- Extension aggregation (2.3M files) fanned across worker threads.
+- Snapshot serialization batched to one `write` per record (was ~10).
+- MFT read trimmed to the $DATA valid-data-length; sector fixups folded into
+  the parse workers; unchecked LE reads for in-bounds header fields; UTF-16
+  names decoded straight into the String (no intermediate `Vec<u16>`).
+- Directory `CString`s built once at push; hot events dispatched to typed
+  emitters; incremental remap rewrites ids in place (no second record clone).
+
+UI: the treemap render used to rebuild the entire D3D device / DXGI factory /
+swapchain / D2D device / DWrite factory+format **on every render** (every
+dirty/resize tick). The stack is now cached and created once; only the
+swapchain + target bitmap rebuild on resize, the panel binds once, and any
+failure resets the stack for device-lost recovery. This removes resize jank.
+
+| Scenario | Round 2 | Round 3 |
+| --- | --- | --- |
+| MFT producer, null sink (`full_ms`) | 2.7-3.0 s | **2.8 s** (unchanged; = read floor) |
+| FFI end-to-end to Completed | 4.7-5.2 s | **3.4-3.6 s** |
+| — producer + drain (`summary_ms`) | ~3.9 s | **2.8-3.0 s** |
+| — model build (Completed − Summary) | ~1.1 s | **~0.6 s** |
+
+The producer number is flat by design — it was already read-bound, so the
+parse-side changes (parallel fixups, unchecked reads, name decode) sit inside
+the read floor's shadow; they cut CPU and allocations without moving the wall
+clock. The end-to-end win is entirely from the drain + model-build shrink.
+
+Evaluated and declined (recorded so they are not re-attempted): unbuffered
+MFT reads (`FILE_FLAG_NO_BUFFERING` forfeits the warm page cache re-scans
+rely on and needs aligned buffers); boxing large `ScanEvent` variants (the
+batch moves by pointer through the channel, so boxing only adds allocations);
+color-batching treemap tile fills (`SetColor` is near-free and reordering
+breaks the nested draw order).
+
+Numbers are warm-cache, best-of-3, and swing ±20-40 % with desktop load
+(a mid-work run under ~20 % higher background load showed the same producer
+at ~3.95 s) — compare rounds only from a quiet machine.
