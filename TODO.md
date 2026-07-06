@@ -54,9 +54,9 @@ These are the remaining checks and hardening tasks before WinBlaze should be tre
 
 ### Added 2026-07-07: hardening, CI, and release polish
 
-- [ ] TODO: Run `cargo clippy --workspace --all-targets --all-features -- -D warnings` in `scripts\check-local.ps1` so lint failures surface locally before CI. CI runs this gate but the local gate did not, so a `redundant_closure`/`writeln!` lint shipped to `main` and only failed in Actions.
-- [ ] TODO: Pin the Rust toolchain (`rust-toolchain.toml`, or a version input on the CI `dtolnay/rust-toolchain` step) so a newer `@stable` clippy release cannot spontaneously red the build with new lints; bump the pin deliberately. A floating stable is what broke CI on 2026-07-06 (1.94 -> 1.96 added `collapsible_match`/`large_enum_variant`).
-- [ ] TODO: Broaden native-boundary fuzz/corpus coverage (extends the existing PARTIAL item): fuzz the `wb_*` FFI entry points and add an all-section truncation/garbage corpus for the binary-cache decoder, not just the current length/enum/truncation regressions.
+- [x] DONE-DONE: Run `cargo fmt --all --check` and `cargo clippy --workspace --all-targets --all-features -- -D warnings` in `scripts\check-local.ps1` so formatting/lint failures surface locally before CI (mirrors the CI Rust checks job).
+- [x] DONE-DONE: Pin the Rust toolchain — `rust-toolchain.toml` (channel 1.96.0 + rustfmt/clippy) plus the CI `dtolnay/rust-toolchain@1.96.0` refs, so a newer floating `@stable` clippy cannot spontaneously red the build. Bump deliberately and keep both in sync.
+- [x] DONE-DONE: Broadened the binary-cache decoder corpus (`store.rs` `fuzz_tests`): every-truncation-offset, random garbage, valid-header + garbage bodies, and single-byte flips of a valid snapshot must never panic or over-allocate. FFI-entry-point fuzzing (`wb_*`) is still open.
 - [ ] TODO: Tighten release CI once a signing/installer environment exists: verify signed artifacts, validate the MSI, verify the update-manifest SHA-256 hashes, run the Release benchmark-budget suite as a gate, and upload release-evidence artifacts.
 - [ ] TODO: Release version/branding polish: move off `0.1.0` to a deliberate release version, add an application icon (none is present under `src\WinBlaze.UI`), and confirm `Package.appxmanifest` identity/publisher/display metadata are release-ready.
 - [ ] TODO (product decision): Decide the post-v0.1.0 update story — stay manual-distribution (current `write-update-manifest.ps1` is metadata only) or build in-app update consumption. Manual distribution is fine short-term but scales poorly.

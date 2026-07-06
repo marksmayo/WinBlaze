@@ -1188,3 +1188,123 @@ fn decode_file_change_kind(value: u8) -> Result<FileChangeKind, IndexStorageErro
         ))),
     }
 }
+
+/// Fuzz/corpus coverage for the binary-cache decoder. The decoder reads an
+/// untrusted file (`%LOCALAPPDATA%\WinBlaze\index`); a corrupt or hostile
+/// snapshot must always yield `Ok`/`Err`, never panic or over-allocate. These
+/// exercise every truncation offset, random garbage, valid-header + garbage
+/// bodies, and single-byte flips of a valid snapshot.
+#[cfg(test)]
+mod fuzz_tests {
+    use super::*;
+    use winblaze_core::FileSystemKind;
+
+    /// A small but structurally complete snapshot: every section is populated
+    /// so truncations and flips land in real fields, not just empty tails.
+    fn valid_snapshot() -> Vec<u8> {
+        let mut txn = BufferedIndexTransaction::default();
+        txn.insert_volume(VolumeRecord {
+            id: VolumeId(0),
+            mount_point: String::from(r"C:\"),
+            label: Some(String::from("OS")),
+            file_system: FileSystemKind::Ntfs,
+            total_bytes: 1_000,
+            free_bytes: 400,
+            root_directory_id: DirectoryId(5),
+        });
+        txn.insert_directory(DirectoryRecord {
+            id: DirectoryId(5),
+            parent_directory_id: None,
+            name: String::from(r"C:\"),
+            full_path: String::from(r"C:\"),
+            ..Default::default()
+        });
+        txn.insert_directory(DirectoryRecord {
+            id: DirectoryId(10),
+            parent_directory_id: Some(DirectoryId(5)),
+            name: String::from("Users"),
+            full_path: String::from(r"C:\Users"),
+            ..Default::default()
+        });
+        txn.insert_file(FileRecord {
+            id: FileId(11),
+            parent_directory_id: DirectoryId(10),
+            name: String::from("report.txt"),
+            full_path: String::new(),
+            size_bytes: 1234,
+            allocation_bytes: 4096,
+            attributes: FileAttributes::ARCHIVE,
+            created_utc: Some(1),
+            modified_utc: Some(2),
+            accessed_utc: None,
+        });
+
+        let mut buffer = Vec::new();
+        write_state(&mut buffer, &txn).expect("serialize valid snapshot");
+        buffer
+    }
+
+    /// Deterministic xorshift so the corpus is reproducible across runs.
+    struct Rng(u64);
+    impl Rng {
+        fn next_u32(&mut self) -> u32 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            (self.0 >> 32) as u32
+        }
+        fn byte(&mut self) -> u8 {
+            (self.next_u32() & 0xff) as u8
+        }
+    }
+
+    #[test]
+    fn valid_snapshot_round_trips() {
+        let snapshot = valid_snapshot();
+        let state = deserialize_state(&snapshot).expect("valid snapshot decodes");
+        assert_eq!(state.snapshot_volumes().len(), 1);
+        assert_eq!(state.snapshot_directories().len(), 2);
+        assert_eq!(state.snapshot_files().len(), 1);
+    }
+
+    #[test]
+    fn decoder_survives_every_truncation() {
+        let snapshot = valid_snapshot();
+        // Every prefix of a valid snapshot must decode or error, never panic.
+        for len in 0..=snapshot.len() {
+            let _ = deserialize_state(&snapshot[..len]);
+        }
+    }
+
+    #[test]
+    fn decoder_survives_random_garbage() {
+        let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+        for _ in 0..4000 {
+            let len = (rng.next_u32() % 4096) as usize;
+            let bytes: Vec<u8> = (0..len).map(|_| rng.byte()).collect();
+            let _ = deserialize_state(&bytes);
+        }
+        // Valid magic + version, then garbage: exercises the section readers
+        // rather than bouncing off the header check.
+        for _ in 0..4000 {
+            let len = (rng.next_u32() % 4096) as usize;
+            let mut bytes = Vec::with_capacity(len + 8);
+            bytes.extend_from_slice(INDEX_MAGIC);
+            bytes.extend_from_slice(&INDEX_FORMAT_VERSION.to_le_bytes());
+            bytes.extend((0..len).map(|_| rng.byte()));
+            let _ = deserialize_state(&bytes);
+        }
+    }
+
+    #[test]
+    fn decoder_survives_single_byte_flips() {
+        let snapshot = valid_snapshot();
+        for index in 0..snapshot.len() {
+            for delta in [0x01u8, 0x7f, 0x80, 0xff] {
+                let mut mutated = snapshot.clone();
+                mutated[index] ^= delta;
+                let _ = deserialize_state(&mutated);
+            }
+        }
+    }
+}
