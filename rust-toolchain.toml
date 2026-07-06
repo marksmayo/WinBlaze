@@ -1,0 +1,8 @@
+# Pin the Rust toolchain so CI and local builds use the same compiler and the
+# same clippy lint set. A floating `stable` previously broke CI when a new
+# clippy release added lints (1.94 -> 1.96 added collapsible_match /
+# large_enum_variant). Bump this deliberately, and keep the CI
+# `dtolnay/rust-toolchain@<version>` refs in .github/workflows/ci.yml in sync.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]

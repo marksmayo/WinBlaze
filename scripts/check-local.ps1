@@ -37,6 +37,16 @@ if ($Configuration -eq "Release") {
 $budgets = Get-Content -LiteralPath $budgetPath -Raw | ConvertFrom-Json
 $tinyBudget = $budgets.profiles.tiny
 
+# Lint gates first (fast, and mirror the CI "Rust checks" job) so formatting
+# and clippy failures surface locally instead of only in Actions.
+Invoke-Step "Rust format" {
+    cargo fmt --all --check
+}
+
+Invoke-Step "Rust clippy" {
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+}
+
 Invoke-Step "Rust tests" {
     cargo test -q
 }
