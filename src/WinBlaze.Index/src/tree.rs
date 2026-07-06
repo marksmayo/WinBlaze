@@ -56,6 +56,11 @@ impl TreeEntry<'_> {
     }
 }
 
+/// Upper bound on the memoized largest-file order (see
+/// [`TreeIndex::for_each_largest_file`]): the cleanup UI never asks for more,
+/// and capping keeps the first query's partial sort cheap.
+const LARGEST_FILE_CACHE_CAP: usize = 10_000;
+
 pub struct TreeIndex {
     volumes: Vec<VolumeRecord>,
     directories: Vec<DirectoryRecord>,
@@ -65,13 +70,22 @@ pub struct TreeIndex {
     file_children: Vec<u32>,
     dir_index_by_id: IdHashMap<u64, u32>,
     root: Option<u32>,
+    /// File indices ordered by allocation size descending, capped at
+    /// [`LARGEST_FILE_CACHE_CAP`]. Built lazily on the first largest-files
+    /// query so repeated opens of the cleanup view don't re-scan every file.
+    largest_files: std::sync::OnceLock<Vec<u32>>,
 }
 
 impl TreeIndex {
     pub fn build(transaction: BufferedIndexTransaction) -> Self {
-        let (volumes, mut directories, mut files) = transaction.into_record_vecs();
-        directories.sort_unstable_by_key(|directory| directory.id.0);
-        files.sort_unstable_by_key(|file| file.id.0);
+        let (volumes, directories, files) = transaction.into_record_vecs();
+        // Sort an index array by id and gather once, rather than
+        // `sort_unstable_by_key` on the records themselves: the records are
+        // ~100-byte structs and pdqsort swaps them O(n log n) times, whereas
+        // gathering through a sorted `u32` index moves each record exactly
+        // once (the id keys are cheap u64 swaps). ~2.3M files on a full drive.
+        let directories = sort_records_by_id(directories, |directory| directory.id.0);
+        let files = sort_records_by_id(files, |file| file.id.0);
 
         let dir_index_by_id: IdHashMap<u64, u32> = directories
             .iter()
@@ -167,6 +181,7 @@ impl TreeIndex {
             file_children,
             dir_index_by_id,
             root,
+            largest_files: std::sync::OnceLock::new(),
         };
         tree.compute_rollups();
         tree.sort_children();
@@ -296,12 +311,33 @@ impl TreeIndex {
         if take == 0 {
             return;
         }
-        let mut order: Vec<u32> = (0..self.files.len() as u32).collect();
+
         let compare = |a: &u32, b: &u32| {
             self.files[*b as usize]
                 .allocation_bytes
                 .cmp(&self.files[*a as usize].allocation_bytes)
         };
+
+        // Requests within the cache cap are served from a memoized order
+        // built once; larger requests fall back to a one-off partial sort.
+        if take <= LARGEST_FILE_CACHE_CAP {
+            let cached = self.largest_files.get_or_init(|| {
+                let cap = LARGEST_FILE_CACHE_CAP.min(self.files.len());
+                let mut order: Vec<u32> = (0..self.files.len() as u32).collect();
+                if cap < order.len() {
+                    order.select_nth_unstable_by(cap - 1, compare);
+                    order.truncate(cap);
+                }
+                order.sort_unstable_by(compare);
+                order
+            });
+            for &index in cached.iter().take(take) {
+                visit(&self.files[index as usize]);
+            }
+            return;
+        }
+
+        let mut order: Vec<u32> = (0..self.files.len() as u32).collect();
         if take < order.len() {
             order.select_nth_unstable_by(take - 1, compare);
             order.truncate(take);
@@ -403,6 +439,27 @@ impl TreeIndex {
     }
 }
 
+/// Sorts `records` ascending by their id without swapping the (large) record
+/// structs during the sort: an index array is sorted by the cheap u64 key and
+/// the records are gathered through it exactly once. `T: Default` lets the
+/// gather `mem::take` each record out of the source in place.
+fn sort_records_by_id<T: Default>(mut records: Vec<T>, key: impl Fn(&T) -> u64) -> Vec<T> {
+    // Decorate each index with its id key so the sort compares a compact
+    // (u64, u32) array rather than chasing pointers into the ~100-byte records
+    // (which would miss cache on every comparison). The gather then moves each
+    // record exactly once, vs pdqsort swapping the large structs O(n log n).
+    let mut keyed: Vec<(u64, u32)> = records
+        .iter()
+        .enumerate()
+        .map(|(index, record)| (key(record), index as u32))
+        .collect();
+    keyed.sort_unstable_by_key(|&(id, _)| id);
+    keyed
+        .into_iter()
+        .map(|(_, index)| std::mem::take(&mut records[index as usize]))
+        .collect()
+}
+
 /// Picks the root directory: a record whose parent is missing or itself.
 /// Prefers id 5 (the NTFS root record number, which both scanner backends
 /// use for the scan root), then the largest candidate by subtree membership
@@ -411,23 +468,23 @@ fn choose_root(
     directories: &[DirectoryRecord],
     dir_index_by_id: &IdHashMap<u64, u32>,
 ) -> Option<u32> {
-    let mut fallback: Option<u32> = None;
-    for (index, directory) in directories.iter().enumerate() {
-        let is_root_like = match directory.parent_directory_id {
-            None => true,
-            Some(parent) => parent.0 == directory.id.0 || !dir_index_by_id.contains_key(&parent.0),
-        };
-        if !is_root_like {
-            continue;
-        }
-        if directory.id.0 == 5 {
-            return Some(index as u32);
-        }
-        if fallback.is_none() {
-            fallback = Some(index as u32);
+    let is_root_like = |directory: &DirectoryRecord| match directory.parent_directory_id {
+        None => true,
+        Some(parent) => parent.0 == directory.id.0 || !dir_index_by_id.contains_key(&parent.0),
+    };
+
+    // The scan root is record 5 on both backends; check it directly instead
+    // of scanning every directory to find it.
+    if let Some(&index) = dir_index_by_id.get(&5) {
+        if is_root_like(&directories[index as usize]) {
+            return Some(index);
         }
     }
-    fallback
+
+    directories
+        .iter()
+        .position(|directory| is_root_like(directory))
+        .map(|index| index as u32)
 }
 
 fn max_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {

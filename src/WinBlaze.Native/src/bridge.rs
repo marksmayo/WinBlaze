@@ -70,9 +70,63 @@ fn build_index_model(
     cache_stats: Option<(u64, u64, u64, bool)>,
 ) -> IndexModel {
     let tree = TreeIndex::build(transaction);
+    let extension_totals = aggregate_extension_totals(tree.files());
 
+    let (read_bytes, read_millis, decode_millis, from_backup) =
+        cache_stats.unwrap_or((0, 0, 0, false));
+    IndexModel {
+        tree,
+        extension_totals,
+        cache_read_bytes: read_bytes,
+        cache_read_millis: read_millis,
+        cache_decode_millis: decode_millis,
+        cache_loaded_from_backup: from_backup,
+    }
+}
+
+/// Aggregates per-extension (bytes, files) over every file in the model.
+/// Runs on the post-scan critical path (before `Completed` reaches the UI), so
+/// the ~2.3M-file pass is fanned across worker threads: each thread folds a
+/// local map over its slice and the (few-hundred-key) maps merge at the end.
+fn aggregate_extension_totals(files: &[FileRecord]) -> Vec<(String, u64, u64)> {
+    let workers = thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(4)
+        .clamp(1, 16);
+    // Below this a single pass is cheaper than the thread hand-off.
+    let chunk = files.len().div_ceil(workers).max(1);
+
+    let mut partials: Vec<HashMap<String, (u64, u64)>> = if files.len() < 64_000 || workers == 1 {
+        vec![aggregate_extension_chunk(files)]
+    } else {
+        thread::scope(|scope| {
+            files
+                .chunks(chunk)
+                .map(|slice| scope.spawn(|| aggregate_extension_chunk(slice)))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|handle| handle.join().unwrap_or_default())
+                .collect()
+        })
+    };
+
+    let mut totals = partials.pop().unwrap_or_default();
+    for partial in partials {
+        for (extension, (bytes, count)) in partial {
+            let entry = totals.entry(extension).or_insert((0, 0));
+            entry.0 = entry.0.saturating_add(bytes);
+            entry.1 = entry.1.saturating_add(count);
+        }
+    }
+    totals
+        .into_iter()
+        .map(|(extension, (bytes, files))| (extension, bytes, files))
+        .collect()
+}
+
+fn aggregate_extension_chunk(files: &[FileRecord]) -> HashMap<String, (u64, u64)> {
     let mut totals: HashMap<String, (u64, u64)> = HashMap::new();
-    for file in tree.files() {
+    for file in files {
         // Borrowed fast path: extensions are usually already lowercase, so
         // look the key up without materializing a String per file (2.3M
         // allocations on a full-drive model build otherwise).
@@ -91,21 +145,7 @@ fn build_index_model(
         entry.0 = entry.0.saturating_add(file.size_bytes);
         entry.1 = entry.1.saturating_add(1);
     }
-    let extension_totals = totals
-        .into_iter()
-        .map(|(extension, (bytes, files))| (extension, bytes, files))
-        .collect();
-
-    let (read_bytes, read_millis, decode_millis, from_backup) =
-        cache_stats.unwrap_or((0, 0, 0, false));
-    IndexModel {
-        tree,
-        extension_totals,
-        cache_read_bytes: read_bytes,
-        cache_read_millis: read_millis,
-        cache_decode_millis: decode_millis,
-        cache_loaded_from_backup: from_backup,
-    }
+    totals
 }
 
 fn set_index_model(model: IndexModel) {
@@ -184,7 +224,10 @@ struct PendingLiveDirectory {
     id: u64,
     parent_id: u64,
     has_parent: bool,
-    name: String,
+    // Built as a CString at push time rather than cloned into a String and
+    // re-allocated into a CString at flush: one allocation per directory
+    // instead of two, across the hundreds of thousands a full drive emits.
+    name: CString,
 }
 
 struct UiEventForwarder {
@@ -247,7 +290,7 @@ impl UiEventForwarder {
                     .map(|parent| parent.0)
                     .unwrap_or(0),
                 has_parent: directory.parent_directory_id.is_some(),
-                name: directory.name.clone(),
+                name: CString::new(directory.name.as_str()).unwrap_or_default(),
             });
             let now = Instant::now();
             let latency_due = self
@@ -308,7 +351,7 @@ impl UiEventForwarder {
         let mut names: Vec<CString> = Vec::with_capacity(self.pending_directories.len());
         let mut items: Vec<WbLiveDirectory> = Vec::with_capacity(self.pending_directories.len());
         for directory in self.pending_directories.drain(..) {
-            let name = CString::new(directory.name).unwrap_or_default();
+            let name = directory.name;
             items.push(WbLiveDirectory {
                 id: directory.id,
                 parent_id: directory.parent_id,
@@ -548,9 +591,25 @@ fn forward_events(
     // this one's finalization — which the single-session UI never starts.
     let mut persist_guard: Option<std::sync::MutexGuard<'static, ()>> = None;
     let mut ui_forwarder = UiEventForwarder::new(callback, user_data);
+    // Reserve the transaction maps once, from the first Progress event's total
+    // record count, so the millions of inserts that follow don't rehash the
+    // maps ~20 times as they grow. total_items is the volume's total MFT record
+    // count; the split below reflects the typical ~50% files / ~12% dirs share
+    // and only over-reserves a bounded amount when a volume skews.
+    let mut reserved = false;
 
     for event in rx.into_iter().flatten() {
         log.append_scan_event(&event);
+
+        if !reserved {
+            if let ScanEvent::Progress(progress) = &event {
+                if progress.total_items > 0 {
+                    let total = progress.total_items as usize;
+                    transaction.reserve(total / 2, total / 8);
+                    reserved = true;
+                }
+            }
+        }
 
         // Publish the read model BEFORE the UI learns the scan ended: its
         // snapshot reload then finds a hot cache instead of re-reading the
@@ -905,6 +964,10 @@ struct EventLog {
     file: Option<fs::File>,
     written_bytes: u64,
     last_progress_log: Option<Instant>,
+    /// Reused across appends so composing a log line does not allocate each
+    /// time. (Only low-volume events reach here — file/directory events return
+    /// early — so this is a tidiness win, not a hot-path one.)
+    line_buf: String,
 }
 
 impl EventLog {
@@ -914,6 +977,7 @@ impl EventLog {
             file: None,
             written_bytes: 0,
             last_progress_log: None,
+            line_buf: String::new(),
         }
     }
 
@@ -992,17 +1056,23 @@ impl EventLog {
         if self.file.is_none() {
             self.open();
         }
-        let Some(file) = self.file.as_mut() else {
+        if self.file.is_none() {
             return;
-        };
+        }
 
-        let line = format!(
+        use std::fmt::Write as _;
+        self.line_buf.clear();
+        let _ = write!(
+            self.line_buf,
             "{{\"ts_ms\":{},\"component\":\"native\",{} }}\n",
             now_ms(),
             payload
         );
-        if file.write_all(line.as_bytes()).is_ok() {
-            self.written_bytes = self.written_bytes.saturating_add(line.len() as u64);
+        let file = self.file.as_mut().expect("checked above");
+        if file.write_all(self.line_buf.as_bytes()).is_ok() {
+            self.written_bytes = self
+                .written_bytes
+                .saturating_add(self.line_buf.len() as u64);
         } else {
             self.file = None;
         }

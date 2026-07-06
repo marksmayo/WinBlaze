@@ -227,6 +227,12 @@ namespace winrt::WinBlaze::UI::implementation
         static std::wstring Utf8ToWide(std::string_view text);
         TreeCatalogEntry CatalogEntryFromNative(WbCatalogEntry const& entry) const;
         void RenderTreemapProbeFrame(int width, int height);
+        // Creates (once) and resizes the cached treemap GPU render stack.
+        // Returns false and leaves a status message on failure.
+        bool EnsureTreemapRenderStack(int width, int height);
+        // Releases the cached render stack so the next render rebuilds it
+        // (used after any device/draw failure, including device-lost).
+        void ResetTreemapRenderStack();
 
         Microsoft::UI::Xaml::Controls::ListViewItem CreateExtensionListItem(ExtensionStatEntry const& entry, uint64_t total_bytes) const;
         void PopulateExtensionList(std::vector<ExtensionStatEntry> const& entries);
@@ -444,6 +450,24 @@ namespace winrt::WinBlaze::UI::implementation
         bool m_treemap_render_dirty{ true };
         int m_treemap_render_width{ 0 };
         int m_treemap_render_height{ 0 };
+        // Cached treemap GPU render stack. The original probe rebuilt the D3D
+        // device, DXGI factory, swapchain, D2D device/context, and DWrite
+        // factory/format on every render (i.e. on every dirty/resize tick).
+        // These are created once and reused; only the swapchain + target
+        // bitmap are rebuilt when the surface size changes, and the swapchain
+        // is bound to the panel once per swapchain. Any create/draw failure
+        // resets the whole stack so the next render rebuilds it.
+        winrt::com_ptr<ID3D11Device> m_render_d3d_device{ nullptr };
+        winrt::com_ptr<ID2D1Factory3> m_render_d2d_factory{ nullptr };
+        winrt::com_ptr<ID2D1Device> m_render_d2d_device{ nullptr };
+        winrt::com_ptr<ID2D1DeviceContext> m_render_d2d_context{ nullptr };
+        winrt::com_ptr<IDWriteFactory> m_render_dwrite_factory{ nullptr };
+        winrt::com_ptr<IDWriteTextFormat> m_render_label_format{ nullptr };
+        winrt::com_ptr<IDXGISwapChain1> m_render_swap_chain{ nullptr };
+        winrt::com_ptr<ID2D1Bitmap1> m_render_target_bitmap{ nullptr };
+        int m_render_swap_width{ 0 };
+        int m_render_swap_height{ 0 };
+        D3D_FEATURE_LEVEL m_render_feature_level{};
         uint64_t m_total_treemap_render_request_count{ 0 };
         uint64_t m_total_treemap_render_flush_count{ 0 };
         uint64_t m_total_treemap_render_coalesced_count{ 0 };
