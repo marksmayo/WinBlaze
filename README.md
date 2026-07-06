@@ -50,6 +50,27 @@ xychart-beta
 
 The snapshot write (~1.5 s) is deferred until after the UI shows *Completed*, so it falls outside the end-to-end figure above. The producer is now read-bound at the ~2.5 s NVMe sequential floor; remaining engine time is the event drain and the tree-model build.
 
+### Compared to WizTree and WinDirStat
+
+Same live `C:\` volume (warm cache, elevated), timed 2026-07-07. GUI tools were timed launch → scan-complete-and-populated via a CPU-idle probe; WinBlaze uses its own reported scan duration plus UI-idle detection.
+
+```mermaid
+xychart-beta
+    title "Scan to interactive view — warm C:\\ (seconds — lower is better)"
+    x-axis ["WinBlaze (engine)", "WinBlaze (in-app)", "WinDirStat 2.6", "WizTree 4.31 (best)"]
+    y-axis "seconds" 0 --> 20
+    bar [2.7, 4.0, 10.5, 14.0]
+```
+
+| Tool | Backend | Scan → interactive | Notes |
+|---|---|---|---|
+| **WinBlaze** (engine) | NTFS MFT | **~2.7 s** | scan → summary (`mft_scan_repro`) |
+| **WinBlaze** (in-app) | NTFS MFT | **~4.0 s** | Release UI idle→idle, incl. tree + treemap |
+| WinDirStat 2.6.0 | directory walk (multithreaded) | ~10.5 s | modern fork; ~60 s CPU across cores |
+| WizTree 4.31 | NTFS MFT | raw read ~2–3 s; to interactive ~14–55 s | see caveat |
+
+**WizTree caveat:** its raw MFT read is as fast as WinBlaze's, but the GUI materializes the full ~2.9M-file list and treemap up front, so *time to an interactive view* is larger and highly variable (14–55 s observed; the chart shows the best run). Its all-file CLI export took 28–35 s, but that is dominated by writing a 437 MB CSV, not scanning. WinBlaze reaches an interactive view sooner because it pages and caps the UI (8,192-entry catalog, paged tree, deferred snapshot) rather than materializing every file. Single-machine, warm-cache figures — see [benchmarks/perf-overhaul-baselines.md](benchmarks/perf-overhaul-baselines.md) for methodology and raw runs.
+
 Generated-dataset budgets (tiny/fanout/fanout-large/scale) are enforced in CI and locally via `benchmarks\performance-budgets*.json`; competitor methodology notes live in `docs\BENCHMARK_METHODOLOGY.md` and `benchmarks\competitor-report.md`.
 
 ## Project Stats
