@@ -41,7 +41,7 @@ xychart-beta
 | Raw-MFT backend, session → summary | 143.7 s | **~2.7 s** |
 | End-to-end scan + tree to Completed (FFI) | 125.6 s | **~3.5 s** |
 | Directory-walk backend (fallback) | ~35 s drain | **~14 s** |
-| In-app Release UI scan, idle to idle | 90–130 s | **~5 s** |
+| In-app Release UI scan, idle to idle | 90–130 s | **~4 s** |
 | Post-scan index flush | 28 s (duplicated) | **&lt;1 s** |
 | Snapshot on disk | 562 MB | **323 MB** |
 | Working set (full model) | ~1.4 GB | **~1.0 GB** |

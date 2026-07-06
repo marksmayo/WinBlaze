@@ -127,6 +127,11 @@ failure resets the stack for device-lost recovery. This removes resize jank.
 | FFI end-to-end to Completed | 4.7-5.2 s | **3.4-3.6 s** |
 | — producer + drain (`summary_ms`) | ~3.9 s | **2.8-3.0 s** |
 | — model build (Completed − Summary) | ~1.1 s | **~0.6 s** |
+| In-app Release UI C:\ scan, idle to idle | 5.2 s | **~4.0 s** |
+
+In-app figure is the mean of 3 UIA-driven Release-UI runs (elevated, MFT
+fast path): wall-clock click→idle 4.02/4.05/4.06 s, app-reported scan
+duration ~3.5 s (the extra ~0.5 s is the post-scan treemap paint).
 
 The producer number is flat by design — it was already read-bound, so the
 parse-side changes (parallel fixups, unchecked reads, name decode) sit inside
