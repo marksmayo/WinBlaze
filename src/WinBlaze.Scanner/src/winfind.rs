@@ -11,7 +11,7 @@ use std::ffi::{c_void, OsString};
 use std::fs;
 use std::io;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[repr(C)]
 #[allow(non_snake_case)]
@@ -53,6 +53,21 @@ extern "system" {
     fn FindNextFileW(hFindFile: isize, lpFindFileData: *mut Win32FindDataW) -> i32;
 
     fn FindClose(hFindFile: isize) -> i32;
+}
+
+/// A directory-enumeration error, carrying the specific path it occurred on
+/// when known (a per-entry `metadata()` failure) so callers report the exact
+/// file rather than the parent directory; `None` for handle-level failures
+/// that no single entry owns.
+pub struct EnumerationError {
+    pub error: io::Error,
+    pub path: Option<PathBuf>,
+}
+
+impl EnumerationError {
+    fn bare(error: io::Error) -> Self {
+        Self { error, path: None }
+    }
 }
 
 /// One directory entry, fully described by the enumeration itself.
@@ -129,7 +144,7 @@ pub fn read_dir_fast(directory: &Path) -> io::Result<FindIterator> {
 }
 
 impl Iterator for FindIterator {
-    type Item = io::Result<FindEntry>;
+    type Item = Result<FindEntry, EnumerationError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -152,7 +167,7 @@ impl Iterator for FindIterator {
                 } else {
                     self.error_budget -= 1;
                 }
-                return Some(Err(error));
+                return Some(Err(EnumerationError::bare(error)));
             }
 
             let data = self.buffer.as_ref();
@@ -210,25 +225,29 @@ pub fn read_dir_auto(directory: &Path, fast: bool) -> io::Result<DirEntries> {
 }
 
 impl Iterator for DirEntries {
-    type Item = io::Result<FindEntry>;
+    type Item = Result<FindEntry, EnumerationError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             DirEntries::Fast(entries) => entries.next(),
             DirEntries::Std(entries) => entries.next().map(|result| {
-                result.and_then(|entry| {
-                    // Free on Windows: DirEntry::metadata() is built from
-                    // the WIN32_FIND_DATAW the enumeration already cached.
-                    let metadata = entry.metadata()?;
-                    use std::os::windows::fs::MetadataExt;
-                    Ok(FindEntry {
-                        name: entry.file_name(),
-                        attributes: metadata.file_attributes(),
-                        size_bytes: metadata.len(),
-                        created_utc: metadata.creation_time(),
-                        modified_utc: metadata.last_write_time(),
-                        accessed_utc: metadata.last_access_time(),
-                    })
+                use std::os::windows::fs::MetadataExt;
+                let entry = result.map_err(EnumerationError::bare)?;
+                // Free on Windows: DirEntry::metadata() is built from the
+                // WIN32_FIND_DATAW the enumeration already cached. On failure
+                // attach the entry's own path so the walker reports the file,
+                // not the directory.
+                let metadata = entry.metadata().map_err(|error| EnumerationError {
+                    error,
+                    path: Some(entry.path()),
+                })?;
+                Ok(FindEntry {
+                    name: entry.file_name(),
+                    attributes: metadata.file_attributes(),
+                    size_bytes: metadata.len(),
+                    created_utc: metadata.creation_time(),
+                    modified_utc: metadata.last_write_time(),
+                    accessed_utc: metadata.last_access_time(),
                 })
             }),
         }
@@ -241,11 +260,14 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn collect_entries(
-        entries: impl Iterator<Item = io::Result<FindEntry>>,
+        entries: impl Iterator<Item = Result<FindEntry, EnumerationError>>,
     ) -> Vec<(String, u64, bool)> {
         let mut collected: Vec<(String, u64, bool)> = entries
             .map(|entry| {
-                let entry = entry.expect("entry");
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(error) => panic!("entry: {}", error.error),
+                };
                 (
                     entry.name.to_string_lossy().into_owned(),
                     entry.size_bytes,

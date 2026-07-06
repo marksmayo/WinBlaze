@@ -400,7 +400,7 @@ enum ReparseDecision {
 fn evaluate_reparse_descent(
     directory: &Path,
     entry_path: &Path,
-    entry_name: &str,
+    entry_name: &std::ffi::OsStr,
     attributes: FileAttributes,
     policy: ReparseTraversalPolicy,
     ancestors: &AncestorChain,
@@ -411,6 +411,10 @@ fn evaluate_reparse_descent(
             // points), so skip the canonical path join entirely.
             return ReparseDecision::Follow(AncestorChain::disabled());
         }
+        // Join the EXACT name (not a lossy display copy): the reparse branch
+        // below compares against fs::canonicalize output, which preserves
+        // unpaired surrogates, so a lossy ancestor here would never match a
+        // cycling target and the cycle guard would fail.
         let canonical = ancestors
             .last()
             .map(|parent| parent.join(entry_name))
@@ -475,11 +479,17 @@ fn walk_directory_tree(
 
         let entry = match entry_result {
             Ok(entry) => entry,
-            Err(error) => {
+            Err(failure) => {
+                let path = failure
+                    .path
+                    .as_deref()
+                    .unwrap_or(directory)
+                    .display()
+                    .to_string();
                 emit_deduplicated_issue(
                     pipeline,
                     issue_keys,
-                    convert_io_error(&error, directory.display().to_string()),
+                    convert_io_error(&failure.error, path),
                 );
                 continue;
             }
@@ -494,15 +504,15 @@ fn walk_directory_tree(
         // on-disk name): file records carry a parent id, not a path.
         if attributes.is_directory() {
             let entry_path = directory.join(&entry.name);
-            let entry_name = display_name(entry.name);
             let decision = evaluate_reparse_descent(
                 directory,
                 &entry_path,
-                &entry_name,
+                &entry.name,
                 attributes,
                 reparse_policy,
                 ancestors,
             );
+            let entry_name = display_name(entry.name);
 
             let directory_id = walk_state.next_directory_id();
             directory_ids.insert(entry_path.clone(), directory_id);
@@ -883,11 +893,17 @@ fn process_fallback_directory(
 
         let entry = match entry_result {
             Ok(entry) => entry,
-            Err(error) => {
+            Err(failure) => {
+                let path = failure
+                    .path
+                    .as_deref()
+                    .unwrap_or(&task.path)
+                    .display()
+                    .to_string();
                 emit_deduplicated_issue_shared(
                     pipeline,
                     shared,
-                    convert_io_error(&error, task.path.display().to_string()),
+                    convert_io_error(&failure.error, path),
                 );
                 continue;
             }
@@ -902,15 +918,15 @@ fn process_fallback_directory(
         // on-disk name): file records carry a parent id, not a path.
         if attributes.is_directory() {
             let entry_path = task.path.join(&entry.name);
-            let entry_name = display_name(entry.name);
             let decision = evaluate_reparse_descent(
                 &task.path,
                 &entry_path,
-                &entry_name,
+                &entry.name,
                 attributes,
                 shared.reparse_policy,
                 &task.ancestors,
             );
+            let entry_name = display_name(entry.name);
 
             let directory_id = winblaze_core::DirectoryId(
                 shared.next_directory_id.fetch_add(1, Ordering::Relaxed),
@@ -1061,6 +1077,48 @@ mod tests {
             strip_verbatim_prefix(Path::new(r"C:\Users\markm")),
             PathBuf::from(r"C:\Users\markm")
         );
+    }
+
+    #[test]
+    fn plain_directory_ancestor_uses_exact_name_not_lossy() {
+        // A directory whose name holds an unpaired UTF-16 surrogate: the
+        // ancestor chain entry must be built from the exact OsStr, so a
+        // reparse point below that cycles back is still matched. Building it
+        // from a lossy (U+FFFD) display name would never match the exact
+        // path fs::canonicalize returns, silently defeating cycle detection.
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+
+        let lossy_name: OsString = OsString::from_wide(&[
+            u16::from(b'w'),
+            u16::from(b'e'),
+            u16::from(b'i'),
+            u16::from(b'r'),
+            u16::from(b'd'),
+            0xD800, // unpaired high surrogate
+        ]);
+        let ancestors = AncestorChain::root(PathBuf::from(r"C:\root"));
+
+        let decision = evaluate_reparse_descent(
+            Path::new(r"C:\root"),
+            &Path::new(r"C:\root").join(&lossy_name),
+            &lossy_name,
+            FileAttributes::DIRECTORY,
+            ReparseTraversalPolicy::FollowAll,
+            &ancestors,
+        );
+        let child = match decision {
+            ReparseDecision::Follow(child) => child,
+            other => panic!(
+                "expected Follow, got a skip: {:?}",
+                std::mem::discriminant(&other)
+            ),
+        };
+
+        // The exact descend path (what a reparse target below would resolve
+        // to) is present in the chain; a lossy join would not be.
+        assert!(child.contains(&Path::new(r"C:\root").join(&lossy_name)));
+        assert!(!child.contains(Path::new("C:\\root\\weird\u{FFFD}")));
     }
 
     #[test]

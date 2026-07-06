@@ -542,6 +542,10 @@ fn forward_events(
     // Acquired BEFORE Completed is forwarded and held until the deferred
     // write finishes, so a session started the instant the UI sees
     // Completed blocks on the gate instead of reading the stale snapshot.
+    // This deliberately widens the critical section past just the disk
+    // write: it is the minimum span that closes the rescan race. The only
+    // cost is that a *second* concurrent ReplaceSnapshot scan would wait on
+    // this one's finalization — which the single-session UI never starts.
     let mut persist_guard: Option<std::sync::MutexGuard<'static, ()>> = None;
     let mut ui_forwarder = UiEventForwarder::new(callback, user_data);
 
