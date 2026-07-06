@@ -650,6 +650,11 @@ fn emit_deduplicated_event(
     event: ScanEvent,
 ) {
     match event {
+        // The two high-volume variants go straight to their typed emitters,
+        // which compute the same size estimate directly, so ~2.85M events per
+        // scan skip the second match `emit_event` would otherwise run.
+        ScanEvent::FileFound(file) => pipeline.emit_file(file),
+        ScanEvent::DirectoryFound(directory) => pipeline.emit_directory(directory),
         ScanEvent::Issue(issue) => emit_deduplicated_issue(pipeline, issue_keys, issue),
         other => pipeline.emit_event(other),
     }

@@ -166,10 +166,11 @@ fn stream_ntfs_entries(
                 Some(full_bytes) => &mut carry[..full_bytes],
             };
 
-            // Restore the sector-tail bytes the on-disk update sequence
-            // array displaced; raw MFT data is unusable without this.
-            apply_mft_fixups(batch, bytes_per_sector);
-            let (parsed, extensions) = parse_batch(batch, full_records, workers)?;
+            // Restore the sector-tail bytes the on-disk update sequence array
+            // displaced (raw MFT data is unusable without this) and parse, both
+            // fanned across the worker threads on disjoint record ranges.
+            let (parsed, extensions) =
+                fixup_and_parse_batch(batch, full_records, workers, bytes_per_sector)?;
             if batch_ptr.is_some() {
                 let full_bytes = full_records * NTFS_RECORD_SIZE;
                 carry.drain(..full_bytes);
@@ -480,7 +481,67 @@ fn parse_batch(
             handles.push(scope.spawn(move || parse_record_range(batch, start_record, end_record)));
         }
 
-        let mut parsed = Vec::new();
+        // Most records parse into an entry, so size the combined buffer to the
+        // record count up front rather than growing it across worker joins.
+        let mut parsed = Vec::with_capacity(record_count);
+        let mut extensions = Vec::new();
+        for handle in handles {
+            match handle.join() {
+                Ok(Ok((chunk_entries, chunk_extensions))) => {
+                    parsed.extend(chunk_entries);
+                    extensions.extend(chunk_extensions);
+                }
+                Ok(Err(error)) => return Err(error),
+                Err(_) => {
+                    return Err(NtfsEnumerationError::InvalidRecord(String::from(
+                        "parallel parser worker panicked",
+                    )))
+                }
+            }
+        }
+        Ok((parsed, extensions))
+    })
+}
+
+/// Streaming-path counterpart to [`parse_batch`] that also applies the sector
+/// fixups, with each worker fixing up and parsing its own disjoint,
+/// record-aligned slice of the buffer. Folding the fixup into the parse fan-out
+/// removes the serial full-batch fixup pass that used to run on the read thread
+/// before the workers started. `batch.len()` must be `record_count *
+/// NTFS_RECORD_SIZE` (the streaming reader guarantees this).
+fn fixup_and_parse_batch(
+    batch: &mut [u8],
+    record_count: usize,
+    workers: usize,
+    bytes_per_sector: usize,
+) -> Result<(Vec<ParsedNtfsEntry>, Vec<ExtensionSizes>), NtfsEnumerationError> {
+    if workers <= 1 || record_count < 2048 {
+        apply_mft_fixups(batch, bytes_per_sector);
+        return parse_record_range(batch, 0, record_count);
+    }
+
+    let chunk_size = record_count.div_ceil(workers);
+    thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(workers);
+        let mut remaining: &mut [u8] = batch;
+        for worker_index in 0..workers {
+            let start_record = worker_index * chunk_size;
+            if start_record >= record_count {
+                break;
+            }
+            let end_record = ((worker_index + 1) * chunk_size).min(record_count);
+            let chunk_records = end_record - start_record;
+            // split_at_mut on a record boundary hands each worker a disjoint,
+            // exclusively-borrowed slice it can fix up in place.
+            let (chunk, rest) = remaining.split_at_mut(chunk_records * NTFS_RECORD_SIZE);
+            remaining = rest;
+            handles.push(scope.spawn(move || {
+                apply_mft_fixups(chunk, bytes_per_sector);
+                parse_record_range(chunk, 0, chunk_records)
+            }));
+        }
+
+        let mut parsed = Vec::with_capacity(record_count);
         let mut extensions = Vec::new();
         for handle in handles {
             match handle.join() {
@@ -782,6 +843,37 @@ fn decode_data_runs(runs: &[u8], bytes_per_cluster: u64) -> io::Result<Vec<(u64,
     Ok(extents)
 }
 
+/// Drops (and partially trims) trailing MFT data-run extents that lie beyond
+/// the $DATA valid-data-length: those clusters are uninitialized and hold no
+/// FILE records. Extents are in data-stream order, so this walks them
+/// accumulating length until the cluster-rounded valid length is covered.
+fn trim_extents_to_valid_length(extents: &mut Vec<(u64, u64)>, valid_len: u64, cluster: u64) {
+    if cluster == 0 || valid_len == 0 || valid_len == u64::MAX {
+        return;
+    }
+    let cap = valid_len.div_ceil(cluster).saturating_mul(cluster);
+    let mut cumulative = 0u64;
+    let mut keep = 0usize;
+    for (index, &(_, length)) in extents.iter().enumerate() {
+        let remaining = cap.saturating_sub(cumulative);
+        if remaining == 0 {
+            break;
+        }
+        if length <= remaining {
+            cumulative += length;
+            keep = index + 1;
+        } else {
+            extents[index].1 = remaining;
+            keep = index + 1;
+            break;
+        }
+    }
+    // Never trim to empty: a bogus valid length must not defeat the scan.
+    if keep > 0 {
+        extents.truncate(keep);
+    }
+}
+
 /// Reads the MFT's own file record (record 0) and extracts the $DATA
 /// runlist. A heavily fragmented MFT whose runs spill into an attribute
 /// list is not supported and falls back to the directory walk.
@@ -828,6 +920,16 @@ fn read_mft_extents(volume: &mut File, geometry: &MftGeometry) -> io::Result<Vec
                     "MFT $DATA attribute unexpectedly resident",
                 ));
             }
+            // Valid-data-length (offset 56 of the non-resident header): bytes
+            // beyond it in the $MFT data stream are uninitialized zeros with no
+            // FILE records, so there is no reason to read them. On a volume
+            // whose MFT was preallocated large this trims real I/O; when the
+            // MFT is fully initialized (valid == allocated) it is a no-op.
+            let valid_data_length = if attribute_length >= 64 {
+                le_u64(&record, cursor + 56)
+            } else {
+                u64::MAX
+            };
             let run_offset =
                 u16::from_le_bytes([record[cursor + 32], record[cursor + 33]]) as usize;
             if run_offset >= attribute_length {
@@ -837,7 +939,13 @@ fn read_mft_extents(volume: &mut File, geometry: &MftGeometry) -> io::Result<Vec
                 ));
             }
             let runs = &record[cursor + run_offset..cursor + attribute_length];
-            return decode_data_runs(runs, geometry.bytes_per_cluster);
+            let mut extents = decode_data_runs(runs, geometry.bytes_per_cluster)?;
+            trim_extents_to_valid_length(
+                &mut extents,
+                valid_data_length,
+                geometry.bytes_per_cluster,
+            );
+            return Ok(extents);
         }
         cursor += attribute_length;
     }
@@ -1512,16 +1620,18 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
         return Ok(ParsedRecordOutcome::None);
     }
 
-    let file_index = read_u32(record, 0x2C)? as u64;
-    let flags = read_u16(record, 0x16)?;
+    // These offsets are fixed header fields inside a full 1024-byte record
+    // (guaranteed by the length check above), so they read unchecked.
+    let file_index = le_u32(record, 0x2C) as u64;
+    let flags = le_u16(record, 0x16);
     // The MFT retains records of deleted files for slot reuse; they still
     // carry the FILE signature but must not be counted.
     if flags & FILE_RECORD_FLAG_IN_USE == 0 {
         return Ok(ParsedRecordOutcome::None);
     }
-    let base_record = read_u64(record, 0x20)? & 0x0000_FFFF_FFFF_FFFF;
+    let base_record = le_u64(record, 0x20) & 0x0000_FFFF_FFFF_FFFF;
     let is_directory = flags & FILE_RECORD_FLAG_DIRECTORY != 0;
-    let first_attr_offset = read_u16(record, 0x14)? as usize;
+    let first_attr_offset = le_u16(record, 0x14) as usize;
     let mut cursor = first_attr_offset;
     let mut file_name: Option<FileNameAttribute> = None;
     let mut allocation_bytes = 0u64;
@@ -1669,10 +1779,11 @@ fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute, NtfsEnumerationErr
         )));
     }
 
-    let parent_reference = Some(read_u64(bytes, 0)? & 0x0000_FFFF_FFFF_FFFF);
-    let created_utc = read_i64(bytes, 8)?;
-    let modified_utc = read_i64(bytes, 16)?;
-    let accessed_utc = read_i64(bytes, 24)?;
+    // Fixed fields, all within the validated 66-byte minimum: read unchecked.
+    let parent_reference = Some(le_u64(bytes, 0) & 0x0000_FFFF_FFFF_FFFF);
+    let created_utc = le_i64(bytes, 8);
+    let modified_utc = le_i64(bytes, 16);
+    let accessed_utc = le_i64(bytes, 24);
     let name_length = bytes[64] as usize;
     let namespace = bytes[65];
     let name_offset = 66usize;
@@ -1683,14 +1794,23 @@ fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute, NtfsEnumerationErr
         )));
     }
 
-    let mut utf16 = Vec::with_capacity(name_length);
-    for chunk in bytes[name_offset..name_offset + name_bytes].chunks_exact(2) {
-        utf16.push(u16::from_le_bytes([chunk[0], chunk[1]]));
+    // Decode UTF-16 straight into the output String instead of buffering a
+    // Vec<u16> first: one allocation per name rather than two, across ~2.85M
+    // records.
+    let units = bytes[name_offset..name_offset + name_bytes]
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]));
+    let mut name = String::with_capacity(name_length);
+    for unit in char::decode_utf16(units) {
+        match unit {
+            Ok(ch) => name.push(ch),
+            Err(_) => {
+                return Err(NtfsEnumerationError::InvalidRecord(String::from(
+                    "invalid utf-16 file name",
+                )))
+            }
+        }
     }
-
-    let name = String::from_utf16(&utf16).map_err(|_| {
-        NtfsEnumerationError::InvalidRecord(String::from("invalid utf-16 file name"))
-    })?;
 
     Ok(FileNameAttribute {
         parent_reference,
@@ -1799,6 +1919,32 @@ pub struct MetadataExtractionSample {
     pub average_bytes_per_record: u64,
 }
 
+// Unchecked little-endian reads for offsets the caller has already proven are
+// in bounds (fixed header fields within a full 1024-byte record, or fixed
+// fields past a validated minimum length). These skip the per-call bounds
+// branch and `Result` plumbing the `read_*` helpers carry for variable
+// attribute offsets, where a malformed record must still be skipped rather
+// than panic. Called ~2.85M times per full-drive scan.
+#[inline]
+fn le_u16(bytes: &[u8], offset: usize) -> u16 {
+    u16::from_le_bytes([bytes[offset], bytes[offset + 1]])
+}
+
+#[inline]
+fn le_u32(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
+}
+
+#[inline]
+fn le_u64(bytes: &[u8], offset: usize) -> u64 {
+    u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap())
+}
+
+#[inline]
+fn le_i64(bytes: &[u8], offset: usize) -> i64 {
+    i64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap())
+}
+
 fn read_u16(bytes: &[u8], offset: usize) -> Result<u16, NtfsEnumerationError> {
     if offset + 2 > bytes.len() {
         return Err(NtfsEnumerationError::InvalidRecord(String::from(
@@ -1829,24 +1975,6 @@ fn read_u64(bytes: &[u8], offset: usize) -> Result<u64, NtfsEnumerationError> {
         )));
     }
     Ok(u64::from_le_bytes([
-        bytes[offset],
-        bytes[offset + 1],
-        bytes[offset + 2],
-        bytes[offset + 3],
-        bytes[offset + 4],
-        bytes[offset + 5],
-        bytes[offset + 6],
-        bytes[offset + 7],
-    ]))
-}
-
-fn read_i64(bytes: &[u8], offset: usize) -> Result<i64, NtfsEnumerationError> {
-    if offset + 8 > bytes.len() {
-        return Err(NtfsEnumerationError::InvalidRecord(String::from(
-            "i64 out of bounds",
-        )));
-    }
-    Ok(i64::from_le_bytes([
         bytes[offset],
         bytes[offset + 1],
         bytes[offset + 2],
@@ -1948,6 +2076,35 @@ mod tests {
             extents,
             vec![(0x4000 * 4096, 0x10 * 4096), (0x3FF0 * 4096, 0x04 * 4096)]
         );
+    }
+
+    #[test]
+    fn trim_extents_stops_at_valid_data_length() {
+        // Two 16 KiB extents (4 KiB clusters), valid length 20 KiB: keep the
+        // first extent whole and trim the second to one cluster.
+        let mut extents = vec![(0x1000, 16 * 1024), (0x9000, 16 * 1024)];
+        trim_extents_to_valid_length(&mut extents, 20 * 1024, 4096);
+        assert_eq!(extents, vec![(0x1000, 16 * 1024), (0x9000, 4 * 1024)]);
+    }
+
+    #[test]
+    fn trim_extents_noop_when_valid_covers_all_or_unknown() {
+        let original = vec![(0x1000, 16 * 1024), (0x9000, 16 * 1024)];
+
+        // Valid length exceeds the allocated total: nothing trimmed.
+        let mut extents = original.clone();
+        trim_extents_to_valid_length(&mut extents, 1 << 30, 4096);
+        assert_eq!(extents, original);
+
+        // Unknown valid length (couldn't read header) leaves extents intact.
+        let mut extents = original.clone();
+        trim_extents_to_valid_length(&mut extents, u64::MAX, 4096);
+        assert_eq!(extents, original);
+
+        // A bogus zero valid length must not trim the MFT to nothing.
+        let mut extents = original.clone();
+        trim_extents_to_valid_length(&mut extents, 0, 4096);
+        assert_eq!(extents, original);
     }
 
     #[test]

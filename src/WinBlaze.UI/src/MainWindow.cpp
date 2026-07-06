@@ -2055,6 +2055,237 @@ namespace winrt::WinBlaze::UI::implementation
         UpdatePerformanceCounters(L"treemap surface resized");
     }
 
+    bool MainWindow::EnsureTreemapRenderStack(int width, int height)
+    {
+        HRESULT result = S_OK;
+
+        // Device + device-independent resources: built once and reused across
+        // every render and resize. The original probe rebuilt all of this
+        // (including the D3D device) on each dirty/resize tick.
+        if (!m_render_d2d_context) {
+            winrt::com_ptr<ID3D11Device> d3d_device;
+            winrt::com_ptr<ID3D11DeviceContext> d3d_context;
+            D3D_FEATURE_LEVEL selected_level{};
+            constexpr D3D_FEATURE_LEVEL levels[] = {
+                D3D_FEATURE_LEVEL_11_1,
+                D3D_FEATURE_LEVEL_11_0,
+                D3D_FEATURE_LEVEL_10_1,
+                D3D_FEATURE_LEVEL_10_0,
+            };
+            result = ::D3D11CreateDevice(
+                nullptr,
+                D3D_DRIVER_TYPE_HARDWARE,
+                nullptr,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                levels,
+                ARRAYSIZE(levels),
+                D3D11_SDK_VERSION,
+                d3d_device.put(),
+                &selected_level,
+                d3d_context.put());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render D3D device failed: " + HresultText(result);
+                return false;
+            }
+
+            winrt::com_ptr<ID2D1Factory3> d2d_factory;
+            D2D1_FACTORY_OPTIONS options{};
+            result = ::D2D1CreateFactory(
+                D2D1_FACTORY_TYPE_SINGLE_THREADED,
+                __uuidof(ID2D1Factory3),
+                &options,
+                reinterpret_cast<void**>(d2d_factory.put()));
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render D2D factory failed: " + HresultText(result);
+                return false;
+            }
+
+            winrt::com_ptr<IDXGIDevice> dxgi_device;
+            result = d3d_device->QueryInterface(__uuidof(IDXGIDevice), dxgi_device.put_void());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render DXGI device failed: " + HresultText(result);
+                return false;
+            }
+
+            winrt::com_ptr<ID2D1Device> d2d_device;
+            result = d2d_factory->CreateDevice(dxgi_device.get(), d2d_device.put());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render D2D device failed: " + HresultText(result);
+                return false;
+            }
+
+            winrt::com_ptr<ID2D1DeviceContext> d2d_context;
+            result = d2d_device->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, d2d_context.put());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render D2D context failed: " + HresultText(result);
+                return false;
+            }
+
+            winrt::com_ptr<IDWriteFactory> dwrite_factory;
+            result = ::DWriteCreateFactory(
+                DWRITE_FACTORY_TYPE_SHARED,
+                __uuidof(IDWriteFactory),
+                reinterpret_cast<IUnknown**>(dwrite_factory.put()));
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render DWrite factory failed: " + HresultText(result);
+                return false;
+            }
+
+            winrt::com_ptr<IDWriteTextFormat> label_format;
+            result = dwrite_factory->CreateTextFormat(
+                L"Segoe UI",
+                nullptr,
+                DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                DWRITE_FONT_STYLE_NORMAL,
+                DWRITE_FONT_STRETCH_NORMAL,
+                12.0f,
+                L"",
+                label_format.put());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render label format failed: " + HresultText(result);
+                return false;
+            }
+            label_format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+            label_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+            label_format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+
+            m_render_d3d_device = d3d_device;
+            m_render_d2d_factory = d2d_factory;
+            m_render_d2d_device = d2d_device;
+            m_render_d2d_context = d2d_context;
+            m_render_dwrite_factory = dwrite_factory;
+            m_render_label_format = label_format;
+            m_render_feature_level = selected_level;
+            // Force the swapchain to (re)create against the new device.
+            m_render_swap_chain = nullptr;
+            m_render_target_bitmap = nullptr;
+        }
+
+        // Swapchain + target bitmap: rebuilt only when missing or resized.
+        if (!m_render_swap_chain || width != m_render_swap_width || height != m_render_swap_height) {
+            // Release references to the old back buffer before the swapchain.
+            m_render_d2d_context->SetTarget(nullptr);
+            m_render_target_bitmap = nullptr;
+            m_render_swap_chain = nullptr;
+
+            winrt::com_ptr<IDXGIDevice> dxgi_device;
+            result = m_render_d3d_device->QueryInterface(__uuidof(IDXGIDevice), dxgi_device.put_void());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render DXGI device failed: " + HresultText(result);
+                ResetTreemapRenderStack();
+                return false;
+            }
+            winrt::com_ptr<IDXGIAdapter> adapter;
+            result = dxgi_device->GetAdapter(adapter.put());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render DXGI adapter failed: " + HresultText(result);
+                ResetTreemapRenderStack();
+                return false;
+            }
+            winrt::com_ptr<IDXGIFactory2> factory;
+            result = adapter->GetParent(__uuidof(IDXGIFactory2), factory.put_void());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render DXGI factory failed: " + HresultText(result);
+                ResetTreemapRenderStack();
+                return false;
+            }
+
+            DXGI_SWAP_CHAIN_DESC1 desc{};
+            desc.Width = static_cast<UINT>((std::max)(1, width));
+            desc.Height = static_cast<UINT>((std::max)(1, height));
+            desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            desc.Stereo = false;
+            desc.SampleDesc.Count = 1;
+            desc.SampleDesc.Quality = 0;
+            desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+            desc.BufferCount = 2;
+            desc.Scaling = DXGI_SCALING_STRETCH;
+            desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+            desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+
+            winrt::com_ptr<IDXGISwapChain1> swap_chain;
+            result = factory->CreateSwapChainForComposition(
+                m_render_d3d_device.get(),
+                &desc,
+                nullptr,
+                swap_chain.put());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render swap-chain creation failed: " + HresultText(result);
+                ResetTreemapRenderStack();
+                return false;
+            }
+
+            winrt::com_ptr<ID3D11Texture2D> back_buffer;
+            result = swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), back_buffer.put_void());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render back-buffer failed: " + HresultText(result);
+                ResetTreemapRenderStack();
+                return false;
+            }
+            winrt::com_ptr<IDXGISurface> dxgi_surface;
+            result = back_buffer->QueryInterface(__uuidof(IDXGISurface), dxgi_surface.put_void());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render DXGI surface failed: " + HresultText(result);
+                ResetTreemapRenderStack();
+                return false;
+            }
+
+            const auto bitmap_properties = D2D1::BitmapProperties1(
+                D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
+                96.0f,
+                96.0f);
+            winrt::com_ptr<ID2D1Bitmap1> target_bitmap;
+            result = m_render_d2d_context->CreateBitmapFromDxgiSurface(
+                dxgi_surface.get(),
+                &bitmap_properties,
+                target_bitmap.put());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render D2D target failed: " + HresultText(result);
+                ResetTreemapRenderStack();
+                return false;
+            }
+
+            // Bind the swapchain to the panel once, when it is (re)created.
+            auto panel_native = TreemapSurface().try_as<ISwapChainPanelNative>();
+            if (!panel_native) {
+                m_treemap_render_status = L"Treemap render panel interface unavailable.";
+                ResetTreemapRenderStack();
+                return false;
+            }
+            result = panel_native->SetSwapChain(swap_chain.get());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render panel bind failed: " + HresultText(result);
+                ResetTreemapRenderStack();
+                return false;
+            }
+
+            m_render_swap_chain = swap_chain;
+            m_render_target_bitmap = target_bitmap;
+            m_render_swap_width = width;
+            m_render_swap_height = height;
+        }
+
+        return true;
+    }
+
+    void MainWindow::ResetTreemapRenderStack()
+    {
+        if (m_render_d2d_context) {
+            m_render_d2d_context->SetTarget(nullptr);
+        }
+        m_render_target_bitmap = nullptr;
+        m_render_swap_chain = nullptr;
+        m_render_label_format = nullptr;
+        m_render_dwrite_factory = nullptr;
+        m_render_d2d_context = nullptr;
+        m_render_d2d_device = nullptr;
+        m_render_d2d_factory = nullptr;
+        m_render_d3d_device = nullptr;
+        m_render_swap_width = 0;
+        m_render_swap_height = 0;
+    }
+
     void MainWindow::RenderTreemapProbeFrame(int width, int height)
     {
         if (!TreemapSurface()) {
@@ -2070,163 +2301,21 @@ namespace winrt::WinBlaze::UI::implementation
         }
 
         try {
-            winrt::com_ptr<ID3D11Device> d3d_device;
-            winrt::com_ptr<ID3D11DeviceContext> d3d_context;
-            D3D_FEATURE_LEVEL selected_level{};
-            constexpr D3D_FEATURE_LEVEL levels[] = {
-                D3D_FEATURE_LEVEL_11_1,
-                D3D_FEATURE_LEVEL_11_0,
-                D3D_FEATURE_LEVEL_10_1,
-                D3D_FEATURE_LEVEL_10_0,
-            };
-
-            HRESULT result = ::D3D11CreateDevice(
-                nullptr,
-                D3D_DRIVER_TYPE_HARDWARE,
-                nullptr,
-                D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                levels,
-                ARRAYSIZE(levels),
-                D3D11_SDK_VERSION,
-                d3d_device.put(),
-                &selected_level,
-                d3d_context.put());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame D3D device failed: " + HresultText(result);
+            if (!EnsureTreemapRenderStack(width, height)) {
                 return;
             }
+            // Cheap AddRef'd handles into the cached stack; the draw code below
+            // uses these names unchanged. selected_level/result are kept for the
+            // downstream status string and D2D calls.
+            auto d2d_context = m_render_d2d_context;
+            auto label_format = m_render_label_format;
+            auto swap_chain = m_render_swap_chain;
+            const D3D_FEATURE_LEVEL selected_level = m_render_feature_level;
+            HRESULT result = S_OK;
 
-            winrt::com_ptr<IDXGIDevice> dxgi_device;
-            result = d3d_device->QueryInterface(__uuidof(IDXGIDevice), dxgi_device.put_void());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame DXGI device failed: " + HresultText(result);
-                return;
-            }
-
-            winrt::com_ptr<IDXGIAdapter> adapter;
-            result = dxgi_device->GetAdapter(adapter.put());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame DXGI adapter failed: " + HresultText(result);
-                return;
-            }
-
-            winrt::com_ptr<IDXGIFactory2> factory;
-            result = adapter->GetParent(__uuidof(IDXGIFactory2), factory.put_void());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame DXGI factory failed: " + HresultText(result);
-                return;
-            }
-
-            DXGI_SWAP_CHAIN_DESC1 desc{};
-            desc.Width = static_cast<UINT>(width);
-            desc.Height = static_cast<UINT>(height);
-            desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-            desc.Stereo = false;
-            desc.SampleDesc.Count = 1;
-            desc.SampleDesc.Quality = 0;
-            desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-            desc.BufferCount = 2;
-            desc.Scaling = DXGI_SCALING_STRETCH;
-            desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-            desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-
-            winrt::com_ptr<IDXGISwapChain1> swap_chain;
-            result = factory->CreateSwapChainForComposition(
-                d3d_device.get(),
-                &desc,
-                nullptr,
-                swap_chain.put());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame swap-chain creation failed: " + HresultText(result);
-                return;
-            }
-
-            winrt::com_ptr<ID3D11Texture2D> back_buffer;
-            result = swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), back_buffer.put_void());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame back-buffer failed: " + HresultText(result);
-                return;
-            }
-
-            winrt::com_ptr<IDXGISurface> dxgi_surface;
-            result = back_buffer->QueryInterface(__uuidof(IDXGISurface), dxgi_surface.put_void());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame DXGI surface failed: " + HresultText(result);
-                return;
-            }
-
-            winrt::com_ptr<ID2D1Factory3> d2d_factory;
-            D2D1_FACTORY_OPTIONS options{};
-            result = ::D2D1CreateFactory(
-                D2D1_FACTORY_TYPE_SINGLE_THREADED,
-                __uuidof(ID2D1Factory3),
-                &options,
-                reinterpret_cast<void**>(d2d_factory.put()));
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame D2D factory failed: " + HresultText(result);
-                return;
-            }
-
-            winrt::com_ptr<ID2D1Device> d2d_device;
-            result = d2d_factory->CreateDevice(dxgi_device.get(), d2d_device.put());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame D2D device failed: " + HresultText(result);
-                return;
-            }
-
-            winrt::com_ptr<ID2D1DeviceContext> d2d_context;
-            result = d2d_device->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, d2d_context.put());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame D2D context failed: " + HresultText(result);
-                return;
-            }
-
-            const auto bitmap_properties = D2D1::BitmapProperties1(
-                D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
-                96.0f,
-                96.0f);
-            winrt::com_ptr<ID2D1Bitmap1> target_bitmap;
-            result = d2d_context->CreateBitmapFromDxgiSurface(
-                dxgi_surface.get(),
-                &bitmap_properties,
-                target_bitmap.put());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame D2D target failed: " + HresultText(result);
-                return;
-            }
-
-            d2d_context->SetTarget(target_bitmap.get());
+            d2d_context->SetTarget(m_render_target_bitmap.get());
             d2d_context->BeginDraw();
             d2d_context->Clear(D2D1::ColorF(0.051f, 0.082f, 0.082f, 1.0f)); // #0d1515 surface
-
-            winrt::com_ptr<IDWriteFactory> dwrite_factory;
-            result = ::DWriteCreateFactory(
-                DWRITE_FACTORY_TYPE_SHARED,
-                __uuidof(IDWriteFactory),
-                reinterpret_cast<IUnknown**>(dwrite_factory.put()));
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap label factory failed: " + HresultText(result);
-                return;
-            }
-
-            winrt::com_ptr<IDWriteTextFormat> label_format;
-            result = dwrite_factory->CreateTextFormat(
-                L"Segoe UI",
-                nullptr,
-                DWRITE_FONT_WEIGHT_SEMI_BOLD,
-                DWRITE_FONT_STYLE_NORMAL,
-                DWRITE_FONT_STRETCH_NORMAL,
-                12.0f,
-                L"",
-                label_format.put());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap label format failed: " + HresultText(result);
-                return;
-            }
-            label_format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
-            label_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-            label_format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
             struct DrawTile
             {
@@ -2613,21 +2702,18 @@ namespace winrt::WinBlaze::UI::implementation
             result = d2d_context->EndDraw();
             if (FAILED(result)) {
                 m_treemap_render_status = L"Treemap probe frame D2D draw failed: " + HresultText(result);
+                ResetTreemapRenderStack();
                 return;
             }
 
             result = swap_chain->Present(1, 0);
             if (FAILED(result)) {
                 m_treemap_render_status = L"Treemap probe frame present failed: " + HresultText(result);
+                ResetTreemapRenderStack();
                 return;
             }
-
-            auto panel_native = TreemapSurface().as<ISwapChainPanelNative>();
-            result = panel_native->SetSwapChain(swap_chain.get());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap probe frame panel bind failed: " + HresultText(result);
-                return;
-            }
+            // The swapchain is bound to the panel once, when it is (re)created
+            // in EnsureTreemapRenderStack — no per-frame rebind.
 
             const int level_major = static_cast<int>((selected_level >> 12) & 0xF);
             const int level_minor = static_cast<int>((selected_level >> 8) & 0xF);
@@ -2658,6 +2744,9 @@ namespace winrt::WinBlaze::UI::implementation
         }
         catch (winrt::hresult_error const& error) {
             m_treemap_render_status = L"Treemap probe frame failed: " + std::wstring(error.message().c_str());
+            // An exception mid-draw can leave the cached D2D context in a
+            // begun-draw state; drop the stack so the next render rebuilds.
+            ResetTreemapRenderStack();
         }
     }
 

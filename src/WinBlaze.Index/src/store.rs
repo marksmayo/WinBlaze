@@ -203,11 +203,11 @@ impl SqliteIndexRepository {
         // scans by full path, and scanners no longer store them per file.
         let previous_files = self.state.snapshot_files_with_paths();
         let current_files =
-            remap_current_files_by_path(&previous_files, &transaction.snapshot_files_with_paths());
+            remap_current_files_by_path(&previous_files, transaction.snapshot_files_with_paths());
         let mut current_transaction = transaction.clone();
         current_transaction.files = current_files
-            .iter()
-            .map(|file| (file.id, file.clone()))
+            .into_iter()
+            .map(|file| (file.id, file))
             .collect();
         self.apply_incremental_transaction(&current_transaction)
     }
@@ -250,7 +250,15 @@ struct LoadedIndexState {
     cache_loaded_from_backup: bool,
 }
 
-fn remap_current_files_by_path(previous: &[FileRecord], current: &[FileRecord]) -> Vec<FileRecord> {
+/// Reassigns each current file's id to the previous scan's id when their full
+/// paths match (so lineage/diff joins across scans), minting fresh ids for
+/// genuinely new paths. Consumes `current` and rewrites ids in place — the
+/// records are already owned clones from `snapshot_files_with_paths`, so this
+/// avoids a second full-record clone of every file on the volume.
+fn remap_current_files_by_path(
+    previous: &[FileRecord],
+    mut current: Vec<FileRecord>,
+) -> Vec<FileRecord> {
     let previous_by_path: HashMap<&str, &FileRecord> = previous
         .iter()
         .map(|record| (record.full_path.as_str(), record))
@@ -263,19 +271,15 @@ fn remap_current_files_by_path(previous: &[FileRecord], current: &[FileRecord]) 
         .unwrap_or(0)
         .saturating_add(1);
 
+    for record in &mut current {
+        if let Some(previous_record) = previous_by_path.get(record.full_path.as_str()) {
+            record.id = previous_record.id;
+        } else {
+            record.id = FileId(next_id);
+            next_id = next_id.saturating_add(1);
+        }
+    }
     current
-        .iter()
-        .map(|record| {
-            let mut mapped = record.clone();
-            if let Some(previous_record) = previous_by_path.get(record.full_path.as_str()) {
-                mapped.id = previous_record.id;
-            } else {
-                mapped.id = FileId(next_id);
-                next_id = next_id.saturating_add(1);
-            }
-            mapped
-        })
-        .collect()
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -346,6 +350,16 @@ impl BufferedIndexTransaction {
 
     pub fn insert_file(&mut self, file: FileRecord) {
         self.files.insert(file.id, file);
+    }
+
+    /// Pre-allocates bucket capacity for the file and directory maps. A full
+    /// scan inserts millions of records into maps that start empty, so without
+    /// this the maps rehash ~20 times as they grow. Callers pass an estimate
+    /// (the scanner's total record count); over-estimating only wastes a
+    /// bounded amount of transient capacity.
+    pub fn reserve(&mut self, files: usize, directories: usize) {
+        self.files.reserve(files);
+        self.directories.reserve(directories);
     }
 
     pub fn snapshot_volumes(&self) -> Vec<VolumeRecord> {
@@ -724,22 +738,28 @@ fn write_directory_records<W: Write, R: std::borrow::Borrow<DirectoryRecord>>(
     directories: &[R],
 ) -> Result<(), IndexStorageError> {
     write_len(writer, directories.len())?;
+    // Encode each record into a reused scratch buffer and emit it with a
+    // single `write_all`, rather than ~8 tiny writes per record. On a full
+    // drive that turns tens of millions of writer calls into a few million.
+    let mut buffer = Vec::with_capacity(128);
     for directory in directories {
         let directory = directory.borrow();
-        write_u64(writer, directory.id.0)?;
+        buffer.clear();
+        push_u64(&mut buffer, directory.id.0);
         match directory.parent_directory_id {
             Some(parent) => {
-                write_u8(writer, 1)?;
-                write_u64(writer, parent.0)?;
+                buffer.push(1);
+                push_u64(&mut buffer, parent.0);
             }
-            None => write_u8(writer, 0)?,
+            None => buffer.push(0),
         }
-        write_string(writer, &directory.name)?;
-        write_string(writer, &directory.full_path)?;
-        write_u64(writer, directory.direct_bytes)?;
-        write_u64(writer, directory.total_bytes)?;
-        write_u64(writer, directory.direct_entries)?;
-        write_u64(writer, directory.total_entries)?;
+        push_string(&mut buffer, &directory.name);
+        push_string(&mut buffer, &directory.full_path);
+        push_u64(&mut buffer, directory.direct_bytes);
+        push_u64(&mut buffer, directory.total_bytes);
+        push_u64(&mut buffer, directory.direct_entries);
+        push_u64(&mut buffer, directory.total_entries);
+        writer.write_all(&buffer)?;
     }
     Ok(())
 }
@@ -749,20 +769,47 @@ fn write_file_records<W: Write, R: std::borrow::Borrow<FileRecord>>(
     files: &[R],
 ) -> Result<(), IndexStorageError> {
     write_len(writer, files.len())?;
+    // See write_directory_records: one buffered `write_all` per record.
+    let mut buffer = Vec::with_capacity(128);
     for file in files {
         let file = file.borrow();
-        write_u64(writer, file.id.0)?;
-        write_u64(writer, file.parent_directory_id.0)?;
-        write_string(writer, &file.name)?;
-        write_string(writer, &file.full_path)?;
-        write_u64(writer, file.size_bytes)?;
-        write_u64(writer, file.allocation_bytes)?;
-        write_u32(writer, file.attributes.0)?;
-        write_option_i64(writer, file.created_utc)?;
-        write_option_i64(writer, file.modified_utc)?;
-        write_option_i64(writer, file.accessed_utc)?;
+        buffer.clear();
+        push_u64(&mut buffer, file.id.0);
+        push_u64(&mut buffer, file.parent_directory_id.0);
+        push_string(&mut buffer, &file.name);
+        push_string(&mut buffer, &file.full_path);
+        push_u64(&mut buffer, file.size_bytes);
+        push_u64(&mut buffer, file.allocation_bytes);
+        push_u32(&mut buffer, file.attributes.0);
+        push_option_i64(&mut buffer, file.created_utc);
+        push_option_i64(&mut buffer, file.modified_utc);
+        push_option_i64(&mut buffer, file.accessed_utc);
+        writer.write_all(&buffer)?;
     }
     Ok(())
+}
+
+fn push_u32(buffer: &mut Vec<u8>, value: u32) {
+    buffer.extend_from_slice(&value.to_le_bytes());
+}
+
+fn push_u64(buffer: &mut Vec<u8>, value: u64) {
+    buffer.extend_from_slice(&value.to_le_bytes());
+}
+
+fn push_string(buffer: &mut Vec<u8>, value: &str) {
+    push_u64(buffer, value.len() as u64);
+    buffer.extend_from_slice(value.as_bytes());
+}
+
+fn push_option_i64(buffer: &mut Vec<u8>, value: Option<i64>) {
+    match value {
+        Some(value) => {
+            buffer.push(1);
+            buffer.extend_from_slice(&value.to_le_bytes());
+        }
+        None => buffer.push(0),
+    }
 }
 
 fn write_lineage_records<W: Write>(
@@ -947,11 +994,6 @@ fn write_u64<W: Write>(writer: &mut W, value: u64) -> Result<(), IndexStorageErr
     Ok(())
 }
 
-fn write_i64<W: Write>(writer: &mut W, value: i64) -> Result<(), IndexStorageError> {
-    writer.write_all(&value.to_le_bytes())?;
-    Ok(())
-}
-
 fn write_len<W: Write>(writer: &mut W, value: usize) -> Result<(), IndexStorageError> {
     let value = u64::try_from(value)
         .map_err(|_| IndexStorageError::CorruptSnapshot(String::from("collection too large")))?;
@@ -973,17 +1015,6 @@ fn write_option_string<W: Write>(
         Some(value) => {
             write_u8(writer, 1)?;
             write_string(writer, value)?;
-        }
-        None => write_u8(writer, 0)?,
-    }
-    Ok(())
-}
-
-fn write_option_i64<W: Write>(writer: &mut W, value: Option<i64>) -> Result<(), IndexStorageError> {
-    match value {
-        Some(value) => {
-            write_u8(writer, 1)?;
-            write_i64(writer, value)?;
         }
         None => write_u8(writer, 0)?,
     }
