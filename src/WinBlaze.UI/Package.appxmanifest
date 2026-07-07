@@ -21,10 +21,10 @@
                  Executable="WinBlaze.UI.exe"
                  EntryPoint="WinBlaze.UI.App">
       <uap:VisualElements DisplayName="WinBlaze"
-                          Description="High-performance disk usage analyzer"
+                          Description="Blazingly fast NTFS disk-usage analyzer with a live folder tree and GPU treemap."
                           Square150x150Logo="Assets\Square150x150Logo.png"
                           Square44x44Logo="Assets\Square44x44Logo.png"
-                          BackgroundColor="transparent" />
+                          BackgroundColor="#0D1515" />
     </Application>
   </Applications>
 </Package>
