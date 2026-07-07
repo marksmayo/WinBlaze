@@ -4,6 +4,10 @@
 #include "ShellTheme.h"
 #include "StartupTrace.h"
 
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Web.Http.h>
+#include <winrt/Windows.Web.Http.Headers.h>
+
 namespace
 {
     constexpr int64_t kFileTimeTicksPerSecond = 10'000'000LL;
@@ -15,6 +19,70 @@ namespace
     // (see WinBlaze.Native/src/bridge.rs); the fast NTFS-MFT reader was
     // unavailable and the scan fell back to the slower directory walk.
     constexpr uint32_t kFastScanUnavailableIssueCode = 16;
+
+    // In-app update check. Bump kCurrentVersion with each release (matches the
+    // Package.appxmanifest identity). TODO: source it from the exe version
+    // resource so there is a single source of truth.
+    const std::string kCurrentVersion = "0.8.0";
+    constexpr wchar_t kReleasesLatestUrl[] =
+        L"https://github.com/marksmayo/WinBlaze/releases/latest";
+    constexpr wchar_t kReleaseApiUrl[] =
+        L"https://api.github.com/repos/marksmayo/WinBlaze/releases/latest";
+
+    // Fetches the latest release from GitHub and reports the result into the
+    // supplied status text (and reveals the download button when newer). The
+    // fetch runs off the UI thread; parsing + version comparison happen in the
+    // Rust core via NativeBridge::CheckForUpdate.
+    winrt::fire_and_forget CheckForUpdatesAsync(
+        winrt::Microsoft::UI::Xaml::Controls::TextBlock status,
+        winrt::Microsoft::UI::Xaml::Controls::Button download)
+    {
+        using winrt::Microsoft::UI::Xaml::Visibility;
+        auto ui_thread = winrt::apartment_context();
+        status.Text(L"Checking for updates…");
+        download.Visibility(Visibility::Collapsed);
+
+        bool ok = false;
+        bool available = false;
+        std::string latest;
+        try {
+            winrt::Windows::Web::Http::HttpClient client;
+            client.DefaultRequestHeaders().UserAgent().TryParseAdd(L"WinBlaze");
+            client.DefaultRequestHeaders().Accept().TryParseAdd(L"application/vnd.github+json");
+            winrt::Windows::Foundation::Uri uri{ kReleaseApiUrl };
+            auto response = co_await client.GetAsync(uri);
+            const bool success = response.IsSuccessStatusCode();
+            auto body = co_await response.Content().ReadAsStringAsync();
+            if (success) {
+                const std::string json = winrt::to_string(body);
+                const WbUpdateCheck check =
+                    WinBlaze::UI::NativeBridge::CheckForUpdate(kCurrentVersion, json);
+                if (check.parsed != 0) {
+                    ok = true;
+                    available = check.available != 0;
+                    latest.assign(reinterpret_cast<const char*>(check.latest), check.latest_len);
+                }
+            }
+        }
+        catch (...) {
+            ok = false;
+        }
+
+        co_await ui_thread;
+        const std::wstring current(winrt::to_hstring(kCurrentVersion).c_str());
+        if (!ok) {
+            status.Text(L"Couldn't check for updates (are you online?).");
+        }
+        else if (available) {
+            const std::wstring latest_w(winrt::to_hstring(latest).c_str());
+            status.Text(winrt::hstring(
+                L"Update available: " + latest_w + L" — you have " + current + L"."));
+            download.Visibility(Visibility::Visible);
+        }
+        else {
+            status.Text(winrt::hstring(L"You're on the latest version (" + current + L")."));
+        }
+    }
 
     bool IsProcessElevated()
     {
@@ -5691,6 +5759,35 @@ namespace winrt::WinBlaze::UI::implementation
                 }
             });
             elevation_stack.Children().Append(elevate_button);
+        }
+
+        {
+            auto updates_stack = add_setting(L"Updates",
+                L"Check GitHub for a newer WinBlaze release. Downloads open in your browser.");
+            auto update_status = TextBlock{};
+            update_status.Text(winrt::hstring(
+                L"Current version " + std::wstring(winrt::to_hstring(kCurrentVersion).c_str()) + L"."));
+            update_status.Foreground(MakeBrush(theme.text_primary));
+            update_status.TextWrapping(TextWrapping::WrapWholeWords);
+            updates_stack.Children().Append(update_status);
+
+            auto button_row = StackPanel{};
+            button_row.Orientation(Orientation::Horizontal);
+            button_row.Spacing(10.0);
+            auto check_button = Button{};
+            check_button.Content(box_value(L"Check for updates"));
+            auto download_button = Button{};
+            download_button.Content(box_value(L"Download update"));
+            download_button.Visibility(Visibility::Collapsed);
+            download_button.Click([](auto const&, auto const&) {
+                ShellExecuteW(nullptr, L"open", kReleasesLatestUrl, nullptr, nullptr, SW_SHOWNORMAL);
+            });
+            check_button.Click([update_status, download_button](auto const&, auto const&) {
+                CheckForUpdatesAsync(update_status, download_button);
+            });
+            button_row.Children().Append(check_button);
+            button_row.Children().Append(download_button);
+            updates_stack.Children().Append(button_row);
         }
 
         add_setting(L"Theme", L"High Velocity (red on black, from the Stitch design system)");

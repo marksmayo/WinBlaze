@@ -164,6 +164,19 @@ pub struct WbExtensionStatsSnapshot {
     pub count: usize,
 }
 
+/// Result of an update check: whether the supplied release payload names a
+/// newer version than the running one, plus that version in a fixed inline
+/// buffer (no heap/ownership crossing the FFI). `latest` holds `latest_len`
+/// UTF-8 bytes (e.g. `v0.9.0`), not NUL-terminated.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WbUpdateCheck {
+    pub available: u8,
+    pub parsed: u8,
+    pub latest_len: u8,
+    pub latest: [u8; 32],
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WbScanSummary {

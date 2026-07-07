@@ -34,4 +34,6 @@ namespace WinBlaze::UI::NativeBridge
     WbTreeChildrenResult TreeChildren(uint64_t parentId, uint64_t offset, TreeNodeHandler handler);
     // Emits the largest files by allocation size (name = full path).
     void TreeLargestFiles(uint64_t limit, TreeNodeHandler handler);
+    // Compares currentVersion against a GitHub releases/latest JSON body.
+    WbUpdateCheck CheckForUpdate(const std::string& currentVersion, const std::string& responseJson);
 }

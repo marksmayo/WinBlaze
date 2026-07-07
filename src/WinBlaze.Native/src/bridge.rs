@@ -25,6 +25,7 @@ use crate::api::{
     WbExtensionStat, WbExtensionStatCallback, WbExtensionStatsSnapshot, WbIncrementalChangeSummary,
     WbIndexSnapshotStats, WbLiveDirectory, WbLiveDirectoryBatch, WbNativeError,
     WbScanSessionHandle, WbScanSummary, WbTreeChildrenResult, WbTreeNode, WbTreeNodeCallback,
+    WbUpdateCheck,
 };
 
 const MAX_JSON_LOG_BYTES: u64 = 2 * 1024 * 1024;
@@ -1590,6 +1591,40 @@ pub extern "C" fn wb_index_snapshot_stats() -> WbIndexSnapshotStats {
     index_snapshot_stats()
 }
 
+/// Compares the running `current_version` against a GitHub `releases/latest`
+/// JSON body (`response_json`), returning whether a newer release is available
+/// and its tag. Pure/synchronous: the caller performs the network fetch and
+/// passes the response here; parsing + version comparison live in
+/// `winblaze_core::update` (unit-tested there).
+#[no_mangle]
+pub extern "C" fn wb_update_check(
+    current_version: WbCStringView,
+    response_json: WbCStringView,
+) -> WbUpdateCheck {
+    let mut result = WbUpdateCheck::default();
+    if current_version.ptr.is_null() || response_json.ptr.is_null() {
+        return result;
+    }
+    let current = unsafe {
+        std::slice::from_raw_parts(current_version.ptr.cast::<u8>(), current_version.len)
+    };
+    let json =
+        unsafe { std::slice::from_raw_parts(response_json.ptr.cast::<u8>(), response_json.len) };
+    let (Ok(current), Ok(json)) = (std::str::from_utf8(current), std::str::from_utf8(json)) else {
+        return result;
+    };
+
+    if let Some(tag) = winblaze_core::parse_release_tag(json) {
+        result.parsed = 1;
+        let bytes = tag.as_bytes();
+        let count = bytes.len().min(result.latest.len());
+        result.latest[..count].copy_from_slice(&bytes[..count]);
+        result.latest_len = count as u8;
+        result.available = u8::from(winblaze_core::is_newer(current, &tag));
+    }
+    result
+}
+
 #[no_mangle]
 pub extern "C" fn wb_index_snapshot_extension_stats(
     callback: WbExtensionStatCallback,
@@ -1735,6 +1770,43 @@ pub extern "C" fn wb_scan_session_destroy(handle: WbScanSessionHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn view(text: &str) -> WbCStringView {
+        WbCStringView {
+            ptr: text.as_ptr().cast::<core::ffi::c_char>(),
+            len: text.len(),
+        }
+    }
+
+    #[test]
+    fn wb_update_check_flags_newer_release() {
+        let json = r#"{"html_url":"https://github.com/x","tag_name":"v0.9.0"}"#;
+        let result = wb_update_check(view("0.8.0"), view(json));
+        assert_eq!(result.parsed, 1);
+        assert_eq!(result.available, 1);
+        let latest = std::str::from_utf8(&result.latest[..result.latest_len as usize]).unwrap();
+        assert_eq!(latest, "v0.9.0");
+    }
+
+    #[test]
+    fn wb_update_check_ignores_same_or_older() {
+        let result = wb_update_check(view("0.8.0"), view(r#"{"tag_name":"v0.8.0"}"#));
+        assert_eq!(result.parsed, 1);
+        assert_eq!(result.available, 0);
+
+        let older = wb_update_check(view("0.8.0"), view(r#"{"tag_name":"v0.7.9"}"#));
+        assert_eq!(older.available, 0);
+    }
+
+    #[test]
+    fn wb_update_check_handles_malformed_and_null() {
+        assert_eq!(wb_update_check(view("0.8.0"), view("{}")).parsed, 0);
+        let null_view = WbCStringView {
+            ptr: core::ptr::null(),
+            len: 0,
+        };
+        assert_eq!(wb_update_check(view("0.8.0"), null_view).parsed, 0);
+    }
 
     #[test]
     fn extension_key_lowercases_and_strips_dot() {

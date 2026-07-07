@@ -16,6 +16,7 @@ namespace
     using TreeRootFn = uint8_t(__stdcall *)(WbTreeNodeCallback, void*);
     using TreeChildrenFn = WbTreeChildrenResult(__stdcall *)(uint64_t, uint64_t, WbTreeNodeCallback, void*);
     using TreeLargestFilesFn = void(__stdcall *)(uint64_t, WbTreeNodeCallback, void*);
+    using UpdateCheckFn = WbUpdateCheck(__stdcall *)(WbCStringView, WbCStringView);
 
     struct DllApi
     {
@@ -29,6 +30,7 @@ namespace
         TreeRootFn tree_root{ nullptr };
         TreeChildrenFn tree_children{ nullptr };
         TreeLargestFilesFn tree_largest_files{ nullptr };
+        UpdateCheckFn update_check{ nullptr };
     };
 
     DllApi& Api()
@@ -91,6 +93,9 @@ namespace
         api.tree_root = reinterpret_cast<TreeRootFn>(GetProcAddress(api.module, "wb_tree_root"));
         api.tree_children = reinterpret_cast<TreeChildrenFn>(GetProcAddress(api.module, "wb_tree_children"));
         api.tree_largest_files = reinterpret_cast<TreeLargestFilesFn>(GetProcAddress(api.module, "wb_tree_largest_files"));
+        // Optional: absence (older DLL) degrades the update check gracefully
+        // rather than failing app startup, so it is not in the required set.
+        api.update_check = reinterpret_cast<UpdateCheckFn>(GetProcAddress(api.module, "wb_update_check"));
 
         if (api.start_scan == nullptr || api.start_incremental_scan == nullptr || api.cancel_scan == nullptr || api.destroy_scan == nullptr || api.load_catalog_snapshot_with_stats == nullptr || api.load_extension_stats == nullptr || api.tree_root == nullptr || api.tree_children == nullptr || api.tree_largest_files == nullptr) {
             throw std::runtime_error("Failed to resolve winblaze_native exports");
@@ -249,5 +254,17 @@ namespace WinBlaze::UI::NativeBridge
         auto context = std::make_shared<TreeNodeCallbackContext>();
         context->handler = std::move(handler);
         Api().tree_largest_files(limit, &OnTreeNodeWithContext, context.get());
+    }
+
+    WbUpdateCheck CheckForUpdate(const std::string& currentVersion, const std::string& responseJson)
+    {
+        EnsureLoaded();
+        WbUpdateCheck result{};
+        if (Api().update_check == nullptr) {
+            return result;  // older DLL without the export; treat as "unknown".
+        }
+        const WbCStringView current{ currentVersion.c_str(), currentVersion.size() };
+        const WbCStringView json{ responseJson.c_str(), responseJson.size() };
+        return Api().update_check(current, json);
     }
 }

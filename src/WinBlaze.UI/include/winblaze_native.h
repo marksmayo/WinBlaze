@@ -191,6 +191,18 @@ WbTreeChildrenResult wb_tree_children(uint64_t parent_id, uint64_t offset, WbTre
    the full display path. */
 void wb_tree_largest_files(uint64_t limit, WbTreeNodeCallback callback, void* user_data);
 
+typedef struct WbUpdateCheck
+{
+    uint8_t available;   /* 1 when `latest` is newer than the current version */
+    uint8_t parsed;      /* 1 when a tag was parsed from the response */
+    uint8_t latest_len;  /* bytes used in `latest` */
+    uint8_t latest[32];  /* latest tag, UTF-8, not NUL-terminated */
+} WbUpdateCheck;
+
+/* Compares current_version against a GitHub releases/latest JSON body and
+   reports whether a newer release is available. The caller does the fetch. */
+WbUpdateCheck wb_update_check(WbCStringView current_version, WbCStringView response_json);
+
 #ifdef __cplusplus
 }
 #endif

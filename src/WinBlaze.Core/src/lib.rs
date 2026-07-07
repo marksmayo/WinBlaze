@@ -6,6 +6,7 @@ pub mod hashing;
 pub mod model;
 pub mod query;
 pub mod scan;
+pub mod update;
 
 pub use diagnostics::ScanIssueSummary;
 pub use ffi::{WbCStringView, WbError, WbProgress};
@@ -21,3 +22,4 @@ pub use query::{
 };
 pub use scan::{ScanEvent, ScanProgress, ScanRequest, ScanState};
 pub use scan::{ScanIssueKind, ScanIssueRecord};
+pub use update::{is_newer, parse_release_tag};
