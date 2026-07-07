@@ -36,13 +36,13 @@ fn parse_args<I: Iterator<Item = String>>(mut args: I) -> Result<Args, String> {
                 parsed.target = PathBuf::from(args.next().ok_or("missing value for --target")?)
             }
             "--relaunch" => {
-                parsed.relaunch =
-                    Some(PathBuf::from(args.next().ok_or("missing value for --relaunch")?))
+                parsed.relaunch = Some(PathBuf::from(
+                    args.next().ok_or("missing value for --relaunch")?,
+                ))
             }
-            "--cleanup" => {
-                parsed.cleanup
-                    .push(PathBuf::from(args.next().ok_or("missing value for --cleanup")?))
-            }
+            "--cleanup" => parsed.cleanup.push(PathBuf::from(
+                args.next().ok_or("missing value for --cleanup")?,
+            )),
             other => return Err(format!("unknown argument {other}")),
         }
     }
@@ -121,7 +121,9 @@ fn main() {
     }
 
     if let Some(exe) = &args.relaunch {
-        let _ = std::process::Command::new(exe).current_dir(&args.target).spawn();
+        let _ = std::process::Command::new(exe)
+            .current_dir(&args.target)
+            .spawn();
     }
 
     for path in &args.cleanup {
@@ -178,7 +180,10 @@ mod tests {
     use super::*;
 
     fn temp_dir(tag: &str) -> PathBuf {
-        let base = std::env::temp_dir().join(format!("winblaze-updater-test-{tag}-{:?}", std::thread::current().id()));
+        let base = std::env::temp_dir().join(format!(
+            "winblaze-updater-test-{tag}-{:?}",
+            std::thread::current().id()
+        ));
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base).unwrap();
         base
@@ -188,8 +193,16 @@ mod tests {
     fn parse_args_reads_flags() {
         let args = parse_args(
             [
-                "--pid", "1234", "--source", r"C:\stage", "--target", r"C:\app",
-                "--relaunch", r"C:\app\WinBlaze.UI.exe", "--cleanup", r"C:\tmp\x.zip",
+                "--pid",
+                "1234",
+                "--source",
+                r"C:\stage",
+                "--target",
+                r"C:\app",
+                "--relaunch",
+                r"C:\app\WinBlaze.UI.exe",
+                "--cleanup",
+                r"C:\tmp\x.zip",
             ]
             .into_iter()
             .map(String::from),
@@ -198,7 +211,10 @@ mod tests {
         assert_eq!(args.pid, Some(1234));
         assert_eq!(args.source, PathBuf::from(r"C:\stage"));
         assert_eq!(args.target, PathBuf::from(r"C:\app"));
-        assert_eq!(args.relaunch, Some(PathBuf::from(r"C:\app\WinBlaze.UI.exe")));
+        assert_eq!(
+            args.relaunch,
+            Some(PathBuf::from(r"C:\app\WinBlaze.UI.exe"))
+        );
         assert_eq!(args.cleanup, vec![PathBuf::from(r"C:\tmp\x.zip")]);
     }
 
