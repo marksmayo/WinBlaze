@@ -57,7 +57,7 @@
   <text x="618" y="197" fill="#C9D0DA" font-size="13" font-weight="600">10.5 s</text>
 
   <!-- WizTree 14.0s (best) -> 504px -->
-  <text x="215" y="238" fill="#AEB6C2" font-size="13" text-anchor="end">WizTree 4.31 (best)</text>
+  <text x="215" y="238" fill="#AEB6C2" font-size="13" text-anchor="end">WizTree 4.31</text>
   <rect x="230" y="222" width="504" height="24" rx="6" fill="url(#gray)"/>
   <text x="744" y="239" fill="#C9D0DA" font-size="13" font-weight="600">14.0 s</text>
 </svg>
