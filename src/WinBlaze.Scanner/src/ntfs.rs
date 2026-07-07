@@ -1265,8 +1265,13 @@ fn read_mft_bitmap(
 }
 
 /// Byte length required to skip a free run before it is worth a seek. Runs
-/// shorter than this are read through (a seek costs more than the bytes).
-const MFT_SKIP_MIN_BYTES: u64 = 64 * 1024;
+/// shorter than this are read through (a seek plus a smaller read costs more
+/// than reading straight through). Tuned on a live C:\ MFT: 256 KiB skips the
+/// large free runs (which hold most of the reclaimable bytes) while keeping the
+/// kept extents few and large enough to sustain read throughput — smaller
+/// thresholds fragment the read into more, slower seeks. Override with
+/// WINBLAZE_SKIP_KB.
+const MFT_SKIP_MIN_BYTES: u64 = 256 * 1024;
 
 /// Filters the MFT `$DATA` extents down to only the regions that hold at least
 /// one in-use record, skipping free runs of `>= MFT_SKIP_MIN_BYTES`. Works at
@@ -1278,6 +1283,7 @@ fn mft_keep_extents(
     data_extents: &[(u64, u64)],
     bitmap: &[u8],
     bytes_per_cluster: u64,
+    skip_min_bytes: u64,
 ) -> Vec<(u64, u64)> {
     let records_per_cluster = (bytes_per_cluster / NTFS_RECORD_SIZE as u64) as usize;
     if records_per_cluster == 0 {
@@ -1302,7 +1308,7 @@ fn mft_keep_extents(
 
     // keep[c]: read cluster c? Occupied clusters, plus free clusters in runs
     // shorter than the skip threshold (read through to stay sequential).
-    let skip_min = MFT_SKIP_MIN_BYTES.div_ceil(bytes_per_cluster).max(1);
+    let skip_min = skip_min_bytes.div_ceil(bytes_per_cluster).max(1);
     let total = total_clusters as usize;
     let mut keep = vec![false; total];
     let mut c = 0usize;
@@ -1581,7 +1587,12 @@ fn open_mft_stream(root: &Path) -> Result<MftStream, NtfsEnumerationError> {
                                 if let Ok(bitmap) =
                                     read_mft_bitmap(&mut volume, &geometry, &extents)
                                 {
-                                    let kept = mft_keep_extents(&extents, &bitmap, bpc);
+                                    let skip = std::env::var("WINBLAZE_SKIP_KB")
+                                        .ok()
+                                        .and_then(|value| value.parse::<u64>().ok())
+                                        .map(|kb| kb * 1024)
+                                        .unwrap_or(MFT_SKIP_MIN_BYTES);
+                                    let kept = mft_keep_extents(&extents, &bitmap, bpc, skip);
                                     if !kept.is_empty() {
                                         extents = kept;
                                     }
@@ -2507,7 +2518,7 @@ mod tests {
         for c in 30..40 {
             set(c);
         }
-        let kept = mft_keep_extents(&extents, &bitmap, bpc);
+        let kept = mft_keep_extents(&extents, &bitmap, bpc, 64 * 1024);
         // Expect two extents: clusters 0-1, and clusters 30-39.
         assert_eq!(
             kept,
@@ -2528,7 +2539,7 @@ mod tests {
                 bitmap[r / 8] |= 1 << (r % 8);
             }
         }
-        let kept = mft_keep_extents(&extents, &bitmap, bpc);
+        let kept = mft_keep_extents(&extents, &bitmap, bpc, 64 * 1024);
         // Clusters 0..=5 kept as one run (gap of 4 < 16); 6..24 skipped.
         assert_eq!(kept, vec![(0, 6 * bpc)]);
     }
