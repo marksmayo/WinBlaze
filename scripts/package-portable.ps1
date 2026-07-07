@@ -43,6 +43,15 @@ foreach ($file in $requiredFiles) {
     Copy-Item -LiteralPath $source -Destination $stageDir -Force
 }
 
+# The update helper that applies downloaded updates (a portable app can't
+# overwrite its own running exe). Always the release build — it is a tiny,
+# config-independent std-only binary.
+$updaterExe = Join-Path $repoRoot "target\release\winblaze-updater.exe"
+if (-not (Test-Path -LiteralPath $updaterExe)) {
+    throw "Updater missing: $updaterExe (build with: cargo build --release -p winblaze-updater)"
+}
+Copy-Item -LiteralPath $updaterExe -Destination $stageDir -Force
+
 $optionalFiles = @(
     "resources.pri",
     "WinBlaze.winmd"

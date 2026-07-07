@@ -4,6 +4,7 @@ members = [
     "src/WinBlaze.Scanner",
     "src/WinBlaze.Index",
     "src/WinBlaze.Native",
+    "src/WinBlaze.Updater",
     "tests/WinBlaze.Tests",
 ]
 resolver = "2"
