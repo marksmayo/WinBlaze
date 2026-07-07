@@ -24,6 +24,7 @@ const ATTRIBUTE_DATA: u32 = 0x80;
 const ATTRIBUTE_BITMAP: u32 = 0xB0;
 const FILE_RECORD_FLAG_IN_USE: u16 = 0x0001;
 const FILE_RECORD_FLAG_DIRECTORY: u16 = 0x0002;
+const MFT_PROGRESS_RECORD_DELTA: u64 = 262_144;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NtfsEnumeration {
@@ -209,6 +210,7 @@ fn stream_ntfs_entries(
     let profile = std::env::var_os("WINBLAZE_PROFILE_STREAM").is_some();
     let mut wait_ns = 0u128;
     let mut emit_ns = 0u128;
+    let mut last_progress_records = 0u64;
 
     let stream_result = (|| -> Result<(), NtfsEnumerationError> {
         loop {
@@ -234,13 +236,19 @@ fn stream_ntfs_entries(
                 emit_ns += started.elapsed().as_nanos();
             }
 
-            let progress = ScanProgress {
-                completed_items: processed_records,
-                total_items: total_records,
-                completed_bytes: processed_records.saturating_mul(NTFS_RECORD_SIZE as u64),
-                total_bytes: total_records.saturating_mul(NTFS_RECORD_SIZE as u64),
-            };
-            on_event(ScanEvent::Progress(progress));
+            let progress_due = processed_records >= total_records
+                || processed_records.saturating_sub(last_progress_records)
+                    >= MFT_PROGRESS_RECORD_DELTA;
+            if progress_due {
+                last_progress_records = processed_records;
+                let progress = ScanProgress {
+                    completed_items: processed_records,
+                    total_items: total_records,
+                    completed_bytes: processed_records.saturating_mul(NTFS_RECORD_SIZE as u64),
+                    total_bytes: total_records.saturating_mul(NTFS_RECORD_SIZE as u64),
+                };
+                on_event(ScanEvent::Progress(progress));
+            }
         }
         Ok(())
     })();

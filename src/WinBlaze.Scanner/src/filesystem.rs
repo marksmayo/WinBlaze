@@ -2,6 +2,11 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::types::ScanBackend;
 
+#[cfg(windows)]
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetLogicalDrives() -> u32;
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VolumeRootCandidate {
     pub normalized_path: PathBuf,
@@ -22,6 +27,24 @@ pub struct ScanAccessPlan {
 }
 
 pub fn discover_available_drive_roots() -> Vec<PathBuf> {
+    #[cfg(windows)]
+    {
+        let mask = unsafe { GetLogicalDrives() };
+        if mask != 0 {
+            return (b'A'..=b'Z')
+                .enumerate()
+                .filter_map(|(index, letter)| {
+                    ((mask & (1u32 << index)) != 0)
+                        .then(|| PathBuf::from(format!("{}:\\", letter as char)))
+                })
+                .collect();
+        }
+    }
+
+    discover_drive_roots_by_probe()
+}
+
+fn discover_drive_roots_by_probe() -> Vec<PathBuf> {
     let mut roots = Vec::new();
 
     for letter in b'A'..=b'Z' {

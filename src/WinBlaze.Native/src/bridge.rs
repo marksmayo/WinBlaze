@@ -33,7 +33,7 @@ const SNAPSHOT_ENTRY_LIMIT: usize = 8192;
 const UI_LIVE_CATALOG_EVENT_LIMIT: usize = SNAPSHOT_ENTRY_LIMIT;
 const UI_PROGRESS_MIN_ITEM_DELTA: u64 = 10_000;
 const UI_PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(150);
-const EXTENSION_STATS_MIN_INTERVAL: Duration = Duration::from_millis(400);
+const EXTENSION_STATS_MIN_INTERVAL: Duration = Duration::from_millis(750);
 const EXTENSION_STATS_TOP_LIMIT: usize = 40;
 const PROGRESS_LOG_MIN_INTERVAL: Duration = Duration::from_secs(1);
 const TREE_CHILDREN_LIMIT: usize = 4096;
@@ -267,10 +267,13 @@ impl UiEventForwarder {
             live_catalog_events: 0,
             last_progress_at: None,
             last_progress_items: 0,
-            extension_totals: HashMap::new(),
+            extension_totals: HashMap::with_capacity(256),
             last_extension_stats_at: None,
-            directory_paths: Default::default(),
-            pending_directories: Vec::new(),
+            directory_paths: winblaze_core::IdHashMap::with_capacity_and_hasher(
+                UI_LIVE_CATALOG_EVENT_LIMIT,
+                Default::default(),
+            ),
+            pending_directories: Vec::with_capacity(DIRECTORY_BATCH_SIZE),
             last_directory_batch_at: None,
         }
     }

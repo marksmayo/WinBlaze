@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     fs,
     path::{Path, PathBuf},
     sync::{
@@ -20,6 +20,8 @@ use crate::pipeline::ScanEventPipeline;
 use crate::policy::{should_descend_into_reparse_target, ReparseTraversalPolicy};
 use crate::types::ScanRuntimeConfig;
 use crate::winfind;
+
+const FALLBACK_PROGRESS_ITEM_DELTA: u64 = 4_096;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScanRequest {
@@ -215,17 +217,12 @@ fn run_fallback_scan(
         } else {
             let mut walk_state = DirectoryWalkState::new();
             walk_state.directories_seen = 1;
-
-            let mut directory_ids = HashMap::new();
-            directory_ids.insert(selected_root.to_path_buf(), root_id);
-
             walk_directory_tree(
                 pipeline,
                 cancelled,
                 selected_root,
                 root_id,
                 &mut walk_state,
-                &mut directory_ids,
                 issue_keys,
                 reparse_policy,
                 &root_ancestors,
@@ -454,7 +451,6 @@ fn walk_directory_tree(
     directory: &std::path::Path,
     parent_directory_id: winblaze_core::DirectoryId,
     walk_state: &mut DirectoryWalkState,
-    directory_ids: &mut HashMap<PathBuf, winblaze_core::DirectoryId>,
     issue_keys: &mut HashSet<String>,
     reparse_policy: ReparseTraversalPolicy,
     ancestors: &AncestorChain,
@@ -515,7 +511,6 @@ fn walk_directory_tree(
             let entry_name = display_name(entry.name);
 
             let directory_id = walk_state.next_directory_id();
-            directory_ids.insert(entry_path.clone(), directory_id);
             emit_directory_record(
                 pipeline,
                 walk_state,
@@ -534,7 +529,6 @@ fn walk_directory_tree(
                         &entry_path,
                         directory_id,
                         walk_state,
-                        directory_ids,
                         issue_keys,
                         reparse_policy,
                         &child_ancestors,
@@ -586,10 +580,13 @@ fn emit_file_record(
     entry: winfind::FindEntry,
 ) {
     let size_bytes = entry.size_bytes;
+    let attributes = winblaze_core::FileAttributes(entry.attributes);
+    let allocation_bytes = entry.allocation_bytes;
     walk_state.files_seen = walk_state.files_seen.saturating_add(1);
     walk_state.total_size_bytes = walk_state.total_size_bytes.saturating_add(size_bytes);
-    walk_state.total_allocation_bytes =
-        walk_state.total_allocation_bytes.saturating_add(size_bytes);
+    walk_state.total_allocation_bytes = walk_state
+        .total_allocation_bytes
+        .saturating_add(allocation_bytes);
 
     pipeline.emit_file(winblaze_core::FileRecord {
         id: winblaze_core::FileId(walk_state.next_file_id()),
@@ -600,8 +597,8 @@ fn emit_file_record(
         // index memory, and snapshot size.
         full_path: String::new(),
         size_bytes,
-        allocation_bytes: size_bytes,
-        attributes: winblaze_core::FileAttributes::ARCHIVE,
+        allocation_bytes,
+        attributes,
         created_utc: filetime_or_none(entry.created_utc),
         modified_utc: filetime_or_none(entry.modified_utc),
         accessed_utc: filetime_or_none(entry.accessed_utc),
@@ -665,15 +662,21 @@ fn emit_deduplicated_issue(
     issue_keys: &mut HashSet<String>,
     issue: ScanIssueRecord,
 ) {
-    let key = format!(
-        "{:?}|{}|{}",
-        issue.kind,
-        issue.path.as_deref().unwrap_or(""),
-        issue.message
-    );
+    let key = issue_key(&issue);
     if issue_keys.insert(key) {
         pipeline.emit_issue(issue);
     }
+}
+
+fn issue_key(issue: &ScanIssueRecord) -> String {
+    let path = issue.path.as_deref().unwrap_or("");
+    let mut key = String::with_capacity(path.len() + issue.message.len() + 16);
+    key.push_str(&(issue.kind as u8).to_string());
+    key.push('\0');
+    key.push_str(path);
+    key.push('\0');
+    key.push_str(&issue.message);
+    key
 }
 
 struct DirectoryWalkState {
@@ -713,7 +716,10 @@ impl DirectoryWalkState {
 
     fn maybe_emit_progress(&mut self, pipeline: &mut ScanEventPipeline, force: bool) {
         let completed_items = self.files_seen.saturating_add(self.directories_seen);
-        if force || completed_items.saturating_sub(self.last_progress_reported_items) >= 256 {
+        if force
+            || completed_items.saturating_sub(self.last_progress_reported_items)
+                >= FALLBACK_PROGRESS_ITEM_DELTA
+        {
             self.last_progress_reported_items = completed_items;
             pipeline.emit_progress(completed_items, 0, self.total_size_bytes);
         }
@@ -999,13 +1005,15 @@ fn emit_file_record_shared(
     entry: winfind::FindEntry,
 ) {
     let size_bytes = entry.size_bytes;
+    let attributes = winblaze_core::FileAttributes(entry.attributes);
+    let allocation_bytes = entry.allocation_bytes;
     shared.files_seen.fetch_add(1, Ordering::Relaxed);
     shared
         .total_size_bytes
         .fetch_add(size_bytes, Ordering::Relaxed);
     shared
         .total_allocation_bytes
-        .fetch_add(size_bytes, Ordering::Relaxed);
+        .fetch_add(allocation_bytes, Ordering::Relaxed);
     let file_id = shared.next_file_id.fetch_add(1, Ordering::Relaxed);
 
     pipeline.emit_file(winblaze_core::FileRecord {
@@ -1015,8 +1023,8 @@ fn emit_file_record_shared(
         // Derived on demand from the parent directory (see FileRecord docs).
         full_path: String::new(),
         size_bytes,
-        allocation_bytes: size_bytes,
-        attributes: winblaze_core::FileAttributes::ARCHIVE,
+        allocation_bytes,
+        attributes,
         created_utc: filetime_or_none(entry.created_utc),
         modified_utc: filetime_or_none(entry.modified_utc),
         accessed_utc: filetime_or_none(entry.accessed_utc),
@@ -1028,12 +1036,7 @@ fn emit_deduplicated_issue_shared(
     shared: &FallbackSharedState,
     issue: ScanIssueRecord,
 ) {
-    let key = format!(
-        "{:?}|{}|{}",
-        issue.kind,
-        issue.path.as_deref().unwrap_or(""),
-        issue.message
-    );
+    let key = issue_key(&issue);
     let is_new = shared.issue_keys.lock().unwrap().insert(key);
     if is_new {
         pipeline.emit_issue(issue);
@@ -1045,16 +1048,24 @@ fn maybe_emit_progress_shared(shared: &FallbackSharedState, pipeline: &mut ScanE
         .files_seen
         .load(Ordering::Relaxed)
         .saturating_add(shared.directories_seen.load(Ordering::Relaxed));
-    let last_reported = shared.last_progress_reported_items.load(Ordering::Relaxed);
-    if completed_items.saturating_sub(last_reported) >= 256 {
-        shared
-            .last_progress_reported_items
-            .store(completed_items, Ordering::Relaxed);
-        pipeline.emit_progress(
+    let mut last_reported = shared.last_progress_reported_items.load(Ordering::Relaxed);
+    while completed_items.saturating_sub(last_reported) >= FALLBACK_PROGRESS_ITEM_DELTA {
+        match shared.last_progress_reported_items.compare_exchange(
+            last_reported,
             completed_items,
-            0,
-            shared.total_size_bytes.load(Ordering::Relaxed),
-        );
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => {
+                pipeline.emit_progress(
+                    completed_items,
+                    0,
+                    shared.total_size_bytes.load(Ordering::Relaxed),
+                );
+                return;
+            }
+            Err(actual) => last_reported = actual,
+        }
     }
 }
 

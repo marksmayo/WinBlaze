@@ -38,7 +38,10 @@ const ERROR_NO_MORE_FILES: i32 = 18;
 /// recovery of the `fs::read_dir` loop this replaced, while still
 /// guaranteeing termination if the handle is persistently broken.
 const FIND_ERROR_BUDGET: u8 = 8;
-
+const INVALID_FILE_SIZE: u32 = 0xFFFF_FFFF;
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+const FILE_ATTRIBUTE_SPARSE_FILE: u32 = 0x200;
+const FILE_ATTRIBUTE_COMPRESSED: u32 = 0x800;
 #[link(name = "kernel32")]
 extern "system" {
     fn FindFirstFileExW(
@@ -53,6 +56,12 @@ extern "system" {
     fn FindNextFileW(hFindFile: isize, lpFindFileData: *mut Win32FindDataW) -> i32;
 
     fn FindClose(hFindFile: isize) -> i32;
+
+    fn GetCompressedFileSizeW(lpFileName: *const u16, lpFileSizeHigh: *mut u32) -> u32;
+
+    fn SetLastError(dwErrCode: u32);
+
+    fn GetLastError() -> u32;
 }
 
 /// A directory-enumeration error, carrying the specific path it occurred on
@@ -79,6 +88,7 @@ pub struct FindEntry {
     pub name: OsString,
     pub attributes: u32,
     pub size_bytes: u64,
+    pub allocation_bytes: u64,
     /// FILETIME (100ns ticks since 1601); zero means "not available".
     pub created_utc: u64,
     pub modified_utc: u64,
@@ -87,6 +97,7 @@ pub struct FindEntry {
 
 pub struct FindIterator {
     handle: isize,
+    directory: PathBuf,
     /// Reusable find-data buffer: `FindEntry` copies everything out before
     /// the next `FindNextFileW` call, so one allocation serves the whole
     /// directory instead of one per entry.
@@ -136,6 +147,7 @@ pub fn read_dir_fast(directory: &Path) -> io::Result<FindIterator> {
     }
     Ok(FindIterator {
         handle,
+        directory: directory.to_path_buf(),
         buffer,
         first_pending: true,
         error_budget: FIND_ERROR_BUDGET,
@@ -181,10 +193,19 @@ impl Iterator for FindIterator {
                 continue;
             }
 
+            let name = OsString::from_wide(name_units);
+            let size_bytes = (u64::from(data.nFileSizeHigh) << 32) | u64::from(data.nFileSizeLow);
+            let allocation_bytes = allocation_size_for_entry(
+                &self.directory,
+                &name,
+                data.dwFileAttributes,
+                size_bytes,
+            );
             return Some(Ok(FindEntry {
-                name: OsString::from_wide(name_units),
+                name,
                 attributes: data.dwFileAttributes,
-                size_bytes: (u64::from(data.nFileSizeHigh) << 32) | u64::from(data.nFileSizeLow),
+                size_bytes,
+                allocation_bytes,
                 created_utc: filetime(data.ftCreationTime),
                 modified_utc: filetime(data.ftLastWriteTime),
                 accessed_utc: filetime(data.ftLastAccessTime),
@@ -201,6 +222,69 @@ impl Drop for FindIterator {
 
 fn filetime(parts: [u32; 2]) -> u64 {
     (u64::from(parts[1]) << 32) | u64::from(parts[0])
+}
+
+fn allocation_size_for_entry(
+    directory: &Path,
+    name: &std::ffi::OsStr,
+    attributes: u32,
+    size_bytes: u64,
+) -> u64 {
+    if attributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+        return 0;
+    }
+    if attributes & (FILE_ATTRIBUTE_SPARSE_FILE | FILE_ATTRIBUTE_COMPRESSED) == 0 {
+        return size_bytes;
+    }
+    allocation_size_for_path(&directory.join(name), attributes, size_bytes)
+}
+
+fn allocation_size_for_path(path: &Path, attributes: u32, size_bytes: u64) -> u64 {
+    if attributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+        return 0;
+    }
+    if attributes & (FILE_ATTRIBUTE_SPARSE_FILE | FILE_ATTRIBUTE_COMPRESSED) == 0 {
+        return size_bytes;
+    }
+    compressed_file_size(path).unwrap_or(size_bytes)
+}
+
+fn compressed_file_size(path: &Path) -> io::Result<u64> {
+    let wide = wide_path_for_win32(path);
+    let mut high = 0u32;
+    unsafe {
+        SetLastError(0);
+        let low = GetCompressedFileSizeW(wide.as_ptr(), &mut high);
+        let error = GetLastError();
+        if low == INVALID_FILE_SIZE && error != 0 {
+            return Err(io::Error::from_raw_os_error(error as i32));
+        }
+        Ok((u64::from(high) << 32) | u64::from(low))
+    }
+}
+
+fn wide_path_for_win32(path: &Path) -> Vec<u16> {
+    let raw: Vec<u16> = path.as_os_str().encode_wide().collect();
+    let mut wide = Vec::with_capacity(raw.len() + 9);
+    let is_verbatim = raw.starts_with(&[
+        u16::from(b'\\'),
+        u16::from(b'\\'),
+        u16::from(b'?'),
+        u16::from(b'\\'),
+    ]);
+    let is_unc = raw.starts_with(&[u16::from(b'\\'), u16::from(b'\\')]);
+    let is_drive_absolute = raw.get(1) == Some(&u16::from(b':'));
+    if raw.len() >= 240 && !is_verbatim && is_drive_absolute {
+        wide.extend(r"\\?\".encode_utf16());
+    } else if raw.len() >= 240 && !is_verbatim && is_unc {
+        wide.extend(r"\\?\UNC\".encode_utf16());
+        wide.extend_from_slice(&raw[2..]);
+        wide.push(0);
+        return wide;
+    }
+    wide.extend_from_slice(&raw);
+    wide.push(0);
+    wide
 }
 
 /// Directory entry source shared by every walker: the raw large-fetch
@@ -243,10 +327,15 @@ impl Iterator for DirEntries {
                     error,
                     path: Some(entry.path()),
                 })?;
+                let attributes = metadata.file_attributes();
+                let size_bytes = metadata.len();
+                let allocation_bytes =
+                    allocation_size_for_path(&entry.path(), attributes, size_bytes);
                 Ok(FindEntry {
                     name: entry.file_name(),
-                    attributes: metadata.file_attributes(),
-                    size_bytes: metadata.len(),
+                    attributes,
+                    size_bytes,
+                    allocation_bytes,
                     created_utc: metadata.creation_time(),
                     modified_utc: metadata.last_write_time(),
                     accessed_utc: metadata.last_access_time(),
