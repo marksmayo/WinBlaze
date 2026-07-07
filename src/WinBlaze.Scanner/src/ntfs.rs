@@ -821,17 +821,36 @@ fn decode_data_runs(runs: &[u8], bytes_per_cluster: u64) -> io::Result<Vec<(u64,
         offset_delta = (offset_delta << shift) >> shift;
         cursor += offset_size;
 
-        current_lcn += offset_delta;
+        // Checked arithmetic throughout: a corrupt/hostile MFT can carry run
+        // values that overflow these products (which would panic in debug and
+        // wrap to a bogus offset in release). A real volume never overflows,
+        // so overflow means the data is bad — reject it and fall back.
+        current_lcn = match current_lcn.checked_add(offset_delta) {
+            Some(value) => value,
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "data run offset overflow",
+                ))
+            }
+        };
         if current_lcn < 0 || run_length == 0 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "data run points before volume start",
             ));
         }
-        extents.push((
-            current_lcn as u64 * bytes_per_cluster,
-            run_length * bytes_per_cluster,
-        ));
+        let start_bytes = (current_lcn as u64).checked_mul(bytes_per_cluster);
+        let length_bytes = run_length.checked_mul(bytes_per_cluster);
+        match (start_bytes, length_bytes) {
+            (Some(start), Some(length)) => extents.push((start, length)),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "data run size overflow",
+                ))
+            }
+        }
     }
 
     if extents.is_empty() {
@@ -2648,5 +2667,120 @@ mod tests {
         assert_eq!(result.files.len(), 1);
         assert_eq!(result.summary.files_seen, 1);
         assert_eq!(result.files[0].name, "second.txt");
+    }
+}
+
+/// Fuzz/corpus coverage for the MFT byte parsers. The MFT is untrusted on-disk
+/// data (a corrupt volume, a hostile image, a torn record): every parser here
+/// takes a raw byte slice and must always return `Ok`/`Err` or a value —
+/// never panic or over-read. These feed random, truncated, and
+/// signature-forced garbage through each layer and the full streaming pipeline.
+#[cfg(test)]
+mod fuzz_tests {
+    use super::*;
+
+    /// Deterministic xorshift so the corpus is reproducible.
+    struct Rng(u64);
+    impl Rng {
+        fn next_u32(&mut self) -> u32 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            (self.0 >> 32) as u32
+        }
+        fn byte(&mut self) -> u8 {
+            (self.next_u32() & 0xff) as u8
+        }
+        fn bytes(&mut self, len: usize) -> Vec<u8> {
+            (0..len).map(|_| self.byte()).collect()
+        }
+    }
+
+    #[test]
+    fn apply_mft_fixups_survives_garbage() {
+        let mut rng = Rng(0x1234_5678_9ABC_DEF0);
+        for _ in 0..3000 {
+            let len = (rng.next_u32() % 8192) as usize;
+            let mut buffer = rng.bytes(len);
+            // Force a FILE signature on the first record so the fixup path runs.
+            if buffer.len() >= 4 && rng.next_u32() & 1 == 0 {
+                buffer[0..4].copy_from_slice(FILE_RECORD_SIGNATURE);
+            }
+            let sector = [512usize, 4096, 0, 1, 65536][(rng.next_u32() % 5) as usize];
+            apply_mft_fixups(&mut buffer, sector);
+        }
+    }
+
+    #[test]
+    fn decode_data_runs_survives_garbage() {
+        let mut rng = Rng(0xDEAD_BEEF_CAFE_F00D);
+        for _ in 0..5000 {
+            let len = (rng.next_u32() % 64) as usize;
+            let runs = rng.bytes(len);
+            let cluster = [512u64, 4096, 0, 65536][(rng.next_u32() % 4) as usize];
+            let _ = decode_data_runs(&runs, cluster);
+        }
+    }
+
+    #[test]
+    fn parse_record_survives_garbage() {
+        let mut rng = Rng(0x0F0F_0F0F_1111_2222);
+        for _ in 0..5000 {
+            let mut record = rng.bytes(NTFS_RECORD_SIZE);
+            // Half the time force the FILE signature so the attribute loop runs
+            // on garbage rather than bouncing off the signature check.
+            if rng.next_u32() & 1 == 0 {
+                record[0..4].copy_from_slice(FILE_RECORD_SIGNATURE);
+            }
+            let _ = parse_record(&record);
+        }
+    }
+
+    #[test]
+    fn parse_mft_records_survives_garbage() {
+        let mut rng = Rng(0xABCD_1234_5678_9F0E);
+        for _ in 0..600 {
+            let records = 1 + (rng.next_u32() % 8) as usize;
+            let mut bytes = rng.bytes(records * NTFS_RECORD_SIZE);
+            for record in 0..records {
+                if rng.next_u32() & 1 == 0 {
+                    let start = record * NTFS_RECORD_SIZE;
+                    bytes[start..start + 4].copy_from_slice(FILE_RECORD_SIGNATURE);
+                }
+            }
+            let _ = parse_mft_records(Path::new(r"C:\"), &bytes);
+        }
+    }
+
+    #[test]
+    fn streaming_pipeline_survives_garbage() {
+        // Full production path over garbage: fixups -> parallel parse -> stream
+        // state ingest -> finish. Must never panic on a corrupt MFT.
+        let mut rng = Rng(0x7777_3333_9999_1111);
+        for _ in 0..40 {
+            let records = 1 + (rng.next_u32() % 3000) as usize;
+            let mut bytes = rng.bytes(records * NTFS_RECORD_SIZE);
+            for record in 0..records {
+                if !rng.next_u32().is_multiple_of(3) {
+                    let start = record * NTFS_RECORD_SIZE;
+                    bytes[start..start + 4].copy_from_slice(FILE_RECORD_SIGNATURE);
+                }
+            }
+            apply_mft_fixups(&mut bytes, 512);
+            let Ok((parsed, extensions)) = parse_batch(&bytes, records, 4) else {
+                continue;
+            };
+            let mut state = NtfsStreamState::new(String::from(r"C:\"));
+            let mut sink = |_event: ScanEvent| {};
+            state.emit_root(&mut sink);
+            for entry in parsed {
+                state.ingest_entry(entry, &mut sink);
+            }
+            for extension in extensions {
+                state.ingest_extension(extension, &mut sink);
+            }
+            state.finish(&mut sink);
+            let _ = state.into_summary();
+        }
     }
 }
