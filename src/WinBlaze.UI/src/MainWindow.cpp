@@ -29,43 +29,50 @@ namespace
     constexpr wchar_t kReleaseApiUrl[] =
         L"https://api.github.com/repos/marksmayo/WinBlaze/releases/latest";
 
-    // Fetches the latest release from GitHub and reports the result into the
-    // supplied status text (and reveals the download button when newer). The
-    // fetch runs off the UI thread; parsing + version comparison happen in the
-    // Rust core via NativeBridge::CheckForUpdate.
-    winrt::fire_and_forget CheckForUpdatesAsync(
-        winrt::Microsoft::UI::Xaml::Controls::TextBlock status,
-        winrt::Microsoft::UI::Xaml::Controls::Button download)
+    // GETs the GitHub releases/latest body off the UI thread; returns an empty
+    // string on any network/HTTP failure so callers treat it as "unknown".
+    winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> FetchReleaseJsonAsync()
     {
-        using winrt::Microsoft::UI::Xaml::Visibility;
-        auto ui_thread = winrt::apartment_context();
-        status.Text(L"Checking for updates…");
-        download.Visibility(Visibility::Collapsed);
-
-        bool ok = false;
-        bool available = false;
-        std::string latest;
         try {
             winrt::Windows::Web::Http::HttpClient client;
             client.DefaultRequestHeaders().UserAgent().TryParseAdd(L"WinBlaze");
             client.DefaultRequestHeaders().Accept().TryParseAdd(L"application/vnd.github+json");
             winrt::Windows::Foundation::Uri uri{ kReleaseApiUrl };
             auto response = co_await client.GetAsync(uri);
-            const bool success = response.IsSuccessStatusCode();
-            auto body = co_await response.Content().ReadAsStringAsync();
-            if (success) {
-                const std::string json = winrt::to_string(body);
-                const WbUpdateCheck check =
-                    WinBlaze::UI::NativeBridge::CheckForUpdate(kCurrentVersion, json);
-                if (check.parsed != 0) {
-                    ok = true;
-                    available = check.available != 0;
-                    latest.assign(reinterpret_cast<const char*>(check.latest), check.latest_len);
-                }
+            if (!response.IsSuccessStatusCode()) {
+                co_return winrt::hstring{};
             }
+            co_return co_await response.Content().ReadAsStringAsync();
         }
         catch (...) {
-            ok = false;
+            co_return winrt::hstring{};
+        }
+    }
+
+    // Settings "Check for updates": reports the result into the status text and
+    // reveals the download button when a newer release exists.
+    winrt::fire_and_forget CheckForUpdatesAsync(
+        winrt::Microsoft::UI::Xaml::Controls::TextBlock status,
+        winrt::Microsoft::UI::Xaml::Controls::Button download)
+    {
+        using winrt::Microsoft::UI::Xaml::Visibility;
+        auto ui_thread = winrt::apartment_context();
+        status.Text(L"Checking for updates...");
+        download.Visibility(Visibility::Collapsed);
+
+        const winrt::hstring json = co_await FetchReleaseJsonAsync();
+        bool ok = false;
+        bool available = false;
+        std::string latest;
+        if (!json.empty()) {
+            const std::string body = winrt::to_string(json);
+            const WbUpdateCheck check =
+                WinBlaze::UI::NativeBridge::CheckForUpdate(kCurrentVersion, body);
+            if (check.parsed != 0) {
+                ok = true;
+                available = check.available != 0;
+                latest.assign(reinterpret_cast<const char*>(check.latest), check.latest_len);
+            }
         }
 
         co_await ui_thread;
@@ -76,11 +83,57 @@ namespace
         else if (available) {
             const std::wstring latest_w(winrt::to_hstring(latest).c_str());
             status.Text(winrt::hstring(
-                L"Update available: " + latest_w + L" — you have " + current + L"."));
+                L"Update available: " + latest_w + L" - you have " + current + L"."));
             download.Visibility(Visibility::Visible);
         }
         else {
             status.Text(winrt::hstring(L"You're on the latest version (" + current + L")."));
+        }
+    }
+
+    // Runs once on launch: if a newer release exists, offers a Download/Later
+    // dialog. Shows nothing when up to date or offline, so it never blocks a
+    // normal launch (dev/CI builds are at or ahead of the published release).
+    winrt::fire_and_forget PromptForUpdateOnLaunchAsync(winrt::Microsoft::UI::Xaml::XamlRoot xaml_root)
+    {
+        namespace Controls = winrt::Microsoft::UI::Xaml::Controls;
+        auto ui_thread = winrt::apartment_context();
+
+        const winrt::hstring json = co_await FetchReleaseJsonAsync();
+        std::string latest;
+        bool available = false;
+        if (!json.empty()) {
+            const std::string body = winrt::to_string(json);
+            const WbUpdateCheck check =
+                WinBlaze::UI::NativeBridge::CheckForUpdate(kCurrentVersion, body);
+            if (check.parsed != 0 && check.available != 0) {
+                available = true;
+                latest.assign(reinterpret_cast<const char*>(check.latest), check.latest_len);
+            }
+        }
+        if (!available) {
+            co_return;
+        }
+
+        co_await ui_thread;
+        const std::wstring latest_w(winrt::to_hstring(latest).c_str());
+        const std::wstring current(winrt::to_hstring(kCurrentVersion).c_str());
+        Controls::ContentDialog dialog;
+        dialog.XamlRoot(xaml_root);
+        dialog.Title(winrt::box_value(winrt::hstring(L"Update available")));
+        dialog.Content(winrt::box_value(winrt::hstring(
+            L"WinBlaze " + latest_w + L" is available - you have " + current +
+            L". Download the new version?")));
+        dialog.PrimaryButtonText(L"Download");
+        dialog.CloseButtonText(L"Later");
+        dialog.DefaultButton(Controls::ContentDialogButton::Primary);
+        try {
+            if (co_await dialog.ShowAsync() == Controls::ContentDialogResult::Primary) {
+                ShellExecuteW(nullptr, L"open", kReleasesLatestUrl, nullptr, nullptr, SW_SHOWNORMAL);
+            }
+        }
+        catch (...) {
+            // A dialog can throw if one is already open; ignore.
         }
     }
 
@@ -1722,6 +1775,18 @@ namespace winrt::WinBlaze::UI::implementation
         TraceStartup(L"OnWindowLoaded after search preview");
         LoadPersistedCatalogSnapshot();
         TraceStartup(L"OnWindowLoaded after persisted catalog snapshot");
+
+        // Once per launch, check GitHub for a newer release and (only if one
+        // exists) offer an update dialog. Non-blocking; silent when up to date
+        // or offline.
+        if (!m_update_check_started) {
+            m_update_check_started = true;
+            if (auto content = Content()) {
+                if (auto xaml_root = content.XamlRoot()) {
+                    PromptForUpdateOnLaunchAsync(xaml_root);
+                }
+            }
+        }
     }
 
     void MainWindow::OnWindowClosed(

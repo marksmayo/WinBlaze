@@ -411,6 +411,8 @@ namespace winrt::WinBlaze::UI::implementation
         bool m_ui_flush_requested{ false };
         bool m_treemap_render_requested{ false };
         bool m_shell_ready{ false };
+        // Guards the once-per-launch background update check (see OnWindowLoaded).
+        bool m_update_check_started{ false };
         bool m_session_active{ false };
         bool m_has_results{ false };
         bool m_has_error{ false };
