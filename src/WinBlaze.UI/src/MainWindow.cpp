@@ -7,6 +7,10 @@
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Web.Http.h>
 #include <winrt/Windows.Web.Http.Headers.h>
+#include <winrt/Windows.Storage.Streams.h>
+
+#include <filesystem>
+#include <fstream>
 
 namespace
 {
@@ -91,9 +95,115 @@ namespace
         }
     }
 
-    // Runs once on launch: if a newer release exists, offers a Download/Later
-    // dialog. Shows nothing when up to date or offline, so it never blocks a
-    // normal launch (dev/CI builds are at or ahead of the published release).
+    // Runs a console command with no window and waits (up to 2 min); returns
+    // its exit code, or -1 if it couldn't be launched.
+    int RunAndWait(std::wstring command_line)
+    {
+        STARTUPINFOW si{};
+        si.cb = sizeof(si);
+        PROCESS_INFORMATION pi{};
+        std::vector<wchar_t> buffer(command_line.begin(), command_line.end());
+        buffer.push_back(L'\0'); // CreateProcessW may write to the buffer.
+        if (!CreateProcessW(nullptr, buffer.data(), nullptr, nullptr, FALSE,
+                            CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+            return -1;
+        }
+        WaitForSingleObject(pi.hProcess, 120'000);
+        DWORD code = 1;
+        GetExitCodeProcess(pi.hProcess, &code);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        return static_cast<int>(code);
+    }
+
+    // Downloads the portable zip for `tag` from the release, extracts it with
+    // the bundled tar.exe, then hands off to winblaze-updater.exe (copied to a
+    // temp dir so the install-dir copy can be overwritten) which waits for this
+    // process to exit, swaps the files, and relaunches. On success the app
+    // exits; on any failure it falls back to opening the download page.
+    // NOTE: relies on the release asset being named
+    // `WinBlaze-<tag>-windows-x64-portable.zip` (the release convention).
+    winrt::fire_and_forget InstallUpdateAsync(std::wstring tag)
+    {
+        namespace WSS = winrt::Windows::Storage::Streams;
+        auto ui_thread = winrt::apartment_context();
+
+        wchar_t exe_buf[MAX_PATH]{};
+        GetModuleFileNameW(nullptr, exe_buf, MAX_PATH);
+        const std::filesystem::path exe_path(exe_buf);
+        const std::filesystem::path install_dir = exe_path.parent_path();
+        wchar_t temp_buf[MAX_PATH]{};
+        GetTempPathW(MAX_PATH, temp_buf);
+        const std::filesystem::path work = std::filesystem::path(temp_buf) / L"WinBlazeUpdate";
+        const std::filesystem::path stage = work / L"stage";
+        const std::filesystem::path zip_path = work / L"download.zip";
+        std::error_code ec;
+        std::filesystem::remove_all(work, ec);
+        std::filesystem::create_directories(stage, ec);
+
+        bool ok = false;
+        try {
+            const std::wstring url =
+                L"https://github.com/marksmayo/WinBlaze/releases/download/" + tag +
+                L"/WinBlaze-" + tag + L"-windows-x64-portable.zip";
+            winrt::Windows::Web::Http::HttpClient client;
+            client.DefaultRequestHeaders().UserAgent().TryParseAdd(L"WinBlaze");
+            auto response = co_await client.GetAsync(winrt::Windows::Foundation::Uri{ url });
+            if (response.IsSuccessStatusCode()) {
+                auto content = co_await response.Content().ReadAsBufferAsync();
+                const uint32_t length = content.Length();
+                if (length > 0) {
+                    auto reader = WSS::DataReader::FromBuffer(content);
+                    std::vector<uint8_t> bytes(length);
+                    reader.ReadBytes(bytes);
+                    std::ofstream out(zip_path, std::ios::binary);
+                    out.write(reinterpret_cast<const char*>(bytes.data()),
+                              static_cast<std::streamsize>(bytes.size()));
+                    out.close();
+                    ok = std::filesystem::exists(zip_path);
+                }
+            }
+        }
+        catch (...) {
+            ok = false;
+        }
+
+        if (ok) {
+            const std::wstring cmd =
+                L"tar.exe -xf \"" + zip_path.wstring() + L"\" -C \"" + stage.wstring() + L"\"";
+            ok = RunAndWait(cmd) == 0;
+        }
+
+        if (ok) {
+            const std::filesystem::path updater_tmp = work / L"winblaze-updater.exe";
+            std::filesystem::copy_file(install_dir / L"winblaze-updater.exe", updater_tmp,
+                                       std::filesystem::copy_options::overwrite_existing, ec);
+            if (!ec && std::filesystem::exists(updater_tmp)) {
+                const std::wstring args =
+                    L"--pid " + std::to_wstring(GetCurrentProcessId()) +
+                    L" --source \"" + stage.wstring() + L"\"" +
+                    L" --target \"" + install_dir.wstring() + L"\"" +
+                    L" --relaunch \"" + exe_path.wstring() + L"\"" +
+                    L" --cleanup \"" + zip_path.wstring() + L"\"";
+                const auto rc = reinterpret_cast<INT_PTR>(ShellExecuteW(
+                    nullptr, L"open", updater_tmp.wstring().c_str(), args.c_str(),
+                    work.wstring().c_str(), SW_SHOWNORMAL));
+                if (rc > 32) {
+                    co_await ui_thread;
+                    winrt::Microsoft::UI::Xaml::Application::Current().Exit();
+                    co_return;
+                }
+            }
+        }
+
+        // Anything went wrong: leave the app running and open the download page.
+        co_await ui_thread;
+        ShellExecuteW(nullptr, L"open", kReleasesLatestUrl, nullptr, nullptr, SW_SHOWNORMAL);
+    }
+
+    // Runs once on launch: if a newer release exists, offers Install/Later.
+    // Shows nothing when up to date or offline, so it never blocks a normal
+    // launch (dev/CI builds are at or ahead of the published release).
     winrt::fire_and_forget PromptForUpdateOnLaunchAsync(winrt::Microsoft::UI::Xaml::XamlRoot xaml_root)
     {
         namespace Controls = winrt::Microsoft::UI::Xaml::Controls;
@@ -123,12 +233,17 @@ namespace
         dialog.Title(winrt::box_value(winrt::hstring(L"Update available")));
         dialog.Content(winrt::box_value(winrt::hstring(
             L"WinBlaze " + latest_w + L" is available - you have " + current +
-            L". Download the new version?")));
-        dialog.PrimaryButtonText(L"Download");
+            L". Install it now? WinBlaze will download the update, close, and reopen.")));
+        dialog.PrimaryButtonText(L"Install now");
+        dialog.SecondaryButtonText(L"Open download page");
         dialog.CloseButtonText(L"Later");
         dialog.DefaultButton(Controls::ContentDialogButton::Primary);
         try {
-            if (co_await dialog.ShowAsync() == Controls::ContentDialogResult::Primary) {
+            const auto result = co_await dialog.ShowAsync();
+            if (result == Controls::ContentDialogResult::Primary) {
+                InstallUpdateAsync(latest_w);
+            }
+            else if (result == Controls::ContentDialogResult::Secondary) {
                 ShellExecuteW(nullptr, L"open", kReleasesLatestUrl, nullptr, nullptr, SW_SHOWNORMAL);
             }
         }
