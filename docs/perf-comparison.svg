@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="800" height="300" font-family="'Segoe UI', system-ui, -apple-system, Roboto, sans-serif" role="img" aria-label="Scan to interactive view on a warm C: drive, lower is better: WinBlaze engine 2.7s, WinBlaze in-app 4.0s, WinDirStat 2.6 10.5s, WizTree 4.31 14.0s">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="800" height="300" font-family="'Segoe UI', system-ui, -apple-system, Roboto, sans-serif" role="img" aria-label="Scan to interactive view on a warm C: drive, lower is better: WinBlaze engine 2.4s, WinBlaze in-app 4.0s, WinDirStat 2.6 10.5s, WizTree 4.31 14.0s">
   <defs>
     <linearGradient id="red" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#FF5A4D"/>
@@ -41,10 +41,10 @@
   </g>
 
   <!-- rows -->
-  <!-- WinBlaze engine 2.7s -> 97.2px -->
+  <!-- WinBlaze engine 2.4s -> 86.4px -->
   <text x="215" y="112" fill="#E6E9EF" font-size="13" font-weight="600" text-anchor="end">WinBlaze &#8212; engine</text>
-  <rect x="230" y="96" width="97.2" height="24" rx="6" fill="url(#red)" filter="url(#glow)"/>
-  <text x="337" y="113" fill="#FFFFFF" font-size="13" font-weight="700">2.7 s</text>
+  <rect x="230" y="96" width="86.4" height="24" rx="6" fill="url(#red)" filter="url(#glow)"/>
+  <text x="326" y="113" fill="#FFFFFF" font-size="13" font-weight="700">2.4 s</text>
 
   <!-- WinBlaze in-app 4.0s -> 144px -->
   <text x="215" y="154" fill="#E6E9EF" font-size="13" font-weight="600" text-anchor="end">WinBlaze &#8212; in-app</text>

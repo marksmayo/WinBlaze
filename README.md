@@ -25,17 +25,19 @@ WinBlaze combines a Rust scanning engine (raw NTFS MFT access with a parallel di
 Compared against WizTree and WinDirStat on the live `C:\` system volume — **~2.3M files / ~546k directories / 464 GB** — Windows 11, NVMe, warm cache, elevated; timed 2026-07-07. GUI tools were timed launch → scan-complete-and-populated via a CPU-idle probe; WinBlaze uses its own reported scan duration plus UI-idle detection.
 
 <p align="center">
-  <img src="docs/perf-comparison.svg" alt="Scan to interactive view on a warm C:\ drive (lower is better): WinBlaze engine ~2.7 s, WinBlaze in-app ~4.0 s, WinDirStat 2.6 ~10.5 s, WizTree 4.31 ~14.0 s" width="820" />
+  <img src="docs/perf-comparison.svg" alt="Scan to interactive view on a warm C:\ drive (lower is better): WinBlaze engine ~2.4 s, WinBlaze in-app ~4.0 s, WinDirStat 2.6 ~10.5 s, WizTree 4.31 ~14.0 s" width="820" />
 </p>
 
 | Tool | Backend | Scan → interactive | Notes |
 |---|---|---|---|
-| **WinBlaze** (engine) | NTFS MFT | **~2.7 s** | scan → summary (`mft_scan_repro`) |
+| **WinBlaze** (engine) | NTFS MFT | **~2.4 s** | scan → summary (`mft_scan_repro`); post-optimization |
 | **WinBlaze** (in-app) | NTFS MFT | **~4.0 s** | Release UI idle→idle, incl. tree + treemap |
 | WinDirStat 2.6.0 | directory walk (multithreaded) | ~10.5 s | modern fork; ~60 s CPU across cores |
 | WizTree 4.31 | NTFS MFT | raw read ~2–3 s; to interactive ~14–55 s | see caveat |
 
 **WizTree caveat:** its raw MFT read is as fast as WinBlaze's, but the GUI materializes the full ~2.9M-file list and treemap up front, so *time to an interactive view* is larger and highly variable (14–55 s observed; the chart shows the best run). Its all-file CLI export took 28–35 s, but that is dominated by writing a 437 MB CSV, not scanning. WinBlaze reaches an interactive view sooner because it pages and caps the UI (8,192-entry catalog, paged tree, deferred snapshot) rather than materializing every file. Single-machine, warm-cache figures — see [benchmarks/perf-overhaul-baselines.md](benchmarks/perf-overhaul-baselines.md) for methodology and raw runs.
+
+The **engine** figure reflects the optimized scanner (sparse MFT read that skips free-record runs, a pipelined parser/emit, and a direct-read reader — ~15% faster than the original 2026-07-07 measurement); the competitor bars are that same dated snapshot and were not re-timed. The scan is now **read-bound at the volume's ~2 GB/s raw-read ceiling**, so sub-2 s is not reachable in software on this hardware — see [docs/ENGINE_SCAN_PERFORMANCE.md](docs/ENGINE_SCAN_PERFORMANCE.md) for the profiling and why.
 
 Generated-dataset budgets (tiny/fanout/fanout-large/scale) are enforced in CI and locally via `benchmarks\performance-budgets*.json`; competitor methodology notes live in `docs\BENCHMARK_METHODOLOGY.md` and `benchmarks\competitor-report.md`.
 
