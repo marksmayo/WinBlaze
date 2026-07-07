@@ -29,7 +29,12 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@1.96.0
         with:
-          components: rustfmt, clippy
+          components: rustfmt, clippy, llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
 
       - name: Format
         run: cargo fmt --all --check
@@ -42,6 +47,9 @@ jobs:
 
       - name: Examples
         run: cargo test --workspace --examples
+
+      - name: Coverage gate
+        run: powershell.exe -ExecutionPolicy Bypass -File scripts\check-coverage.ps1 -MinLines 80
 
       - name: Build
         run: cargo build --workspace --all-targets
