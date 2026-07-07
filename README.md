@@ -1,5 +1,9 @@
 # WinBlaze
 
+<p align="center">
+  <img src="docs/winblaze.png" alt="WinBlaze" width="256" />
+</p>
+
 A blazingly fast disk usage analyzer for Windows that leverages NTFS internals for real-time insight into where your space went.
 
 ## Overview
