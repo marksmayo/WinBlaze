@@ -13,6 +13,16 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <vector>
+
+#include <objbase.h>
+#include <sddl.h>
+#include <aclapi.h>
+
+// Update-staging hardening uses token/integrity-label and COM GUID APIs.
+#pragma comment(lib, "Advapi32.lib")
+#pragma comment(lib, "Ole32.lib")
 
 namespace
 {
@@ -34,6 +44,91 @@ namespace
         L"https://github.com/marksmayo/WinBlaze/releases/latest";
     constexpr wchar_t kReleaseApiUrl[] =
         L"https://api.github.com/repos/marksmayo/WinBlaze/releases/latest";
+
+    // --- Secure update-staging helpers -------------------------------------
+
+    // SHA-256 of a byte buffer as a hex string, in the same format the download
+    // hash is compared against the release manifest.
+    std::string Sha256Hex(const std::vector<uint8_t>& bytes)
+    {
+        namespace WSC = winrt::Windows::Security::Cryptography;
+        namespace WSCC = winrt::Windows::Security::Cryptography::Core;
+        auto digest = WSCC::HashAlgorithmProvider::OpenAlgorithm(WSCC::HashAlgorithmNames::Sha256())
+                          .HashData(WSC::CryptographicBuffer::CreateFromByteArray(bytes));
+        return winrt::to_string(WSC::CryptographicBuffer::EncodeToHexString(digest));
+    }
+
+    std::vector<uint8_t> ReadAllBytes(const std::filesystem::path& path)
+    {
+        std::ifstream in(path, std::ios::binary);
+        return std::vector<uint8_t>(std::istreambuf_iterator<char>(in),
+                                    std::istreambuf_iterator<char>());
+    }
+
+    // Mandatory-integrity RID of the current process (0x2000 High when elevated,
+    // 0x1000 Medium otherwise). The staging directory is labelled at this level
+    // so a lower-integrity process cannot tamper with it.
+    DWORD CurrentIntegrityRid()
+    {
+        DWORD rid = SECURITY_MANDATORY_MEDIUM_RID;
+        HANDLE token = nullptr;
+        if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
+            DWORD len = 0;
+            GetTokenInformation(token, TokenIntegrityLevel, nullptr, 0, &len);
+            std::vector<uint8_t> buf(len);
+            if (len != 0 &&
+                GetTokenInformation(token, TokenIntegrityLevel, buf.data(), len, &len)) {
+                auto* label = reinterpret_cast<TOKEN_MANDATORY_LABEL*>(buf.data());
+                const UCHAR count = *GetSidSubAuthorityCount(label->Label.Sid);
+                if (count > 0) {
+                    rid = *GetSidSubAuthority(label->Label.Sid, count - 1);
+                }
+            }
+            CloseHandle(token);
+        }
+        return rid;
+    }
+
+    // Applies an inheritable mandatory-integrity label (no-write-up) to `path`,
+    // so processes below `integrityRid` cannot create, delete, or modify
+    // anything under it. Best effort: returns false if it could not be applied.
+    bool ProtectPathIntegrity(const std::wstring& path, DWORD integrityRid)
+    {
+        // OICI => object+container inherit, so children created afterwards are
+        // covered too; NW => no-write-up.
+        const std::wstring sddl =
+            L"S:(ML;OICI;NW;;;S-1-16-" + std::to_wstring(integrityRid) + L")";
+        PSECURITY_DESCRIPTOR sd = nullptr;
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.c_str(), SDDL_REVISION_1, &sd, nullptr)) {
+            return false;
+        }
+        BOOL saclPresent = FALSE;
+        BOOL saclDefaulted = FALSE;
+        PACL sacl = nullptr;
+        bool ok = false;
+        if (GetSecurityDescriptorSacl(sd, &saclPresent, &sacl, &saclDefaulted) && saclPresent) {
+            ok = SetNamedSecurityInfoW(const_cast<LPWSTR>(path.c_str()), SE_FILE_OBJECT,
+                                       LABEL_SECURITY_INFORMATION, nullptr, nullptr, nullptr,
+                                       sacl) == ERROR_SUCCESS;
+        }
+        LocalFree(sd);
+        return ok;
+    }
+
+    // Per-run, unpredictable staging directory name so an attacker cannot
+    // pre-create (and thereby own) the path before WinBlaze does.
+    std::wstring UniqueStagingName()
+    {
+        GUID guid{};
+        if (SUCCEEDED(CoCreateGuid(&guid))) {
+            wchar_t buf[64]{};
+            if (StringFromGUID2(guid, buf, 64) > 0) {
+                return std::wstring(buf); // "{XXXXXXXX-....}"
+            }
+        }
+        return L"stage-" + std::to_wstring(GetCurrentProcessId());
+    }
 
     // GETs a URL off the UI thread; returns an empty string on any network/HTTP
     // failure so callers can treat it as "unknown".
@@ -140,15 +235,31 @@ namespace
         const std::filesystem::path install_dir = exe_path.parent_path();
         wchar_t temp_buf[MAX_PATH]{};
         GetTempPathW(MAX_PATH, temp_buf);
-        const std::filesystem::path work = std::filesystem::path(temp_buf) / L"WinBlazeUpdate";
+        // Stage into a per-run, unpredictable directory labelled at our own
+        // integrity level (no-write-up, inheritable). WinBlaze is meant to run
+        // elevated for the MFT fast path; without this, a lower-integrity
+        // same-user process could swap the extracted files or the updater we
+        // launch after verification and get code executed at high integrity.
+        const std::filesystem::path work =
+            std::filesystem::path(temp_buf) / L"WinBlazeUpdate" / UniqueStagingName();
         const std::filesystem::path stage = work / L"stage";
         const std::filesystem::path zip_path = work / L"download.zip";
         std::error_code ec;
-        std::filesystem::remove_all(work, ec);
-        std::filesystem::create_directories(stage, ec);
+        std::filesystem::create_directories(work, ec);
+        if (!ec) {
+            // Label the root before creating children so they inherit it.
+            ProtectPathIntegrity(work.wstring(), CurrentIntegrityRid());
+            std::filesystem::create_directories(stage, ec);
+        }
+        if (ec) {
+            co_await ui_thread;
+            ShellExecuteW(nullptr, L"open", kReleasesLatestUrl, nullptr, nullptr, SW_SHOWNORMAL);
+            co_return;
+        }
 
         bool ok = false;
         std::string download_hash;
+        std::vector<uint8_t> bytes;
         try {
             const std::wstring url =
                 L"https://github.com/marksmayo/WinBlaze/releases/download/" + tag +
@@ -161,20 +272,10 @@ namespace
                 const uint32_t length = content.Length();
                 if (length > 0) {
                     auto reader = WSS::DataReader::FromBuffer(content);
-                    std::vector<uint8_t> bytes(length);
+                    bytes.resize(length);
                     reader.ReadBytes(bytes);
-                    // SHA-256 of the downloaded bytes, for manifest verification.
-                    namespace WSC = winrt::Windows::Security::Cryptography;
-                    namespace WSCC = winrt::Windows::Security::Cryptography::Core;
-                    auto digest = WSCC::HashAlgorithmProvider::OpenAlgorithm(
-                                      WSCC::HashAlgorithmNames::Sha256())
-                                      .HashData(WSC::CryptographicBuffer::CreateFromByteArray(bytes));
-                    download_hash = winrt::to_string(WSC::CryptographicBuffer::EncodeToHexString(digest));
-                    std::ofstream out(zip_path, std::ios::binary);
-                    out.write(reinterpret_cast<const char*>(bytes.data()),
-                              static_cast<std::streamsize>(bytes.size()));
-                    out.close();
-                    ok = std::filesystem::exists(zip_path);
+                    download_hash = Sha256Hex(bytes); // hash of the downloaded bytes
+                    ok = !download_hash.empty();
                 }
             }
         }
@@ -203,6 +304,24 @@ namespace
             }
         }
 
+        // Persist the verified bytes, then re-hash them FROM DISK before use:
+        // tar extracts the file, not our in-memory buffer, so confirm the file
+        // is byte-identical to what the manifest verified. (No await between
+        // this check and the extraction below.)
+        if (ok) {
+            try {
+                std::ofstream out(zip_path, std::ios::binary);
+                out.write(reinterpret_cast<const char*>(bytes.data()),
+                          static_cast<std::streamsize>(bytes.size()));
+                out.close();
+                ok = std::filesystem::exists(zip_path) &&
+                     Sha256Hex(ReadAllBytes(zip_path)) == download_hash;
+            }
+            catch (...) {
+                ok = false;
+            }
+        }
+
         if (ok) {
             const std::wstring cmd =
                 L"tar.exe -xf \"" + zip_path.wstring() + L"\" -C \"" + stage.wstring() + L"\"";
@@ -210,16 +329,21 @@ namespace
         }
 
         if (ok) {
+            const std::filesystem::path updater_src = install_dir / L"winblaze-updater.exe";
             const std::filesystem::path updater_tmp = work / L"winblaze-updater.exe";
-            std::filesystem::copy_file(install_dir / L"winblaze-updater.exe", updater_tmp,
+            std::filesystem::copy_file(updater_src, updater_tmp,
                                        std::filesystem::copy_options::overwrite_existing, ec);
-            if (!ec && std::filesystem::exists(updater_tmp)) {
+            // Confirm the staged helper is byte-for-byte the trusted installed
+            // one right before launching it (defence in depth atop the label).
+            const bool updater_ok = !ec && std::filesystem::exists(updater_tmp) &&
+                                    ReadAllBytes(updater_tmp) == ReadAllBytes(updater_src);
+            if (updater_ok) {
                 const std::wstring args =
                     L"--pid " + std::to_wstring(GetCurrentProcessId()) +
                     L" --source \"" + stage.wstring() + L"\"" +
                     L" --target \"" + install_dir.wstring() + L"\"" +
                     L" --relaunch \"" + exe_path.wstring() + L"\"" +
-                    L" --cleanup \"" + zip_path.wstring() + L"\"";
+                    L" --cleanup \"" + work.wstring() + L"\"";
                 const auto rc = reinterpret_cast<INT_PTR>(ShellExecuteW(
                     nullptr, L"open", updater_tmp.wstring().c_str(), args.c_str(),
                     work.wstring().c_str(), SW_SHOWNORMAL));
