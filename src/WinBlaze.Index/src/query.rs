@@ -393,4 +393,222 @@ mod tests {
         assert_eq!(catalog.files.len(), 1);
         assert_eq!(catalog.files[0].name, "new.txt");
     }
+
+    fn sample_catalog() -> IndexCatalog {
+        let mut transaction = BufferedIndexTransaction::default();
+        transaction.upsert_directory(&DirectoryRecord {
+            id: DirectoryId(10),
+            parent_directory_id: None,
+            name: String::from("root"),
+            full_path: String::from("C:\\root"),
+            direct_bytes: 100,
+            total_bytes: 200,
+            direct_entries: 3,
+            total_entries: 3,
+        });
+        for (id, name, path, size, alloc, modified) in [
+            (
+                1u64,
+                "alpha.log",
+                "C:\\root\\alpha.log",
+                10u64,
+                16u64,
+                10i64,
+            ),
+            (2, "beta.txt", "C:\\root\\beta.txt", 20, 32, 20),
+            (3, "gamma.txt", "C:\\root\\gamma.txt", 30, 48, 30),
+        ] {
+            transaction.upsert_file(&FileRecord {
+                id: FileId(id),
+                parent_directory_id: DirectoryId(10),
+                name: String::from(name),
+                full_path: String::from(path),
+                size_bytes: size,
+                allocation_bytes: alloc,
+                attributes: FileAttributes::ARCHIVE,
+                created_utc: None,
+                modified_utc: Some(modified),
+                accessed_utc: None,
+            });
+        }
+        IndexCatalog::from_transaction(&transaction)
+    }
+
+    fn names(hits: Vec<IndexSearchHit>) -> Vec<String> {
+        hits.into_iter().map(|hit| hit.name).collect()
+    }
+
+    #[test]
+    fn search_matches_directories_with_prefix_and_name_sort() {
+        let query = SearchQuery {
+            include_files: false,
+            include_directories: true,
+            pattern: Some(String::from("ro")),
+            match_mode: MatchMode::Prefix,
+            sort_field: SortField::Name,
+            sort_direction: SortDirection::Ascending,
+            ..SearchQuery::default()
+        };
+        let hits = sample_catalog().search(&query);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, IndexRecordKind::Directory);
+        assert_eq!(hits[0].name, "root");
+    }
+
+    #[test]
+    fn search_returns_nothing_when_pattern_matches_no_record() {
+        let query = SearchQuery {
+            include_files: true,
+            pattern: Some(String::from("zzz-no-such-name")),
+            ..SearchQuery::default()
+        };
+        assert!(sample_catalog().search(&query).is_empty());
+    }
+
+    #[test]
+    fn search_applies_size_bounds() {
+        let mut query = SearchQuery {
+            include_files: true,
+            ..SearchQuery::default()
+        };
+        query.size.min_bytes = Some(15);
+        query.size.max_bytes = Some(25);
+        assert_eq!(names(sample_catalog().search(&query)), ["beta.txt"]);
+    }
+
+    #[test]
+    fn search_applies_modified_bounds() {
+        let mut after = SearchQuery {
+            include_files: true,
+            sort_field: SortField::ModifiedUtc,
+            sort_direction: SortDirection::Ascending,
+            ..SearchQuery::default()
+        };
+        after.modified.modified_after_utc = Some(15);
+        assert_eq!(
+            names(sample_catalog().search(&after)),
+            ["beta.txt", "gamma.txt"]
+        );
+
+        let mut before = SearchQuery {
+            include_files: true,
+            sort_field: SortField::ModifiedUtc,
+            sort_direction: SortDirection::Ascending,
+            ..SearchQuery::default()
+        };
+        before.modified.modified_before_utc = Some(25);
+        assert_eq!(
+            names(sample_catalog().search(&before)),
+            ["alpha.log", "beta.txt"]
+        );
+    }
+
+    #[test]
+    fn search_honors_each_match_mode() {
+        let catalog = sample_catalog();
+
+        let exact = SearchQuery {
+            include_files: true,
+            pattern: Some(String::from("BETA.TXT")),
+            match_mode: MatchMode::Exact,
+            ..SearchQuery::default()
+        };
+        assert_eq!(names(catalog.search(&exact)), ["beta.txt"]);
+
+        let contains = SearchQuery {
+            include_files: true,
+            pattern: Some(String::from("amm")),
+            match_mode: MatchMode::Contains,
+            ..SearchQuery::default()
+        };
+        assert_eq!(names(catalog.search(&contains)), ["gamma.txt"]);
+
+        // An empty pattern under Contains matches every record.
+        let empty = SearchQuery {
+            include_files: true,
+            pattern: Some(String::new()),
+            match_mode: MatchMode::Contains,
+            ..SearchQuery::default()
+        };
+        assert_eq!(catalog.search(&empty).len(), 3);
+    }
+
+    #[test]
+    fn search_sorts_by_each_field_and_direction() {
+        let catalog = sample_catalog();
+
+        let by_name = SearchQuery {
+            include_files: true,
+            sort_field: SortField::Name,
+            sort_direction: SortDirection::Ascending,
+            ..SearchQuery::default()
+        };
+        assert_eq!(
+            names(catalog.search(&by_name)),
+            ["alpha.log", "beta.txt", "gamma.txt"]
+        );
+
+        let by_path_desc = SearchQuery {
+            include_files: true,
+            sort_field: SortField::Path,
+            sort_direction: SortDirection::Descending,
+            ..SearchQuery::default()
+        };
+        assert_eq!(
+            names(catalog.search(&by_path_desc)),
+            ["gamma.txt", "beta.txt", "alpha.log"]
+        );
+
+        let by_alloc = SearchQuery {
+            include_files: true,
+            sort_field: SortField::AllocationBytes,
+            sort_direction: SortDirection::Ascending,
+            ..SearchQuery::default()
+        };
+        let allocs: Vec<u64> = catalog
+            .search(&by_alloc)
+            .into_iter()
+            .map(|hit| hit.allocation_bytes)
+            .collect();
+        assert_eq!(allocs, [16, 32, 48]);
+
+        let by_modified_desc = SearchQuery {
+            include_files: true,
+            sort_field: SortField::ModifiedUtc,
+            sort_direction: SortDirection::Descending,
+            ..SearchQuery::default()
+        };
+        let mods: Vec<Option<i64>> = catalog
+            .search(&by_modified_desc)
+            .into_iter()
+            .map(|hit| hit.modified_utc)
+            .collect();
+        assert_eq!(mods, [Some(30), Some(20), Some(10)]);
+    }
+
+    #[test]
+    fn search_ignores_extensions_that_normalize_to_nothing() {
+        // "." and "" normalize away, so no extension filter is applied.
+        let query = SearchQuery {
+            include_files: true,
+            extensions: vec![String::from("."), String::new()],
+            ..SearchQuery::default()
+        };
+        assert_eq!(sample_catalog().search(&query).len(), 3);
+    }
+
+    #[test]
+    fn search_filters_by_extension_case_insensitively() {
+        let query = SearchQuery {
+            include_files: true,
+            extensions: vec![String::from("TXT")],
+            sort_field: SortField::Name,
+            sort_direction: SortDirection::Ascending,
+            ..SearchQuery::default()
+        };
+        assert_eq!(
+            names(sample_catalog().search(&query)),
+            ["beta.txt", "gamma.txt"]
+        );
+    }
 }

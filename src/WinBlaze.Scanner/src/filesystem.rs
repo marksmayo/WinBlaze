@@ -197,4 +197,34 @@ mod tests {
             ScanBackend::DirectoryWalk
         );
     }
+
+    #[test]
+    fn select_scan_backend_prefers_mft_for_volume_roots() {
+        assert_eq!(select_scan_backend(Path::new(r"C:\")), ScanBackend::NtfsMft);
+    }
+
+    #[test]
+    fn normalize_scan_root_drops_leading_current_dir() {
+        assert_eq!(
+            normalize_scan_root(Path::new(r".\foo\bar")),
+            PathBuf::from(r"foo\bar")
+        );
+    }
+
+    #[test]
+    fn discover_volume_root_recognizes_unc_shares() {
+        let candidate = discover_volume_root(Path::new(r"\\server\share\dir")).expect("unc share");
+        assert!(candidate.is_unc);
+        assert_eq!(candidate.drive_letter, None);
+        assert_eq!(candidate.root_path, PathBuf::from(r"\\server\share\"));
+    }
+
+    #[test]
+    fn build_scan_access_plan_defaults_empty_root_to_a_drive_root() {
+        let plan = build_scan_access_plan(Path::new(""), ScanBackend::NtfsMft);
+        // An empty root falls back to the first available drive root, and an
+        // empty (non-volume) request downgrades MFT to the directory walk.
+        assert!(plan.available_drive_roots.contains(&plan.selected_root));
+        assert_eq!(plan.primary_backend, ScanBackend::DirectoryWalk);
+    }
 }

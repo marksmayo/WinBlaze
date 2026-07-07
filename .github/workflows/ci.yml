@@ -49,7 +49,7 @@ jobs:
         run: cargo test --workspace --examples
 
       - name: Coverage gate
-        run: powershell.exe -ExecutionPolicy Bypass -File scripts\check-coverage.ps1 -MinLines 80
+        run: powershell.exe -ExecutionPolicy Bypass -File scripts\check-coverage.ps1 -MinLines 92
 
       - name: Build
         run: cargo build --workspace --all-targets

@@ -62,4 +62,31 @@ mod tests {
         assert_eq!(map.get(&512), Some(&"value"));
         assert_eq!(map.get(&2048), None);
     }
+
+    #[test]
+    fn write_u32_and_usize_store_the_value_directly() {
+        let mut hasher = IdHasher::default();
+        hasher.write_u32(0xABCD);
+        assert_eq!(hasher.finish(), 0xABCD);
+
+        let mut hasher = IdHasher::default();
+        hasher.write_usize(42);
+        assert_eq!(hasher.finish(), 42);
+    }
+
+    #[test]
+    fn write_folds_arbitrary_bytes_deterministically() {
+        // state starts at 0: byte 0x01 -> rotate_left(8)^1 = 1; byte 0x02 ->
+        // rotate_left(8)^2 = 0x100 ^ 2 = 0x102.
+        let mut hasher = IdHasher::default();
+        hasher.write(&[0x01, 0x02]);
+        assert_eq!(hasher.finish(), 0x102);
+
+        // Same bytes hash the same way (the map fallback relies on this).
+        let mut a = IdHasher::default();
+        let mut b = IdHasher::default();
+        a.write(&[9, 8, 7, 6]);
+        b.write(&[9, 8, 7, 6]);
+        assert_eq!(a.finish(), b.finish());
+    }
 }

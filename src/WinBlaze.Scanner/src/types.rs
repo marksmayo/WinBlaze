@@ -91,4 +91,41 @@ mod tests {
         };
         assert_eq!(config.backend_hint(), ScanBackend::DirectoryWalk);
     }
+
+    #[test]
+    fn normalized_root_path_strips_dot_segments() {
+        let config = ScanRuntimeConfig {
+            root_path: PathBuf::from(r"C:\a\.\b\..\c"),
+            ..ScanRuntimeConfig::default()
+        };
+        assert_eq!(config.normalized_root_path(), PathBuf::from(r"C:\a\c"));
+    }
+
+    #[test]
+    fn is_long_path_flags_paths_at_the_legacy_limit() {
+        let short = ScanRuntimeConfig {
+            root_path: PathBuf::from(r"C:\short"),
+            ..ScanRuntimeConfig::default()
+        };
+        assert!(!short.is_long_path());
+
+        let long = ScanRuntimeConfig {
+            root_path: PathBuf::from(format!(r"C:\{}", "a".repeat(300))),
+            ..ScanRuntimeConfig::default()
+        };
+        assert!(long.is_long_path());
+    }
+
+    #[test]
+    fn follows_reparse_points_reflects_policy() {
+        // The default policy is SkipAll (disk-usage scans don't descend into
+        // reparse points), so the default does NOT follow them.
+        assert!(!ScanRuntimeConfig::default().follows_reparse_points());
+
+        let follow = ScanRuntimeConfig {
+            reparse_policy: ReparseTraversalPolicy::FollowAll,
+            ..ScanRuntimeConfig::default()
+        };
+        assert!(follow.follows_reparse_points());
+    }
 }

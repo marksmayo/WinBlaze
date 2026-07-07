@@ -13,7 +13,7 @@
 #
 # Requires: cargo-llvm-cov and the llvm-tools-preview component.
 param(
-    [int]$MinLines = 80
+    [int]$MinLines = 92
 )
 $ErrorActionPreference = "Stop"
 

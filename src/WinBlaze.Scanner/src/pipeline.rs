@@ -221,4 +221,57 @@ mod tests {
         pipeline.emit_file(FileRecord::default());
         assert_eq!(rx.try_recv().expect("batch at batch_size").len(), 3);
     }
+
+    fn roomy_config() -> ScanPipelineConfig {
+        ScanPipelineConfig {
+            batch_size: 100,
+            max_in_flight_events: 1000,
+            max_in_flight_bytes: 1 << 20,
+        }
+    }
+
+    #[test]
+    fn emit_event_handles_every_variant_in_order() {
+        let (tx, rx) = mpsc::channel();
+        let mut pipeline = ScanEventPipeline::new(tx, roomy_config());
+
+        pipeline.emit_event(ScanEvent::VolumeDiscovered(VolumeRecord::default()));
+        pipeline.emit_event(ScanEvent::DirectoryFound(DirectoryRecord::default()));
+        pipeline.emit_event(ScanEvent::FileFound(FileRecord {
+            size_bytes: 7,
+            ..FileRecord::default()
+        }));
+        pipeline.emit_event(ScanEvent::Issue(ScanIssueRecord {
+            kind: winblaze_core::ScanIssueKind::Unknown,
+            path: None,
+            message: String::from("test"),
+        }));
+        pipeline.emit_event(ScanEvent::Summary(ScanSummary::default()));
+        pipeline.emit_event(ScanEvent::Progress(ScanProgress::default()));
+        pipeline.emit_event(ScanEvent::Failed(String::from("boom")));
+        pipeline.emit_event(ScanEvent::Completed);
+        pipeline.emit_event(ScanEvent::Cancelled);
+        pipeline.flush();
+
+        let events: Vec<ScanEvent> = rx.try_iter().flatten().collect();
+        assert_eq!(events.len(), 9);
+        assert!(matches!(events[0], ScanEvent::VolumeDiscovered(_)));
+        assert!(matches!(events[2], ScanEvent::FileFound(_)));
+        assert!(matches!(events[8], ScanEvent::Cancelled));
+    }
+
+    #[test]
+    fn dedicated_emitters_enqueue_and_terminal_forces_flush() {
+        let (tx, rx) = mpsc::channel();
+        let mut pipeline = ScanEventPipeline::new(tx, roomy_config());
+
+        pipeline.emit_volume_discovered(VolumeRecord::default());
+        // A cancelled event is terminal, so it force-flushes everything queued.
+        pipeline.emit_cancelled();
+
+        let events: Vec<ScanEvent> = rx.try_iter().flatten().collect();
+        assert_eq!(events.len(), 2);
+        assert!(matches!(events[0], ScanEvent::VolumeDiscovered(_)));
+        assert!(matches!(events[1], ScanEvent::Cancelled));
+    }
 }

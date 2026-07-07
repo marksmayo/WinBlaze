@@ -262,4 +262,37 @@ mod tests {
         );
         fs::remove_dir_all(&root).ok();
     }
+
+    #[test]
+    fn parse_args_rejects_unknown_flags() {
+        let result = parse_args(["--bogus", "x"].into_iter().map(String::from));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn copy_file_with_retry_gives_up_after_exhausting_retries() {
+        let root = temp_dir("retry");
+        let missing = root.join("does-not-exist.bin");
+        let destination = root.join("out.bin");
+        // One retry: the copy fails, sleeps, retries, then returns the error.
+        assert!(copy_file_with_retry(&missing, &destination, 1).is_err());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn resolve_source_falls_back_to_source_when_no_executable_found() {
+        let root = temp_dir("resolve-fallback");
+        // No relaunch hint: the source is returned unchanged.
+        assert_eq!(resolve_source(&root, None), root);
+
+        // A relaunch hint, but neither the source nor a single subdirectory
+        // holds the executable (two subdirs -> not a lone portable folder).
+        fs::create_dir_all(root.join("one")).unwrap();
+        fs::create_dir_all(root.join("two")).unwrap();
+        assert_eq!(
+            resolve_source(&root, Some(Path::new(r"C:\app\WinBlaze.UI.exe"))),
+            root
+        );
+        fs::remove_dir_all(&root).ok();
+    }
 }
