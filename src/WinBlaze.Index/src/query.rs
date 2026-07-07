@@ -173,15 +173,17 @@ fn matches_query(
     }
 
     if !normalized_extensions.is_empty() {
-        // Extract and lowercase the file extension once; compare against pre-normalized
-        // query extensions (no per-entry normalize_extension() calls needed).
+        // Compare the raw extension case-insensitively against the already
+        // lowercased query extensions — no per-entry String allocation.
         let extension = std::path::Path::new(file_params.full_path)
             .extension()
-            .and_then(|value| value.to_str())
-            .map(|value| value.to_ascii_lowercase());
+            .and_then(|value| value.to_str());
 
         match extension {
-            Some(ref value) if normalized_extensions.iter().any(|ext| ext == value) => {}
+            Some(raw)
+                if normalized_extensions
+                    .iter()
+                    .any(|ext| ext.eq_ignore_ascii_case(raw)) => {}
             _ => return false,
         }
     }

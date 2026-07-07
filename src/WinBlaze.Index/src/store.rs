@@ -187,10 +187,19 @@ impl SqliteIndexRepository {
         // full paths, and scanners no longer store them per file.
         let previous_files = self.state.snapshot_files_with_paths();
         let current_files = transaction.snapshot_files_with_paths();
-        let mut merged = transaction.clone();
-        merged.files = self.state.files.clone();
-        merged.lineages = self.state.lineages.clone();
-        merged.file_changes = self.state.file_changes.clone();
+        // Keep the new scan's volumes/sessions/directories but the prior state's
+        // files/lineages/file_changes. Building the struct directly avoids
+        // `transaction.clone()` deep-copying millions of new-scan file records
+        // that the next lines would only overwrite.
+        let mut merged = BufferedIndexTransaction {
+            volumes: transaction.volumes.clone(),
+            sessions: transaction.sessions.clone(),
+            directories: transaction.directories.clone(),
+            files: self.state.files.clone(),
+            lineages: self.state.lineages.clone(),
+            file_changes: self.state.file_changes.clone(),
+            committed: transaction.committed,
+        };
         let change_set = merged.apply_incremental_files(&previous_files, &current_files);
         self.state = merged;
         persist_index_state(&self.storage_path, &self.state)?;
@@ -206,11 +215,20 @@ impl SqliteIndexRepository {
         let previous_files = self.state.snapshot_files_with_paths();
         let current_files =
             remap_current_files_by_path(&previous_files, transaction.snapshot_files_with_paths());
-        let mut current_transaction = transaction.clone();
-        current_transaction.files = current_files
-            .into_iter()
-            .map(|file| (file.id, file))
-            .collect();
+        // Set `files` to the remapped set directly rather than cloning the whole
+        // transaction (millions of file records) only to overwrite `.files`.
+        let current_transaction = BufferedIndexTransaction {
+            volumes: transaction.volumes.clone(),
+            sessions: transaction.sessions.clone(),
+            directories: transaction.directories.clone(),
+            files: current_files
+                .into_iter()
+                .map(|file| (file.id, file))
+                .collect(),
+            lineages: transaction.lineages.clone(),
+            file_changes: transaction.file_changes.clone(),
+            committed: transaction.committed,
+        };
         self.apply_incremental_transaction(&current_transaction)
     }
 
@@ -366,25 +384,27 @@ impl BufferedIndexTransaction {
 
     pub fn snapshot_volumes(&self) -> Vec<VolumeRecord> {
         let mut volumes = Vec::from_iter(self.volumes.values().cloned());
-        volumes.sort_by_key(|volume| volume.id.0);
+        // Keys are the map keys (unique), so unstable sort yields identical
+        // order without the stable sort's O(n) scratch allocation.
+        volumes.sort_unstable_by_key(|volume| volume.id.0);
         volumes
     }
 
     pub fn snapshot_sessions(&self) -> Vec<ScanSession> {
         let mut sessions = Vec::from_iter(self.sessions.values().cloned());
-        sessions.sort_by_key(|session| session.session_id);
+        sessions.sort_unstable_by_key(|session| session.session_id);
         sessions
     }
 
     pub fn snapshot_directories(&self) -> Vec<DirectoryRecord> {
         let mut directories = Vec::from_iter(self.directories.values().cloned());
-        directories.sort_by_key(|directory| directory.id.0);
+        directories.sort_unstable_by_key(|directory| directory.id.0);
         directories
     }
 
     pub fn snapshot_files(&self) -> Vec<FileRecord> {
         let mut files = Vec::from_iter(self.files.values().cloned());
-        files.sort_by_key(|file| file.id.0);
+        files.sort_unstable_by_key(|file| file.id.0);
         files
     }
 
@@ -703,34 +723,25 @@ fn deserialize_state_from_reader<R: Read>(
 
     let volumes = read_volume_records(&mut cursor)?;
     let sessions = read_session_records(&mut cursor)?;
+    // Directories and files are read straight into their pre-sized maps.
     let directories = read_directory_records(&mut cursor)?;
     let files = read_file_records(&mut cursor, version)?;
     let lineages = read_lineage_records(&mut cursor)?;
     let file_changes = read_change_sets(&mut cursor)?;
 
-    // Pre-size each HashMap to the exact entry count read from the binary header.
-    // HashMap::from_iter without a size hint causes repeated rehashing (O(log N) events)
-    // as the map grows; with a known count we pay for exactly one bucket allocation per
-    // map regardless of catalog size.  For a 500k-file index this removes ~76 total
-    // reallocation events spread across all four maps.
+    // Volumes/sessions are small; pre-size their maps to the header count so
+    // they allocate their buckets exactly once instead of rehashing as they grow.
     let mut volumes_map = HashMap::with_capacity(volumes.len());
     volumes_map.extend(volumes.into_iter().map(|v| (v.id, v)));
 
     let mut sessions_map = HashMap::with_capacity(sessions.len());
     sessions_map.extend(sessions.into_iter().map(|s| (s.session_id, s)));
 
-    let mut directories_map =
-        IdHashMap::with_capacity_and_hasher(directories.len(), Default::default());
-    directories_map.extend(directories.into_iter().map(|d| (d.id, d)));
-
-    let mut files_map = IdHashMap::with_capacity_and_hasher(files.len(), Default::default());
-    files_map.extend(files.into_iter().map(|f| (f.id, f)));
-
     Ok(BufferedIndexTransaction {
         volumes: volumes_map,
         sessions: sessions_map,
-        directories: directories_map,
-        files: files_map,
+        directories,
+        files,
         lineages,
         file_changes,
         committed: false,
@@ -941,10 +952,12 @@ fn read_session_records<R: Read>(
 
 fn read_directory_records<R: Read>(
     cursor: &mut SnapshotReader<R>,
-) -> Result<Vec<DirectoryRecord>, IndexStorageError> {
+) -> Result<IdHashMap<DirectoryId, DirectoryRecord>, IndexStorageError> {
     let len = read_len(cursor)?;
     validate_collection_len(cursor, len, 41, "directory records")?;
-    let mut directories = Vec::with_capacity(len);
+    // Insert straight into the pre-sized map instead of a transient Vec that
+    // would then be moved element-by-element into the map.
+    let mut directories = IdHashMap::with_capacity_and_hasher(len, Default::default());
     for _ in 0..len {
         let id = DirectoryId(read_u64(cursor)?);
         let parent_directory_id = match read_u8(cursor)? {
@@ -957,7 +970,7 @@ fn read_directory_records<R: Read>(
             }
         };
 
-        directories.push(DirectoryRecord {
+        let record = DirectoryRecord {
             id,
             parent_directory_id,
             name: read_string(cursor)?,
@@ -966,7 +979,8 @@ fn read_directory_records<R: Read>(
             total_bytes: read_u64(cursor)?,
             direct_entries: read_u64(cursor)?,
             total_entries: read_u64(cursor)?,
-        });
+        };
+        directories.insert(id, record);
     }
     Ok(directories)
 }
@@ -974,14 +988,15 @@ fn read_directory_records<R: Read>(
 fn read_file_records<R: Read>(
     cursor: &mut SnapshotReader<R>,
     version: u32,
-) -> Result<Vec<FileRecord>, IndexStorageError> {
+) -> Result<IdHashMap<FileId, FileRecord>, IndexStorageError> {
     let len = read_len(cursor)?;
     let min_bytes_per_item = if version >= 2 { 48 } else { 57 };
     validate_collection_len(cursor, len, min_bytes_per_item, "file records")?;
-    let mut files = Vec::with_capacity(len);
+    let mut files = IdHashMap::with_capacity_and_hasher(len, Default::default());
     for _ in 0..len {
-        files.push(FileRecord {
-            id: FileId(read_u64(cursor)?),
+        let id = FileId(read_u64(cursor)?);
+        let record = FileRecord {
+            id,
             parent_directory_id: DirectoryId(read_u64(cursor)?),
             name: read_string(cursor)?,
             full_path: read_snapshot_path(cursor, version)?,
@@ -991,7 +1006,8 @@ fn read_file_records<R: Read>(
             created_utc: read_option_i64(cursor)?,
             modified_utc: read_option_i64(cursor)?,
             accessed_utc: read_option_i64(cursor)?,
-        });
+        };
+        files.insert(id, record);
     }
     Ok(files)
 }

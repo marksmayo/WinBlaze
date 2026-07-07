@@ -144,7 +144,7 @@ fn aggregate_extension_chunk(files: &[FileRecord]) -> HashMap<String, (u64, u64)
             Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => ext,
             _ => "",
         };
-        let entry = if !raw.contains(|ch: char| ch.is_ascii_uppercase()) {
+        let entry = if !raw.bytes().any(|b| b.is_ascii_uppercase()) {
             match totals.get_mut(raw) {
                 Some(entry) => entry,
                 None => totals.entry(raw.to_string()).or_insert((0, 0)),
@@ -661,7 +661,13 @@ fn forward_events(
         ui_forwarder.forward(&event);
 
         let flush_requested = should_flush_index(&event, persistence_mode);
-        let flush_trigger = event_name(&event);
+        // Only label the trigger when a flush is actually requested (rare);
+        // flush_trigger is read only inside the flush branch below.
+        let flush_trigger = if flush_requested {
+            event_name(&event)
+        } else {
+            ""
+        };
         records_dirty |= persist_scan_event(&mut transaction, event);
 
         if flush_requested && (records_dirty || !flushed) && !model_published {
@@ -796,9 +802,10 @@ fn extension_key(file_name: &str) -> String {
 /// Best-effort friendly label for the extension breakdown table. Unknown
 /// extensions fall back to "<EXT> File"; matches the spirit (not an exact
 /// copy) of the descriptions shown by tools like WizTree.
-fn extension_description(extension: &str) -> String {
+fn extension_description(extension: &str) -> std::borrow::Cow<'static, str> {
+    use std::borrow::Cow;
     if extension.is_empty() {
-        return "No extension".to_string();
+        return Cow::Borrowed("No extension");
     }
     let description = match extension {
         "exe" => "Application",
@@ -844,9 +851,9 @@ fn extension_description(extension: &str) -> String {
         "md" => "Markdown document",
         "html" | "htm" => "HTML document",
         "css" => "Stylesheet",
-        _ => return format!("{} File", extension.to_ascii_uppercase()),
+        _ => return Cow::Owned(format!("{} File", extension.to_ascii_uppercase())),
     };
-    description.to_string()
+    Cow::Borrowed(description)
 }
 
 struct OwnedExtensionStats {
@@ -870,12 +877,12 @@ fn sorted_top_extension_totals(mut totals: Vec<(String, u64, u64)>) -> Vec<(Stri
 
 fn build_extension_stats(totals: Vec<(String, u64, u64)>) -> OwnedExtensionStats {
     let totals = sorted_top_extension_totals(totals);
-    let mut strings = Vec::new();
+    let mut strings = Vec::with_capacity(totals.len() * 2);
     let items = totals
         .into_iter()
         .map(|(extension, bytes, files)| WbExtensionStat {
             extension: c_view_str(&extension, &mut strings),
-            description: c_view(extension_description(&extension), &mut strings),
+            description: c_view_str(&extension_description(&extension), &mut strings),
             bytes,
             files,
         })
@@ -1146,6 +1153,7 @@ fn event_name(event: &ScanEvent) -> &'static str {
 }
 
 fn json_escape(value: &str) -> String {
+    use std::fmt::Write as _;
     let mut escaped = String::with_capacity(value.len());
     for ch in value.chars() {
         match ch {
@@ -1154,7 +1162,10 @@ fn json_escape(value: &str) -> String {
             '\n' => escaped.push_str("\\n"),
             '\r' => escaped.push_str("\\r"),
             '\t' => escaped.push_str("\\t"),
-            ch if ch.is_control() => escaped.push_str(&format!("\\u{:04x}", ch as u32)),
+            // Write straight into the buffer instead of allocating a temp String.
+            ch if ch.is_control() => {
+                let _ = write!(escaped, "\\u{:04x}", ch as u32);
+            }
             ch => escaped.push(ch),
         }
     }
@@ -1320,20 +1331,29 @@ fn load_extension_stats_from_snapshot(
     };
 
     let model = get_or_load_index_model();
-    for (extension, bytes, files) in model.extension_top.iter().cloned() {
-        let mut strings = Vec::new();
+    for (extension, bytes, files) in &model.extension_top {
+        let mut strings = Vec::with_capacity(2);
         let entry = WbExtensionStat {
-            extension: c_view_str(&extension, &mut strings),
-            description: c_view(extension_description(&extension), &mut strings),
-            bytes,
-            files,
+            extension: c_view_str(extension, &mut strings),
+            description: c_view_str(&extension_description(extension), &mut strings),
+            bytes: *bytes,
+            files: *files,
         };
         cb(&entry as *const WbExtensionStat, user_data);
     }
 }
 
 fn c_view(text: String, strings: &mut Vec<CString>) -> WbCStringView {
-    c_view_str(&text, strings)
+    // Build the CString from the owned String (into_bytes is zero-copy) rather
+    // than re-borrowing through c_view_str, which would allocate + memcpy a
+    // fresh buffer and then free this one.
+    let c_string = CString::new(text).unwrap_or_default();
+    let view = WbCStringView {
+        ptr: c_string.as_ptr(),
+        len: c_string.as_bytes().len(),
+    };
+    strings.push(c_string);
+    view
 }
 
 fn c_view_str(text: &str, strings: &mut Vec<CString>) -> WbCStringView {
@@ -1407,7 +1427,7 @@ fn index_snapshot_stats() -> WbIndexSnapshotStats {
 }
 
 fn catalog_entry_from_volume(volume: &VolumeRecord) -> OwnedCatalogEntry {
-    let mut strings = Vec::new();
+    let mut strings = Vec::with_capacity(5); // name, path, kind, size_text, description
     let name = volume.label.as_deref().unwrap_or(&volume.mount_point);
     let entry = WbCatalogEntry {
         name: c_view_str(name, &mut strings),
@@ -1435,7 +1455,7 @@ fn catalog_entry_from_volume(volume: &VolumeRecord) -> OwnedCatalogEntry {
 }
 
 fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntry {
-    let mut strings = Vec::new();
+    let mut strings = Vec::with_capacity(5); // name, path, kind, size_text, description
     let entry = WbCatalogEntry {
         name: c_view_str(&directory.name, &mut strings),
         path: c_view_str(&directory.full_path, &mut strings),
@@ -1468,7 +1488,7 @@ fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntr
 }
 
 fn catalog_entry_from_file(file: &FileRecord, full_path: &str) -> OwnedCatalogEntry {
-    let mut strings = Vec::new();
+    let mut strings = Vec::with_capacity(5); // name, path, kind, size_text, description
     let entry = WbCatalogEntry {
         name: c_view_str(&file.name, &mut strings),
         path: c_view_str(full_path, &mut strings),

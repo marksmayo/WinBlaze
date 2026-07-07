@@ -1874,7 +1874,9 @@ fn parse_record_range(
     start_record: usize,
     end_record: usize,
 ) -> Result<(Vec<ParsedNtfsEntry>, Vec<ExtensionSizes>), NtfsEnumerationError> {
-    let mut entries = Vec::new();
+    // Almost every record yields an entry, so the record count is a tight upper
+    // bound — pre-size to avoid regrowth across the chunk. Extensions are rare.
+    let mut entries = Vec::with_capacity(end_record.saturating_sub(start_record));
     let mut extensions = Vec::new();
     for index in start_record..end_record {
         let start = index * NTFS_RECORD_SIZE;
@@ -1991,6 +1993,7 @@ fn parse_entries(
 
     let total_size_bytes = sum_u64_saturating(files.iter().map(|file| file.size_bytes));
     let total_allocation_bytes = sum_u64_saturating(files.iter().map(|file| file.allocation_bytes));
+    let (files_seen, directories_seen) = count_entries(&entries);
 
     Ok(NtfsEnumeration {
         volume: VolumeRecord {
@@ -2005,8 +2008,8 @@ fn parse_entries(
         directories,
         files,
         summary: ScanSummary {
-            files_seen: total_file_count(&entries),
-            directories_seen: total_directory_count(&entries),
+            files_seen,
+            directories_seen,
             total_size_bytes,
             total_allocation_bytes,
         },
@@ -2069,12 +2072,14 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
     let mut has_attribute_list = false;
 
     while cursor + 8 <= record.len() {
-        let attribute_type = read_u32(record, cursor)?;
+        // The loop condition proves cursor+8 <= len, so these two reads are
+        // in bounds without the checked helper's per-attribute branch.
+        let attribute_type = le_u32(record, cursor);
         if attribute_type == u32::MAX {
             break;
         }
 
-        let attribute_length = read_u32(record, cursor + 4)? as usize;
+        let attribute_length = le_u32(record, cursor + 4) as usize;
         if attribute_length == 0 || cursor + attribute_length > record.len() {
             break;
         }
@@ -2302,11 +2307,16 @@ fn resolve_entry_path(
 }
 
 fn join_path(base: &str, child: &str) -> String {
-    if base.ends_with('\\') {
-        format!("{base}{child}")
-    } else {
-        format!("{base}\\{child}")
+    // Exactly-sized single allocation; avoids the format! machinery on the
+    // per-directory path-join.
+    let needs_sep = !base.ends_with('\\');
+    let mut path = String::with_capacity(base.len() + usize::from(needs_sep) + child.len());
+    path.push_str(base);
+    if needs_sep {
+        path.push('\\');
     }
+    path.push_str(child);
+    path
 }
 
 pub fn measure_metadata_extraction_overhead(
@@ -2333,12 +2343,19 @@ pub fn measure_metadata_extraction_overhead(
     })
 }
 
-fn total_file_count(entries: &IdHashMap<u64, ParsedNtfsEntry>) -> u64 {
-    entries.values().filter(|entry| !entry.is_directory).count() as u64
-}
-
-fn total_directory_count(entries: &IdHashMap<u64, ParsedNtfsEntry>) -> u64 {
-    entries.values().filter(|entry| entry.is_directory).count() as u64
+/// Counts files and directories in one pass over the entries (rather than two
+/// full `values()` scans).
+fn count_entries(entries: &IdHashMap<u64, ParsedNtfsEntry>) -> (u64, u64) {
+    let mut files = 0u64;
+    let mut directories = 0u64;
+    for entry in entries.values() {
+        if entry.is_directory {
+            directories += 1;
+        } else {
+            files += 1;
+        }
+    }
+    (files, directories)
 }
 
 fn sum_u64_saturating(values: impl Iterator<Item = u64>) -> u64 {
