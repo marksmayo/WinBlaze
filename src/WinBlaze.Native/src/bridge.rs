@@ -45,7 +45,7 @@ const DIRECTORY_BATCH_MAX_LATENCY: Duration = Duration::from_millis(250);
 /// the multi-hundred-MB snapshot file on every FFI call.
 struct IndexModel {
     tree: TreeIndex,
-    extension_totals: Vec<(String, u64, u64)>,
+    extension_top: Vec<(String, u64, u64)>,
     cache_read_bytes: u64,
     cache_read_millis: u64,
     cache_decode_millis: u64,
@@ -80,13 +80,13 @@ fn build_index_model(
     cache_stats: Option<(u64, u64, u64, bool)>,
 ) -> IndexModel {
     let tree = TreeIndex::build(transaction);
-    let extension_totals = aggregate_extension_totals(tree.files());
+    let extension_top = sorted_top_extension_totals(aggregate_extension_totals(tree.files()));
 
     let (read_bytes, read_millis, decode_millis, from_backup) =
         cache_stats.unwrap_or((0, 0, 0, false));
     IndexModel {
         tree,
-        extension_totals,
+        extension_top,
         cache_read_bytes: read_bytes,
         cache_read_millis: read_millis,
         cache_decode_millis: decode_millis,
@@ -434,11 +434,12 @@ impl UiEventForwarder {
         }
         self.last_extension_stats_at = Some(now);
 
-        let stats: Vec<(String, u64, u64)> = self
-            .extension_totals
-            .iter()
-            .map(|(extension, (bytes, files))| (extension.clone(), *bytes, *files))
-            .collect();
+        let stats = sorted_top_extension_totals(
+            self.extension_totals
+                .iter()
+                .map(|(extension, (bytes, files))| (extension.clone(), *bytes, *files))
+                .collect(),
+        );
         emit_extension_stats(cb, self.user_data, stats);
     }
 
@@ -857,8 +858,13 @@ struct OwnedExtensionStats {
 /// the FFI payload (and the UI table) stay bounded regardless of how many
 /// distinct extensions a scan encounters.
 fn sorted_top_extension_totals(mut totals: Vec<(String, u64, u64)>) -> Vec<(String, u64, u64)> {
-    totals.sort_by_key(|entry| std::cmp::Reverse(entry.1));
-    totals.truncate(EXTENSION_STATS_TOP_LIMIT);
+    if totals.len() > EXTENSION_STATS_TOP_LIMIT {
+        totals.select_nth_unstable_by(EXTENSION_STATS_TOP_LIMIT, |left, right| {
+            right.1.cmp(&left.1)
+        });
+        totals.truncate(EXTENSION_STATS_TOP_LIMIT);
+    }
+    totals.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.1));
     totals
 }
 
@@ -868,7 +874,7 @@ fn build_extension_stats(totals: Vec<(String, u64, u64)>) -> OwnedExtensionStats
     let items = totals
         .into_iter()
         .map(|(extension, bytes, files)| WbExtensionStat {
-            extension: c_view(extension.clone(), &mut strings),
+            extension: c_view_str(&extension, &mut strings),
             description: c_view(extension_description(&extension), &mut strings),
             bytes,
             files,
@@ -1163,7 +1169,7 @@ fn json_escape(value: &str) -> String {
 fn convert_directory_event(directory: &DirectoryRecord) -> OwnedEvent {
     let mut strings = Vec::new();
     let entry = WbCatalogEntry {
-        name: c_view(directory.name.clone(), &mut strings),
+        name: c_view_str(&directory.name, &mut strings),
         id: directory.id.0,
         parent_id: directory
             .parent_directory_id
@@ -1314,12 +1320,10 @@ fn load_extension_stats_from_snapshot(
     };
 
     let model = get_or_load_index_model();
-    let totals = sorted_top_extension_totals(model.extension_totals.clone());
-
-    for (extension, bytes, files) in totals {
+    for (extension, bytes, files) in model.extension_top.iter().cloned() {
         let mut strings = Vec::new();
         let entry = WbExtensionStat {
-            extension: c_view(extension.clone(), &mut strings),
+            extension: c_view_str(&extension, &mut strings),
             description: c_view(extension_description(&extension), &mut strings),
             bytes,
             files,
@@ -1329,6 +1333,10 @@ fn load_extension_stats_from_snapshot(
 }
 
 fn c_view(text: String, strings: &mut Vec<CString>) -> WbCStringView {
+    c_view_str(&text, strings)
+}
+
+fn c_view_str(text: &str, strings: &mut Vec<CString>) -> WbCStringView {
     let c_string = CString::new(text).unwrap_or_default();
     let view = WbCStringView {
         ptr: c_string.as_ptr(),
@@ -1400,16 +1408,11 @@ fn index_snapshot_stats() -> WbIndexSnapshotStats {
 
 fn catalog_entry_from_volume(volume: &VolumeRecord) -> OwnedCatalogEntry {
     let mut strings = Vec::new();
+    let name = volume.label.as_deref().unwrap_or(&volume.mount_point);
     let entry = WbCatalogEntry {
-        name: c_view(
-            volume
-                .label
-                .clone()
-                .unwrap_or_else(|| volume.mount_point.clone()),
-            &mut strings,
-        ),
-        path: c_view(volume.mount_point.clone(), &mut strings),
-        kind: c_view("Volume".to_string(), &mut strings),
+        name: c_view_str(name, &mut strings),
+        path: c_view_str(&volume.mount_point, &mut strings),
+        kind: c_view_str("Volume", &mut strings),
         size_text: c_view(format_size(volume.total_bytes), &mut strings),
         description: c_view(
             format!("Root directory id {}", volume.root_directory_id.0),
@@ -1434,9 +1437,9 @@ fn catalog_entry_from_volume(volume: &VolumeRecord) -> OwnedCatalogEntry {
 fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntry {
     let mut strings = Vec::new();
     let entry = WbCatalogEntry {
-        name: c_view(directory.name.clone(), &mut strings),
-        path: c_view(directory.full_path.clone(), &mut strings),
-        kind: c_view("Directory".to_string(), &mut strings),
+        name: c_view_str(&directory.name, &mut strings),
+        path: c_view_str(&directory.full_path, &mut strings),
+        kind: c_view_str("Directory", &mut strings),
         size_text: c_view(format_size(directory.total_bytes), &mut strings),
         description: c_view(
             format!(
@@ -1467,9 +1470,9 @@ fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntr
 fn catalog_entry_from_file(file: &FileRecord, full_path: &str) -> OwnedCatalogEntry {
     let mut strings = Vec::new();
     let entry = WbCatalogEntry {
-        name: c_view(file.name.clone(), &mut strings),
-        path: c_view(full_path.to_string(), &mut strings),
-        kind: c_view("File".to_string(), &mut strings),
+        name: c_view_str(&file.name, &mut strings),
+        path: c_view_str(full_path, &mut strings),
+        kind: c_view_str("File", &mut strings),
         size_text: c_view(format_size(file.size_bytes), &mut strings),
         description: c_view(
             format!("allocation {} bytes", file.allocation_bytes),
@@ -1684,7 +1687,7 @@ pub extern "C" fn wb_tree_root(
     let node = WbTreeNode {
         id: record.id.0,
         is_directory: 1,
-        name: c_view(record.full_path.clone(), &mut strings),
+        name: c_view_str(&record.full_path, &mut strings),
         logical_bytes: rollup.logical_bytes,
         physical_bytes: rollup.physical_bytes,
         file_count: rollup.file_count,
@@ -1720,7 +1723,7 @@ pub extern "C" fn wb_tree_children(
                 TreeEntry::Directory { record, rollup } => WbTreeNode {
                     id: record.id.0,
                     is_directory: 1,
-                    name: c_view(record.name.clone(), &mut strings),
+                    name: c_view_str(&record.name, &mut strings),
                     logical_bytes: rollup.logical_bytes,
                     physical_bytes: rollup.physical_bytes,
                     file_count: rollup.file_count,
@@ -1731,7 +1734,7 @@ pub extern "C" fn wb_tree_children(
                 TreeEntry::File(file) => WbTreeNode {
                     id: file.id.0,
                     is_directory: 0,
-                    name: c_view(file.name.clone(), &mut strings),
+                    name: c_view_str(&file.name, &mut strings),
                     logical_bytes: file.size_bytes,
                     physical_bytes: file.allocation_bytes,
                     file_count: 0,

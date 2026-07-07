@@ -4296,6 +4296,7 @@ namespace winrt::WinBlaze::UI::implementation
         auto dispatcher = DispatcherQueue();
         std::thread([this, generation, dispatcher]() {
             auto snapshot = std::make_shared<std::vector<TreeCatalogEntry>>();
+            snapshot->reserve(kCatalogSnapshotLoadLimit);
             WbIndexSnapshotStats stats{};
             stats = ::WinBlaze::UI::NativeBridge::LoadCatalogSnapshotWithStats(
                 [&snapshot, this](WbCatalogEntry const& entry) {
@@ -4352,11 +4353,7 @@ namespace winrt::WinBlaze::UI::implementation
             UpdateStatus(L"No catalog snapshot available.");
             return;
         }
-        for (auto const& entry : snapshot) {
-            if (m_tree_catalog_keys.insert(TreeCatalogKey(entry)).second) {
-                m_tree_catalog.push_back(entry);
-            }
-        }
+        m_tree_catalog = std::move(snapshot);
 
         m_has_results = true;
         m_instant_search_hits = FilterTreeCatalog();
@@ -6317,6 +6314,7 @@ namespace winrt::WinBlaze::UI::implementation
     void MainWindow::LoadExtensionStatsSnapshot()
     {
         std::vector<ExtensionStatEntry> entries;
+        entries.reserve(40);
         ::WinBlaze::UI::NativeBridge::LoadExtensionStatsSnapshot(
             [&entries](WbExtensionStat const& entry) {
                 entries.push_back(ExtensionStatFromNative(entry));
@@ -6357,6 +6355,8 @@ namespace winrt::WinBlaze::UI::implementation
             extension_start = next + 1;
         }
 
+        std::sort(extension_tokens.begin(), extension_tokens.end());
+
         auto matches_text = [&](std::wstring const& value) {
             if (pattern.empty()) {
                 return true;
@@ -6385,13 +6385,10 @@ namespace winrt::WinBlaze::UI::implementation
             if (entry.extension_lower.empty()) {
                 return false;
             }
-            for (auto const& token : extension_tokens) {
-                if (token == entry.extension_lower) {
-                    return true;
-                }
-            }
-
-            return false;
+            return std::binary_search(
+                extension_tokens.begin(),
+                extension_tokens.end(),
+                entry.extension_lower);
         };
 
         auto matches_size = [&](TreeCatalogEntry const& entry) {
@@ -6450,105 +6447,6 @@ namespace winrt::WinBlaze::UI::implementation
         });
 
         return entries;
-    }
-
-    bool MainWindow::MatchesInstantSearch(TreeCatalogEntry const& entry) const
-    {
-        const std::wstring pattern = SearchBox() ? LowercaseCopy(SearchBox().Text().c_str()) : L"";
-        const std::wstring extensions = ExtensionBox() ? LowercaseCopy(ExtensionBox().Text().c_str()) : L"";
-        const std::wstring minimum_size_text = MinSizeBox() ? MinSizeBox().Text().c_str() : L"";
-        const std::wstring modified_after_text = ModifiedAfterBox() ? ModifiedAfterBox().Text().c_str() : L"";
-        const std::wstring modified_before_text = ModifiedBeforeBox() ? ModifiedBeforeBox().Text().c_str() : L"";
-        const std::wstring match_mode = MatchModeBox() ? ComboBoxSelectionText(MatchModeBox(), L"Substring") : L"Substring";
-
-        const auto minimum_size = ParseSizeTextBytes(minimum_size_text);
-
-        const auto modified_after = ParseUtcDateBoundary(modified_after_text);
-        const auto modified_before = ParseUtcDateBoundary(modified_before_text);
-        std::vector<std::wstring> extension_tokens;
-        size_t extension_start = 0;
-        while (extension_start <= extensions.size()) {
-            const auto next = extensions.find(L';', extension_start);
-            std::wstring token = extensions.substr(
-                extension_start,
-                next == std::wstring::npos ? std::wstring::npos : next - extension_start);
-            token.erase(std::remove_if(token.begin(), token.end(), ::iswspace), token.end());
-            if (!token.empty()) {
-                extension_tokens.push_back(std::move(token));
-            }
-            if (next == std::wstring::npos) {
-                break;
-            }
-            extension_start = next + 1;
-        }
-
-        auto matches_text = [&](std::wstring const& value) {
-            if (pattern.empty()) {
-                return true;
-            }
-
-            if (match_mode == L"Exact") {
-                return value == pattern ||
-                    value.rfind(pattern + L"\n", 0) == 0 ||
-                    value.find(L"\n" + pattern + L"\n") != std::wstring::npos ||
-                    (value.size() > pattern.size() &&
-                        value.compare(value.size() - pattern.size(), pattern.size(), pattern) == 0 &&
-                        value[value.size() - pattern.size() - 1] == L'\n');
-            }
-            if (match_mode == L"Prefix") {
-                return value.rfind(pattern, 0) == 0 ||
-                    value.find(L"\n" + pattern) != std::wstring::npos;
-            }
-            return value.find(pattern) != std::wstring::npos;
-        };
-
-        auto matches_extension = [&]() {
-            if (extension_tokens.empty()) {
-                return true;
-            }
-
-            if (entry.extension_lower.empty()) {
-                return false;
-            }
-            for (auto const& token : extension_tokens) {
-                if (token == entry.extension_lower) {
-                    return true;
-                }
-            }
-
-            return false;
-        };
-
-        auto matches_size = [&]() {
-            if (!minimum_size) {
-                return true;
-            }
-
-            return entry.size_bytes >= minimum_size.value();
-        };
-
-        auto matches_modified = [&]() {
-            if (!modified_after && !modified_before) {
-                return true;
-            }
-
-            if (!entry.modified_utc) {
-                return false;
-            }
-
-            if (modified_after && entry.modified_utc.value() < modified_after.value()) {
-                return false;
-            }
-            if (modified_before && entry.modified_utc.value() >= modified_before.value()) {
-                return false;
-            }
-            return true;
-        };
-
-        return matches_text(entry.search_text_lower)
-            && matches_extension()
-            && matches_size()
-            && matches_modified();
     }
 
     std::wstring MainWindow::TreeCatalogKey(TreeCatalogEntry const& entry) const

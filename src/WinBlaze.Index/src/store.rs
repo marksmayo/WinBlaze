@@ -1,6 +1,8 @@
 use std::fmt::{self, Display, Formatter};
 use std::fs;
-use std::io::{self, Cursor, Read, Write};
+#[cfg(test)]
+use std::io::Cursor;
+use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{collections::HashMap, iter::FromIterator};
@@ -15,7 +17,7 @@ use winblaze_core::{
 use crate::schema::{MIGRATIONS, SCHEMA_VERSION};
 
 const INDEX_MAGIC: &[u8; 4] = b"WBIX";
-const INDEX_FORMAT_VERSION: u32 = 1;
+const INDEX_FORMAT_VERSION: u32 = 2;
 const MAX_SNAPSHOT_STRING_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -499,14 +501,15 @@ fn load_index_state(
     loaded_from_backup: bool,
 ) -> Result<LoadedIndexState, IndexStorageError> {
     let read_started = Instant::now();
-    let bytes = fs::read(path)?;
+    let file = fs::File::open(path)?;
+    let cache_read_bytes = file.metadata()?.len();
     let cache_read_millis = millis_u64(read_started.elapsed().as_millis());
     let decode_started = Instant::now();
-    let state = deserialize_state(&bytes)?;
+    let state = deserialize_state_from_reader(BufReader::new(file), cache_read_bytes as usize)?;
     let cache_decode_millis = millis_u64(decode_started.elapsed().as_millis());
     Ok(LoadedIndexState {
         state,
-        cache_read_bytes: bytes.len() as u64,
+        cache_read_bytes,
         cache_read_millis,
         cache_decode_millis,
         cache_loaded_from_backup: loaded_from_backup,
@@ -643,8 +646,46 @@ fn write_sorted_records<W: Write>(
     Ok(())
 }
 
+#[cfg(test)]
 fn deserialize_state(bytes: &[u8]) -> Result<BufferedIndexTransaction, IndexStorageError> {
-    let mut cursor = Cursor::new(bytes);
+    deserialize_state_from_reader(Cursor::new(bytes), bytes.len())
+}
+
+struct SnapshotReader<R> {
+    inner: R,
+    remaining: usize,
+}
+
+impl<R: Read> SnapshotReader<R> {
+    fn new(inner: R, len: usize) -> Self {
+        Self {
+            inner,
+            remaining: len,
+        }
+    }
+
+    fn read_exact(&mut self, buffer: &mut [u8]) -> Result<(), IndexStorageError> {
+        if buffer.len() > self.remaining {
+            return Err(IndexStorageError::Io(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "snapshot ended before field was complete",
+            )));
+        }
+        self.inner.read_exact(buffer)?;
+        self.remaining -= buffer.len();
+        Ok(())
+    }
+
+    fn remaining_bytes(&self) -> usize {
+        self.remaining
+    }
+}
+
+fn deserialize_state_from_reader<R: Read>(
+    reader: R,
+    len: usize,
+) -> Result<BufferedIndexTransaction, IndexStorageError> {
+    let mut cursor = SnapshotReader::new(reader, len);
     let mut magic = [0u8; 4];
     cursor.read_exact(&mut magic)?;
     if &magic != INDEX_MAGIC {
@@ -654,7 +695,7 @@ fn deserialize_state(bytes: &[u8]) -> Result<BufferedIndexTransaction, IndexStor
     }
 
     let version = read_u32(&mut cursor)?;
-    if version != INDEX_FORMAT_VERSION {
+    if !(1..=INDEX_FORMAT_VERSION).contains(&version) {
         return Err(IndexStorageError::CorruptSnapshot(String::from(
             "unsupported format version",
         )));
@@ -663,7 +704,7 @@ fn deserialize_state(bytes: &[u8]) -> Result<BufferedIndexTransaction, IndexStor
     let volumes = read_volume_records(&mut cursor)?;
     let sessions = read_session_records(&mut cursor)?;
     let directories = read_directory_records(&mut cursor)?;
-    let files = read_file_records(&mut cursor)?;
+    let files = read_file_records(&mut cursor, version)?;
     let lineages = read_lineage_records(&mut cursor)?;
     let file_changes = read_change_sets(&mut cursor)?;
 
@@ -777,7 +818,7 @@ fn write_file_records<W: Write, R: std::borrow::Borrow<FileRecord>>(
         push_u64(&mut buffer, file.id.0);
         push_u64(&mut buffer, file.parent_directory_id.0);
         push_string(&mut buffer, &file.name);
-        push_string(&mut buffer, &file.full_path);
+        push_snapshot_path(&mut buffer, &file.full_path);
         push_u64(&mut buffer, file.size_bytes);
         push_u64(&mut buffer, file.allocation_bytes);
         push_u32(&mut buffer, file.attributes.0);
@@ -800,6 +841,15 @@ fn push_u64(buffer: &mut Vec<u8>, value: u64) {
 fn push_string(buffer: &mut Vec<u8>, value: &str) {
     push_u64(buffer, value.len() as u64);
     buffer.extend_from_slice(value.as_bytes());
+}
+
+fn push_snapshot_path(buffer: &mut Vec<u8>, value: &str) {
+    if value.is_empty() {
+        buffer.push(0);
+    } else {
+        buffer.push(1);
+        push_string(buffer, value);
+    }
 }
 
 fn push_option_i64(buffer: &mut Vec<u8>, value: Option<i64>) {
@@ -846,7 +896,9 @@ fn write_change_sets<W: Write>(
     Ok(())
 }
 
-fn read_volume_records(cursor: &mut Cursor<&[u8]>) -> Result<Vec<VolumeRecord>, IndexStorageError> {
+fn read_volume_records<R: Read>(
+    cursor: &mut SnapshotReader<R>,
+) -> Result<Vec<VolumeRecord>, IndexStorageError> {
     let len = read_len(cursor)?;
     validate_collection_len(cursor, len, 34, "volume records")?;
     let mut volumes = Vec::with_capacity(len);
@@ -864,7 +916,9 @@ fn read_volume_records(cursor: &mut Cursor<&[u8]>) -> Result<Vec<VolumeRecord>, 
     Ok(volumes)
 }
 
-fn read_session_records(cursor: &mut Cursor<&[u8]>) -> Result<Vec<ScanSession>, IndexStorageError> {
+fn read_session_records<R: Read>(
+    cursor: &mut SnapshotReader<R>,
+) -> Result<Vec<ScanSession>, IndexStorageError> {
     let len = read_len(cursor)?;
     validate_collection_len(cursor, len, 41, "session records")?;
     let mut sessions = Vec::with_capacity(len);
@@ -885,8 +939,8 @@ fn read_session_records(cursor: &mut Cursor<&[u8]>) -> Result<Vec<ScanSession>, 
     Ok(sessions)
 }
 
-fn read_directory_records(
-    cursor: &mut Cursor<&[u8]>,
+fn read_directory_records<R: Read>(
+    cursor: &mut SnapshotReader<R>,
 ) -> Result<Vec<DirectoryRecord>, IndexStorageError> {
     let len = read_len(cursor)?;
     validate_collection_len(cursor, len, 41, "directory records")?;
@@ -917,16 +971,20 @@ fn read_directory_records(
     Ok(directories)
 }
 
-fn read_file_records(cursor: &mut Cursor<&[u8]>) -> Result<Vec<FileRecord>, IndexStorageError> {
+fn read_file_records<R: Read>(
+    cursor: &mut SnapshotReader<R>,
+    version: u32,
+) -> Result<Vec<FileRecord>, IndexStorageError> {
     let len = read_len(cursor)?;
-    validate_collection_len(cursor, len, 57, "file records")?;
+    let min_bytes_per_item = if version >= 2 { 48 } else { 57 };
+    validate_collection_len(cursor, len, min_bytes_per_item, "file records")?;
     let mut files = Vec::with_capacity(len);
     for _ in 0..len {
         files.push(FileRecord {
             id: FileId(read_u64(cursor)?),
             parent_directory_id: DirectoryId(read_u64(cursor)?),
             name: read_string(cursor)?,
-            full_path: read_string(cursor)?,
+            full_path: read_snapshot_path(cursor, version)?,
             size_bytes: read_u64(cursor)?,
             allocation_bytes: read_u64(cursor)?,
             attributes: FileAttributes(read_u32(cursor)?),
@@ -938,8 +996,8 @@ fn read_file_records(cursor: &mut Cursor<&[u8]>) -> Result<Vec<FileRecord>, Inde
     Ok(files)
 }
 
-fn read_lineage_records(
-    cursor: &mut Cursor<&[u8]>,
+fn read_lineage_records<R: Read>(
+    cursor: &mut SnapshotReader<R>,
 ) -> Result<Vec<FileLineageRecord>, IndexStorageError> {
     let len = read_len(cursor)?;
     validate_collection_len(cursor, len, 34, "lineage records")?;
@@ -958,7 +1016,9 @@ fn read_lineage_records(
     Ok(lineages)
 }
 
-fn read_change_sets(cursor: &mut Cursor<&[u8]>) -> Result<Vec<FileChangeSet>, IndexStorageError> {
+fn read_change_sets<R: Read>(
+    cursor: &mut SnapshotReader<R>,
+) -> Result<Vec<FileChangeSet>, IndexStorageError> {
     let len = read_len(cursor)?;
     validate_collection_len(cursor, len, 8, "change sets")?;
     let mut change_sets = Vec::with_capacity(len);
@@ -1021,46 +1081,43 @@ fn write_option_string<W: Write>(
     Ok(())
 }
 
-fn read_u8(cursor: &mut Cursor<&[u8]>) -> Result<u8, IndexStorageError> {
+fn read_u8<R: Read>(cursor: &mut SnapshotReader<R>) -> Result<u8, IndexStorageError> {
     let mut value = [0u8; 1];
     cursor.read_exact(&mut value)?;
     Ok(value[0])
 }
 
-fn read_u32(cursor: &mut Cursor<&[u8]>) -> Result<u32, IndexStorageError> {
+fn read_u32<R: Read>(cursor: &mut SnapshotReader<R>) -> Result<u32, IndexStorageError> {
     let mut value = [0u8; 4];
     cursor.read_exact(&mut value)?;
     Ok(u32::from_le_bytes(value))
 }
 
-fn read_u64(cursor: &mut Cursor<&[u8]>) -> Result<u64, IndexStorageError> {
+fn read_u64<R: Read>(cursor: &mut SnapshotReader<R>) -> Result<u64, IndexStorageError> {
     let mut value = [0u8; 8];
     cursor.read_exact(&mut value)?;
     Ok(u64::from_le_bytes(value))
 }
 
-fn read_i64(cursor: &mut Cursor<&[u8]>) -> Result<i64, IndexStorageError> {
+fn read_i64<R: Read>(cursor: &mut SnapshotReader<R>) -> Result<i64, IndexStorageError> {
     let mut value = [0u8; 8];
     cursor.read_exact(&mut value)?;
     Ok(i64::from_le_bytes(value))
 }
 
-fn read_len(cursor: &mut Cursor<&[u8]>) -> Result<usize, IndexStorageError> {
+fn read_len<R: Read>(cursor: &mut SnapshotReader<R>) -> Result<usize, IndexStorageError> {
     let value = read_u64(cursor)?;
     usize::try_from(value).map_err(|_| {
         IndexStorageError::CorruptSnapshot(String::from("collection length too large"))
     })
 }
 
-fn remaining_bytes(cursor: &Cursor<&[u8]>) -> usize {
-    cursor
-        .get_ref()
-        .len()
-        .saturating_sub(usize::try_from(cursor.position()).unwrap_or(usize::MAX))
+fn remaining_bytes<R: Read>(cursor: &SnapshotReader<R>) -> usize {
+    cursor.remaining_bytes()
 }
 
-fn validate_collection_len(
-    cursor: &Cursor<&[u8]>,
+fn validate_collection_len<R: Read>(
+    cursor: &SnapshotReader<R>,
     len: usize,
     min_bytes_per_item: usize,
     label: &str,
@@ -1078,7 +1135,7 @@ fn validate_collection_len(
     Ok(())
 }
 
-fn read_string(cursor: &mut Cursor<&[u8]>) -> Result<String, IndexStorageError> {
+fn read_string<R: Read>(cursor: &mut SnapshotReader<R>) -> Result<String, IndexStorageError> {
     let len = read_len(cursor)?;
     if len > MAX_SNAPSHOT_STRING_BYTES {
         return Err(IndexStorageError::CorruptSnapshot(String::from(
@@ -1096,7 +1153,26 @@ fn read_string(cursor: &mut Cursor<&[u8]>) -> Result<String, IndexStorageError> 
         .map_err(|_| IndexStorageError::CorruptSnapshot(String::from("invalid utf-8 string")))
 }
 
-fn read_option_string(cursor: &mut Cursor<&[u8]>) -> Result<Option<String>, IndexStorageError> {
+fn read_snapshot_path<R: Read>(
+    cursor: &mut SnapshotReader<R>,
+    version: u32,
+) -> Result<String, IndexStorageError> {
+    if version < 2 {
+        return read_string(cursor);
+    }
+
+    match read_u8(cursor)? {
+        0 => Ok(String::new()),
+        1 => read_string(cursor),
+        _ => Err(IndexStorageError::CorruptSnapshot(String::from(
+            "invalid path-present flag",
+        ))),
+    }
+}
+
+fn read_option_string<R: Read>(
+    cursor: &mut SnapshotReader<R>,
+) -> Result<Option<String>, IndexStorageError> {
     match read_u8(cursor)? {
         0 => Ok(None),
         1 => Ok(Some(read_string(cursor)?)),
@@ -1106,7 +1182,9 @@ fn read_option_string(cursor: &mut Cursor<&[u8]>) -> Result<Option<String>, Inde
     }
 }
 
-fn read_option_i64(cursor: &mut Cursor<&[u8]>) -> Result<Option<i64>, IndexStorageError> {
+fn read_option_i64<R: Read>(
+    cursor: &mut SnapshotReader<R>,
+) -> Result<Option<i64>, IndexStorageError> {
     match read_u8(cursor)? {
         0 => Ok(None),
         1 => Ok(Some(read_i64(cursor)?)),

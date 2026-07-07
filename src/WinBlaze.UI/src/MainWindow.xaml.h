@@ -222,7 +222,6 @@ namespace winrt::WinBlaze::UI::implementation
         bool TreeArenaActive() const { return !m_tree_nodes.empty(); }
         static std::wstring ExtensionKeyFromName(std::wstring const& name);
         std::vector<TreeCatalogEntry> FilterTreeCatalog() const;
-        bool MatchesInstantSearch(TreeCatalogEntry const& entry) const;
         std::wstring TreeCatalogKey(TreeCatalogEntry const& entry) const;
         static std::wstring Utf8ToWide(std::string_view text);
         TreeCatalogEntry CatalogEntryFromNative(WbCatalogEntry const& entry) const;

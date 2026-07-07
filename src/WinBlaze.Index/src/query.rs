@@ -71,7 +71,10 @@ impl IndexCatalog {
             .filter_map(|ext| normalize_extension(ext))
             .collect();
 
-        let mut hits = Vec::new();
+        let candidate_count = usize::from(query.include_files) * self.files.len()
+            + usize::from(query.include_directories) * self.aggregated_directories.len();
+        let initial_capacity = query.limit.unwrap_or(256).min(candidate_count);
+        let mut hits = Vec::with_capacity(initial_capacity);
 
         if query.include_files {
             hits.extend(self.files.iter().filter_map(|file| {
