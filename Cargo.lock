@@ -4,18 +4,18 @@ version = 4
 
 [[package]]
 name = "winblaze-core"
-version = "0.8.0"
+version = "0.9.0"
 
 [[package]]
 name = "winblaze-index"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "winblaze-core",
 ]
 
 [[package]]
 name = "winblaze-native"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "winblaze-core",
  "winblaze-index",
@@ -24,7 +24,7 @@ dependencies = [
 
 [[package]]
 name = "winblaze-scanner"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "winblaze-core",
 ]
@@ -37,3 +37,7 @@ dependencies = [
  "winblaze-index",
  "winblaze-scanner",
 ]
+
+[[package]]
+name = "winblaze-updater"
+version = "0.9.0"

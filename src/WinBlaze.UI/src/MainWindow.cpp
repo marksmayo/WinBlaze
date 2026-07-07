@@ -27,7 +27,7 @@ namespace
     // In-app update check. Bump kCurrentVersion with each release (matches the
     // Package.appxmanifest identity). TODO: source it from the exe version
     // resource so there is a single source of truth.
-    const std::string kCurrentVersion = "0.8.0";
+    const std::string kCurrentVersion = "0.9.0";
     constexpr wchar_t kReleasesLatestUrl[] =
         L"https://github.com/marksmayo/WinBlaze/releases/latest";
     constexpr wchar_t kReleaseApiUrl[] =
