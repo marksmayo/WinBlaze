@@ -179,3 +179,25 @@ raw MFT read while getting to interactive sooner because it pages/caps the UI
 (8,192-entry catalog, paged tree, deferred snapshot) instead of materializing
 every file. These are single-machine, warm-cache figures; broaden across
 machines and cold-cache for release-grade competitor evidence.
+
+## Stability soak — live C:\ (2026-07-07)
+
+`soak_repro` (winblaze-native example) loops full scans in one process, with an
+incremental rescan + snapshot read every 4th cycle, printing the working set
+and handle count per cycle so a leak shows as an upward trend. 12 cycles on
+live C:\ (~2.05M files):
+
+- Handles: flat at **69** for all 12 cycles — no handle leak.
+- Working set: ~594 MB (cycles 1-3 warmup) -> plateau ~640-650 MB from cycle 5
+  on; first-third vs last-third mean +9.4% (all in the warmup ramp, then flat).
+- Verdict: **stable** (no monotonic working-set climb, no handle growth).
+
+This is a representative stand-in; the multi-hour release soak remains a gate.
+Run: `soak_repro C:\ 12` (or pass more cycles).
+
+Finding: an **incremental rescan of a full drive (~15 s) is ~3.5x slower than a
+full MFT scan (~4.4 s)** now that the MFT path is so fast — the 2M x 2M
+path-materialize + diff + merge dominates. For full-volume roots a plain
+re-scan is cheaper than incremental; incremental still wins for small subtrees
+and for its change reporting. Candidate future work: id/mtime-keyed fast path
+in the diff, or skip incremental for volume roots.
