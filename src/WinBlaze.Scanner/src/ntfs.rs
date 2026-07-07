@@ -717,7 +717,12 @@ impl Read for VolumeMftReader {
 
             let sector = self.bytes_per_sector.max(512);
             let direct = (buf.len().min(remaining as usize) / sector) * sector;
-            if direct >= VOLUME_READ_CHUNK {
+            // Any full-sector-aligned chunk reads straight into the caller's
+            // buffer. Sparse extents are cluster-aligned and often < 4 MiB, so
+            // gating this on VOLUME_READ_CHUNK used to bounce them through an
+            // extra 4.8 GB-scale memcpy; the bounce chunk below now only serves
+            // a genuine sub-sector tail.
+            if direct >= sector {
                 self.volume
                     .seek(SeekFrom::Start(start + self.consumed_in_extent))?;
                 self.volume.read_exact(&mut buf[..direct])?;
