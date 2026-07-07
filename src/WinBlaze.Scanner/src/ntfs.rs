@@ -21,6 +21,7 @@ const NTFS_RECORD_SIZE: usize = 1024;
 const ATTRIBUTE_LIST: u32 = 0x20;
 const ATTRIBUTE_FILE_NAME: u32 = 0x30;
 const ATTRIBUTE_DATA: u32 = 0x80;
+const ATTRIBUTE_BITMAP: u32 = 0xB0;
 const FILE_RECORD_FLAG_IN_USE: u16 = 0x0001;
 const FILE_RECORD_FLAG_DIRECTORY: u16 = 0x0002;
 
@@ -102,19 +103,18 @@ fn stream_ntfs_entries(
     let records_per_read = workers.saturating_mul(1024).clamp(1024, 65_536);
     let block_len = NTFS_RECORD_SIZE * records_per_read;
     let mut state = NtfsStreamState::new(root.display().to_string());
-    let mut processed_records = 0u64;
-    let mut carry: Vec<u8> = Vec::new();
 
     state.emit_root(on_event);
 
-    // Read-ahead: a dedicated thread keeps the volume busy while this
-    // thread runs fixups + parse + emit on the previous block. Serial, the
-    // read alone is ~45% of the wall clock; overlapped it hides almost
-    // entirely behind parsing. Three pooled buffers: one being filled, one
-    // in flight, one being parsed.
+    // Three-stage pipeline so the single-threaded path-resolution emit overlaps
+    // the parse and the read instead of running after them:
+    //   reader thread  -> fills pooled buffers from the volume
+    //   parser thread  -> fixup + parse fan-out, recycles buffers
+    //   this thread    -> ingest/emit (keeps on_event + state single-threaded)
+    // Four pooled buffers cover one in each stage plus one in flight.
     let (block_tx, block_rx) = mpsc::sync_channel::<io::Result<(Vec<u8>, usize)>>(2);
     let (pool_tx, pool_rx) = mpsc::channel::<Vec<u8>>();
-    for _ in 0..3 {
+    for _ in 0..4 {
         let _ = pool_tx.send(vec![0u8; block_len]);
     }
     let reader = thread::spawn(move || {
@@ -142,9 +142,22 @@ fn stream_ntfs_entries(
         }
     });
 
-    let stream_result = (|| -> Result<(), NtfsEnumerationError> {
+    // Parser thread: owns the carry, applies fixups + parses each block across
+    // the worker fan-out, recycles the buffer, and forwards parsed entries (in
+    // MFT order) to the emit loop below.
+    type ParsedBatch = (Vec<ParsedNtfsEntry>, Vec<ExtensionSizes>, u64);
+    let (parsed_tx, parsed_rx) = mpsc::sync_channel::<Result<ParsedBatch, NtfsEnumerationError>>(2);
+    let parser = thread::spawn(move || {
+        let mut carry: Vec<u8> = Vec::new();
+        let mut processed_records = 0u64;
         while let Ok(block) = block_rx.recv() {
-            let (block, filled) = block.map_err(NtfsEnumerationError::Io)?;
+            let (block, filled) = match block {
+                Ok(value) => value,
+                Err(error) => {
+                    let _ = parsed_tx.send(Err(NtfsEnumerationError::Io(error)));
+                    return;
+                }
+            };
             if filled == 0 {
                 break;
             }
@@ -166,23 +179,59 @@ fn stream_ntfs_entries(
                 Some(full_bytes) => &mut carry[..full_bytes],
             };
 
-            // Restore the sector-tail bytes the on-disk update sequence array
-            // displaced (raw MFT data is unusable without this) and parse, both
-            // fanned across the worker threads on disjoint record ranges.
-            let (parsed, extensions) =
-                fixup_and_parse_batch(batch, full_records, workers, bytes_per_sector)?;
+            let result = fixup_and_parse_batch(batch, full_records, workers, bytes_per_sector);
             if batch_ptr.is_some() {
                 let full_bytes = full_records * NTFS_RECORD_SIZE;
                 carry.drain(..full_bytes);
             }
             let _ = pool_tx.send(owned_block);
-            processed_records = processed_records.saturating_add(full_records as u64);
 
+            match result {
+                Ok((parsed, extensions)) => {
+                    processed_records = processed_records.saturating_add(full_records as u64);
+                    if parsed_tx
+                        .send(Ok((parsed, extensions, processed_records)))
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+                Err(error) => {
+                    let _ = parsed_tx.send(Err(error));
+                    return;
+                }
+            }
+        }
+    });
+
+    // Env-gated profiling: split this thread's wall into wait (blocked on the
+    // parser) vs emit (path resolution). Zero cost unless the var is set.
+    let profile = std::env::var_os("WINBLAZE_PROFILE_STREAM").is_some();
+    let mut wait_ns = 0u128;
+    let mut emit_ns = 0u128;
+
+    let stream_result = (|| -> Result<(), NtfsEnumerationError> {
+        loop {
+            let message = if profile {
+                let started = std::time::Instant::now();
+                let message = parsed_rx.recv();
+                wait_ns += started.elapsed().as_nanos();
+                message
+            } else {
+                parsed_rx.recv()
+            };
+            let Ok(message) = message else { break };
+            let (parsed, extensions, processed_records) = message?;
+
+            let emit_started = profile.then(std::time::Instant::now);
             for entry in parsed {
                 state.ingest_entry(entry, on_event);
             }
             for extension in extensions {
                 state.ingest_extension(extension, on_event);
+            }
+            if let Some(started) = emit_started {
+                emit_ns += started.elapsed().as_nanos();
             }
 
             let progress = ScanProgress {
@@ -196,8 +245,16 @@ fn stream_ntfs_entries(
         Ok(())
     })();
 
-    drop(pool_tx);
-    drop(block_rx);
+    if profile {
+        eprintln!(
+            "[stream-profile] wait_ms={} emit_ms={}",
+            wait_ns / 1_000_000,
+            emit_ns / 1_000_000,
+        );
+    }
+
+    drop(parsed_rx);
+    let _ = parser.join();
     let _ = reader.join();
     stream_result?;
 
@@ -266,9 +323,13 @@ impl NtfsStreamState {
 
     fn ingest_entry(&mut self, mut entry: ParsedNtfsEntry, on_event: &mut dyn FnMut(ScanEvent)) {
         let file_id = entry.file_id.0;
-        if let Some(sizes) = self.pending_extensions.remove(&file_id) {
-            entry.size_bytes = entry.size_bytes.max(sizes.size_bytes);
-            entry.allocation_bytes = entry.allocation_bytes.max(sizes.allocation_bytes);
+        // Extension records are rare; the map is empty for the vast majority of
+        // records, so skip the per-entry hash probe unless something is pending.
+        if !self.pending_extensions.is_empty() {
+            if let Some(sizes) = self.pending_extensions.remove(&file_id) {
+                entry.size_bytes = entry.size_bytes.max(sizes.size_bytes);
+                entry.allocation_bytes = entry.allocation_bytes.max(sizes.allocation_bytes);
+            }
         }
 
         if entry.is_directory {
@@ -975,6 +1036,319 @@ fn read_mft_extents(volume: &mut File, geometry: &MftGeometry) -> io::Result<Vec
     ))
 }
 
+/// Reads one MFT record (1024 bytes) from the volume, reading the whole
+/// containing cluster so the raw read stays cluster/sector aligned (required on
+/// 4Kn volumes), then applies the sector fixups.
+fn read_mft_record_at(
+    volume: &mut File,
+    geometry: &MftGeometry,
+    physical: u64,
+) -> io::Result<Vec<u8>> {
+    let cluster = geometry
+        .bytes_per_cluster
+        .max(geometry.bytes_per_sector as u64)
+        .max(NTFS_RECORD_SIZE as u64);
+    let base = (physical / cluster) * cluster;
+    let within = (physical - base) as usize;
+    let mut buffer = vec![0u8; cluster as usize];
+    volume.seek(SeekFrom::Start(base))?;
+    volume.read_exact(&mut buffer)?;
+    if within + NTFS_RECORD_SIZE > buffer.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "record spans cluster",
+        ));
+    }
+    let mut record = buffer[within..within + NTFS_RECORD_SIZE].to_vec();
+    if &record[0..4] != FILE_RECORD_SIGNATURE
+        || !apply_record_fixups(&mut record, geometry.bytes_per_sector as usize)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "MFT record has no valid FILE signature",
+        ));
+    }
+    Ok(record)
+}
+
+/// Physical byte offset of logical MFT record `number`, mapped through the
+/// `$DATA` extents (the reader's logical stream order).
+fn mft_record_physical_offset(data_extents: &[(u64, u64)], number: u64) -> Option<u64> {
+    let target = number * NTFS_RECORD_SIZE as u64;
+    let mut logical = 0u64;
+    for &(start, length) in data_extents {
+        if target < logical + length {
+            return Some(start + (target - logical));
+        }
+        logical += length;
+    }
+    None
+}
+
+/// Extracts the raw `$BITMAP` bytes from a single MFT record if it carries that
+/// attribute (resident or non-resident); returns `Ok(None)` when the record has
+/// no `$BITMAP` so the caller can look elsewhere (e.g. an extension record).
+fn extract_bitmap_from_record(
+    record: &[u8],
+    volume: &mut File,
+    geometry: &MftGeometry,
+) -> io::Result<Option<Vec<u8>>> {
+    let mut cursor = le_u16(record, 20) as usize;
+    while cursor + 8 <= record.len() {
+        let attribute_type = le_u32(record, cursor);
+        if attribute_type == u32::MAX {
+            break;
+        }
+        let attribute_length = le_u32(record, cursor + 4) as usize;
+        if attribute_length == 0 || cursor + attribute_length > record.len() {
+            break;
+        }
+        if attribute_type == ATTRIBUTE_BITMAP {
+            let non_resident = record.get(cursor + 8).copied().unwrap_or(0);
+            if non_resident == 0 {
+                let value_offset = le_u16(record, cursor + 20) as usize;
+                let value_length = le_u32(record, cursor + 16) as usize;
+                let start = cursor + value_offset;
+                let end = start + value_length;
+                if end <= record.len() {
+                    return Ok(Some(record[start..end].to_vec()));
+                }
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "resident $BITMAP out of bounds",
+                ));
+            }
+            let real_size = if attribute_length >= 56 {
+                le_u64(record, cursor + 48) as usize
+            } else {
+                usize::MAX
+            };
+            let run_offset = le_u16(record, cursor + 32) as usize;
+            if run_offset >= attribute_length {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "$BITMAP run offset out of bounds",
+                ));
+            }
+            let runs = &record[cursor + run_offset..cursor + attribute_length];
+            let extents = decode_data_runs(runs, geometry.bytes_per_cluster)?;
+            let mut bitmap = Vec::new();
+            let mut buffer = vec![0u8; VOLUME_READ_CHUNK];
+            for &(start, length) in &extents {
+                let mut offset = 0u64;
+                while offset < length {
+                    let to_read = ((length - offset) as usize).min(buffer.len());
+                    volume.seek(SeekFrom::Start(start + offset))?;
+                    volume.read_exact(&mut buffer[..to_read])?;
+                    bitmap.extend_from_slice(&buffer[..to_read]);
+                    offset += to_read as u64;
+                }
+            }
+            bitmap.truncate(real_size.min(bitmap.len()));
+            return Ok(Some(bitmap));
+        }
+        cursor += attribute_length;
+    }
+    Ok(None)
+}
+
+/// Returns the raw `$ATTRIBUTE_LIST` value bytes (resident inline, or read from
+/// its runs when non-resident), or None if the record has no attribute list.
+fn read_attribute_list_value(
+    record: &[u8],
+    volume: &mut File,
+    geometry: &MftGeometry,
+) -> io::Result<Option<Vec<u8>>> {
+    let mut cursor = le_u16(record, 20) as usize;
+    while cursor + 8 <= record.len() {
+        let attribute_type = le_u32(record, cursor);
+        if attribute_type == u32::MAX {
+            break;
+        }
+        let attribute_length = le_u32(record, cursor + 4) as usize;
+        if attribute_length == 0 || cursor + attribute_length > record.len() {
+            break;
+        }
+        if attribute_type == ATTRIBUTE_LIST {
+            let non_resident = record.get(cursor + 8).copied().unwrap_or(0);
+            if non_resident == 0 {
+                let value_offset = le_u16(record, cursor + 20) as usize;
+                let value_length = le_u32(record, cursor + 16) as usize;
+                let start = cursor + value_offset;
+                let end = (start + value_length).min(record.len());
+                return Ok(Some(record[start..end].to_vec()));
+            }
+            let real_size = if attribute_length >= 56 {
+                le_u64(record, cursor + 48) as usize
+            } else {
+                usize::MAX
+            };
+            let run_offset = le_u16(record, cursor + 32) as usize;
+            if run_offset >= attribute_length {
+                return Ok(None);
+            }
+            let runs = &record[cursor + run_offset..cursor + attribute_length];
+            let extents = decode_data_runs(runs, geometry.bytes_per_cluster)?;
+            let mut value = Vec::new();
+            let mut buffer = vec![0u8; VOLUME_READ_CHUNK];
+            for &(start, length) in &extents {
+                let mut offset = 0u64;
+                while offset < length {
+                    let to_read = ((length - offset) as usize).min(buffer.len());
+                    volume.seek(SeekFrom::Start(start + offset))?;
+                    volume.read_exact(&mut buffer[..to_read])?;
+                    value.extend_from_slice(&buffer[..to_read]);
+                    offset += to_read as u64;
+                }
+            }
+            value.truncate(real_size.min(value.len()));
+            return Ok(Some(value));
+        }
+        cursor += attribute_length;
+    }
+    Ok(None)
+}
+
+/// Scans an `$ATTRIBUTE_LIST` value for the MFT record number that holds the
+/// `$BITMAP` attribute (its first fragment).
+fn attribute_list_bitmap_record(list: &[u8]) -> Option<u64> {
+    let mut pos = 0usize;
+    while pos + 0x18 <= list.len() {
+        let entry_type = le_u32(list, pos);
+        let entry_len = le_u16(list, pos + 4) as usize;
+        if entry_len < 0x18 || pos + entry_len > list.len() {
+            break;
+        }
+        let starting_vcn = le_u64(list, pos + 8);
+        if entry_type == ATTRIBUTE_BITMAP && starting_vcn == 0 {
+            let reference = le_u64(list, pos + 16);
+            return Some(reference & 0x0000_FFFF_FFFF_FFFF);
+        }
+        pos += entry_len;
+    }
+    None
+}
+
+/// Reads the `$MFT`'s own `$BITMAP` attribute — one bit per MFT record, set when
+/// that record is allocated (in use). Used to skip reading long runs of free
+/// records. Returns the raw bitmap bytes (record N -> byte N/8, bit N%8). On a
+/// large MFT the `$BITMAP` is relocated to an extension record via the base
+/// record's `$ATTRIBUTE_LIST`, which is followed here.
+fn read_mft_bitmap(
+    volume: &mut File,
+    geometry: &MftGeometry,
+    data_extents: &[(u64, u64)],
+) -> io::Result<Vec<u8>> {
+    let record0 = read_mft_record_at(volume, geometry, geometry.mft_start_offset)?;
+    if let Some(bitmap) = extract_bitmap_from_record(&record0, volume, geometry)? {
+        return Ok(bitmap);
+    }
+    if let Some(list) = read_attribute_list_value(&record0, volume, geometry)? {
+        if let Some(number) = attribute_list_bitmap_record(&list) {
+            if let Some(physical) = mft_record_physical_offset(data_extents, number) {
+                let extension = read_mft_record_at(volume, geometry, physical)?;
+                if let Some(bitmap) = extract_bitmap_from_record(&extension, volume, geometry)? {
+                    return Ok(bitmap);
+                }
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        "MFT record 0 has no $BITMAP attribute",
+    ))
+}
+
+/// Byte length required to skip a free run before it is worth a seek. Runs
+/// shorter than this are read through (a seek costs more than the bytes).
+const MFT_SKIP_MIN_BYTES: u64 = 64 * 1024;
+
+/// Filters the MFT `$DATA` extents down to only the regions that hold at least
+/// one in-use record, skipping free runs of `>= MFT_SKIP_MIN_BYTES`. Works at
+/// cluster granularity so a raw read stays sector/cluster aligned and never
+/// splits a record (requires `bytes_per_cluster` to be a whole number of
+/// 1024-byte records; the caller falls back to a full read otherwise). Coalesces
+/// short free gaps so the read stays mostly sequential.
+fn mft_keep_extents(
+    data_extents: &[(u64, u64)],
+    bitmap: &[u8],
+    bytes_per_cluster: u64,
+) -> Vec<(u64, u64)> {
+    let records_per_cluster = (bytes_per_cluster / NTFS_RECORD_SIZE as u64) as usize;
+    if records_per_cluster == 0 {
+        return data_extents.to_vec();
+    }
+    let total_clusters: u64 = data_extents.iter().map(|e| e.1 / bytes_per_cluster).sum();
+    if total_clusters == 0 {
+        return data_extents.to_vec();
+    }
+
+    // A cluster is occupied if any of its records is marked in use.
+    let cluster_occupied = |cluster: u64| -> bool {
+        let first_record = cluster * records_per_cluster as u64;
+        (0..records_per_cluster as u64).any(|offset| {
+            let record = first_record + offset;
+            let byte = (record / 8) as usize;
+            bitmap
+                .get(byte)
+                .is_some_and(|b| b & (1u8 << (record % 8)) != 0)
+        })
+    };
+
+    // keep[c]: read cluster c? Occupied clusters, plus free clusters in runs
+    // shorter than the skip threshold (read through to stay sequential).
+    let skip_min = MFT_SKIP_MIN_BYTES.div_ceil(bytes_per_cluster).max(1);
+    let total = total_clusters as usize;
+    let mut keep = vec![false; total];
+    let mut c = 0usize;
+    while c < total {
+        if cluster_occupied(c as u64) {
+            keep[c] = true;
+            c += 1;
+            continue;
+        }
+        let run_start = c;
+        while c < total && !cluster_occupied(c as u64) {
+            c += 1;
+        }
+        let run_len = (c - run_start) as u64;
+        if run_len < skip_min {
+            for slot in keep.iter_mut().take(c).skip(run_start) {
+                *slot = true;
+            }
+        }
+    }
+
+    // Map kept logical clusters back to physical byte extents, merging
+    // physically-contiguous kept clusters within each source extent.
+    let mut result: Vec<(u64, u64)> = Vec::new();
+    let mut logical_cluster = 0u64;
+    for &(phys_start, length) in data_extents {
+        let clusters_here = length / bytes_per_cluster;
+        for local in 0..clusters_here {
+            let keep_it = keep.get(logical_cluster as usize).copied().unwrap_or(true);
+            if keep_it {
+                let phys = phys_start + local * bytes_per_cluster;
+                match result.last_mut() {
+                    Some(last) if last.0 + last.1 == phys => last.1 += bytes_per_cluster,
+                    _ => result.push((phys, bytes_per_cluster)),
+                }
+            }
+            logical_cluster += 1;
+        }
+        // Preserve any sub-cluster tail (valid-length trim can leave one).
+        let tail = length % bytes_per_cluster;
+        if tail != 0 {
+            let phys = phys_start + clusters_here * bytes_per_cluster;
+            match result.last_mut() {
+                Some(last) if last.0 + last.1 == phys => last.1 += tail,
+                _ => result.push((phys, tail)),
+            }
+        }
+    }
+    result
+}
+
 /// Applies the NTFS Update Sequence Array fixups to one file record: the
 /// last two bytes of every sector are replaced on disk by the update
 /// sequence number and must be restored from the USA before parsing.
@@ -1186,7 +1560,28 @@ fn open_mft_stream(root: &Path) -> Result<MftStream, NtfsEnumerationError> {
                     )
                 } else {
                     match read_mft_extents(&mut volume, &geometry) {
-                        Ok(extents) => {
+                        Ok(mut extents) => {
+                            // Sparse read: skip long runs of free MFT records
+                            // (~44% of the MFT is unused on a live volume, ~34%
+                            // of it in runs long enough to seek past). Only when
+                            // clusters hold whole 1024-byte records so a
+                            // cluster-aligned cut never splits one; any bitmap
+                            // read failure falls back to the full extents. Set
+                            // WINBLAZE_NO_SPARSE_MFT to force a full read.
+                            let bpc = geometry.bytes_per_cluster;
+                            if std::env::var_os("WINBLAZE_NO_SPARSE_MFT").is_none()
+                                && bpc >= NTFS_RECORD_SIZE as u64
+                                && bpc % NTFS_RECORD_SIZE as u64 == 0
+                            {
+                                if let Ok(bitmap) =
+                                    read_mft_bitmap(&mut volume, &geometry, &extents)
+                                {
+                                    let kept = mft_keep_extents(&extents, &bitmap, bpc);
+                                    if !kept.is_empty() {
+                                        extents = kept;
+                                    }
+                                }
+                            }
                             let reader = VolumeMftReader {
                                 volume,
                                 extents,
@@ -2086,6 +2481,69 @@ extern "system" {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mft_keep_extents_skips_long_free_runs_and_keeps_short_gaps() {
+        // 4 KiB clusters = 4 records/cluster; skip threshold 64 KiB = 16 clusters.
+        let bpc = 4096u64;
+        let rpc = 4usize;
+        // 40 clusters in one physical extent starting at 1 MiB.
+        let extents = vec![(1_048_576u64, 40 * bpc)];
+        // Occupy clusters 0-1, then a long free run 2..30 (28 clusters, skip),
+        // then a short free gap handled implicitly, then clusters 30-39 occupied.
+        let mut bitmap = vec![0u8; (40 * rpc).div_ceil(8)];
+        let mut set = |cluster: usize| {
+            for r in cluster * rpc..cluster * rpc + rpc {
+                bitmap[r / 8] |= 1 << (r % 8);
+            }
+        };
+        set(0);
+        set(1);
+        for c in 30..40 {
+            set(c);
+        }
+        let kept = mft_keep_extents(&extents, &bitmap, bpc);
+        // Expect two extents: clusters 0-1, and clusters 30-39.
+        assert_eq!(
+            kept,
+            vec![(1_048_576, 2 * bpc), (1_048_576 + 30 * bpc, 10 * bpc),]
+        );
+    }
+
+    #[test]
+    fn mft_keep_extents_reads_through_short_free_gaps() {
+        let bpc = 4096u64;
+        let rpc = 4usize;
+        let extents = vec![(0u64, 24 * bpc)];
+        // Occupy clusters 0 and 5 (4-cluster gap < 16 -> read through), then a
+        // trailing free run of 18 clusters (>= 16 -> skipped).
+        let mut bitmap = vec![0u8; (24 * rpc).div_ceil(8)];
+        for &c in &[0usize, 5] {
+            for r in c * rpc..c * rpc + rpc {
+                bitmap[r / 8] |= 1 << (r % 8);
+            }
+        }
+        let kept = mft_keep_extents(&extents, &bitmap, bpc);
+        // Clusters 0..=5 kept as one run (gap of 4 < 16); 6..24 skipped.
+        assert_eq!(kept, vec![(0, 6 * bpc)]);
+    }
+
+    #[test]
+    fn attribute_list_bitmap_record_finds_bitmap_reference() {
+        // Two entries: $DATA (0x80) in record 0, $BITMAP (0xB0) in record 42.
+        let mut list = Vec::new();
+        let mut entry = |ty: u32, rec: u64| {
+            let mut e = vec![0u8; 0x20];
+            e[0..4].copy_from_slice(&ty.to_le_bytes());
+            e[4..6].copy_from_slice(&0x20u16.to_le_bytes()); // entry length
+                                                             // starting_vcn at 0x08 = 0, base reference at 0x10.
+            e[16..24].copy_from_slice(&rec.to_le_bytes());
+            list.extend_from_slice(&e);
+        };
+        entry(ATTRIBUTE_DATA, 0);
+        entry(ATTRIBUTE_BITMAP, 42);
+        assert_eq!(attribute_list_bitmap_record(&list), Some(42));
+    }
 
     #[test]
     fn decode_data_runs_handles_positive_and_negative_deltas() {
