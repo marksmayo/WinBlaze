@@ -31,6 +31,27 @@ pub fn parse_release_tag(json: &str) -> Option<String> {
     parse_json_string_field(json, "tag_name")
 }
 
+/// Extracts the SHA-256 of the update-manifest artifact with the given `kind`
+/// (e.g. `"portable_zip"`). The manifest lists artifacts as flat objects
+/// `{kind, file_name, bytes, sha256}`, so this finds the `kind` marker and
+/// reads the `sha256` that follows it. Returns None if absent.
+pub fn parse_manifest_sha256(manifest_json: &str, kind: &str) -> Option<String> {
+    let marker = format!("\"{kind}\"");
+    let after_kind = &manifest_json[manifest_json.find(&marker)? + marker.len()..];
+    // Scope the search to this artifact object: stop at the next artifact's
+    // "kind" so a missing/blank sha256 can never read a sibling's hash.
+    let object = &after_kind[..after_kind.find("\"kind\"").unwrap_or(after_kind.len())];
+    parse_json_string_field(object, "sha256").filter(|value| !value.trim().is_empty())
+}
+
+/// Case-insensitive hex comparison of two SHA-256 digests (ignoring
+/// surrounding whitespace). Empty inputs never match.
+pub fn hash_matches(expected: &str, actual: &str) -> bool {
+    let expected = expected.trim();
+    let actual = actual.trim();
+    !expected.is_empty() && expected.eq_ignore_ascii_case(actual)
+}
+
 /// Minimal extractor for a top-level `"field": "value"` JSON string. Handles
 /// whitespace and the common escape sequences in the value; good enough for the
 /// small, well-formed GitHub release payload (not a general JSON parser).
@@ -120,6 +141,49 @@ mod tests {
         assert_eq!(parse_release_tag("{}"), None);
         assert_eq!(parse_release_tag(r#"{"tag_name":"#), None);
         assert_eq!(parse_release_tag("not json at all"), None);
+    }
+
+    #[test]
+    fn parse_manifest_sha256_reads_portable_artifact() {
+        let manifest = r#"{"schema_version":1,"product":"WinBlaze","version":"0.9.1","artifacts":[
+            {"kind":"portable_zip","file_name":"WinBlaze-Release-x64-portable.zip","bytes":1660783,"sha256":"ABC123def456"},
+            {"kind":"msi","file_name":"WinBlaze.msi","bytes":100,"sha256":"deadbeef"}]}"#;
+        assert_eq!(
+            parse_manifest_sha256(manifest, "portable_zip").as_deref(),
+            Some("ABC123def456")
+        );
+        assert_eq!(
+            parse_manifest_sha256(manifest, "msi").as_deref(),
+            Some("deadbeef")
+        );
+        assert_eq!(parse_manifest_sha256(manifest, "appimage"), None);
+    }
+
+    #[test]
+    fn parse_manifest_sha256_is_object_scoped_and_rejects_blank() {
+        // portable_zip has NO sha256; the msi (next artifact) does. The parser
+        // must NOT bleed into the sibling and return the msi's hash.
+        let no_hash = r#"{"artifacts":[
+            {"kind":"portable_zip","file_name":"p.zip","bytes":10},
+            {"kind":"msi","file_name":"w.msi","sha256":"deadbeef"}]}"#;
+        assert_eq!(parse_manifest_sha256(no_hash, "portable_zip"), None);
+        assert_eq!(
+            parse_manifest_sha256(no_hash, "msi").as_deref(),
+            Some("deadbeef")
+        );
+
+        // A blank sha256 is "no usable hash" -> None (indeterminate), not "".
+        let blank = r#"{"artifacts":[{"kind":"portable_zip","sha256":"  "}]}"#;
+        assert_eq!(parse_manifest_sha256(blank, "portable_zip"), None);
+    }
+
+    #[test]
+    fn hash_matches_is_case_insensitive_and_rejects_empty() {
+        assert!(hash_matches("ABC123", "abc123"));
+        assert!(hash_matches("  abc123  ", "ABC123"));
+        assert!(!hash_matches("abc123", "abc124"));
+        assert!(!hash_matches("", "abc123"));
+        assert!(!hash_matches("abc123", ""));
     }
 
     #[test]

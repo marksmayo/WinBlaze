@@ -22,4 +22,4 @@ pub use query::{
 };
 pub use scan::{ScanEvent, ScanProgress, ScanRequest, ScanState};
 pub use scan::{ScanIssueKind, ScanIssueRecord};
-pub use update::{is_newer, parse_release_tag};
+pub use update::{hash_matches, is_newer, parse_manifest_sha256, parse_release_tag};

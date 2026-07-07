@@ -151,10 +151,34 @@ jobs:
           $env:WINBLAZE_SIGNING_CERT_PATH = $certPath
           powershell.exe -ExecutionPolicy Bypass -File scripts\sign-artifacts.ps1 -Configuration Release -Platform x64 -Files $installer.FullName
 
+      - name: Verify signatures when configured
+        if: matrix.configuration == 'Release'
+        shell: pwsh
+        env:
+          WINBLAZE_SIGNING_CERT_BASE64: ${{ secrets.WINBLAZE_SIGNING_CERT_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINBLAZE_SIGNING_CERT_BASE64)) {
+            Write-Host "No signing certificate secret configured; skipping signature verification."
+            exit 0
+          }
+          powershell.exe -ExecutionPolicy Bypass -File scripts\sign-artifacts.ps1 -Configuration Release -Platform x64 -VerifyOnly
+
       - name: Write update manifest
         if: matrix.configuration == 'Release'
         shell: pwsh
         run: powershell.exe -ExecutionPolicy Bypass -File scripts\write-update-manifest.ps1
+
+      - name: Verify update manifest hashes match artifacts
+        if: matrix.configuration == 'Release'
+        shell: pwsh
+        run: |
+          $manifest = Get-Content artifacts\release\winblaze-update-manifest.json -Raw | ConvertFrom-Json
+          $zip = "artifacts\portable\WinBlaze-Release-x64-portable.zip"
+          $actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $entry = $manifest.artifacts | Where-Object { $_.kind -eq 'portable_zip' } | Select-Object -First 1
+          if (-not $entry) { throw "update manifest has no portable_zip artifact" }
+          if ($entry.sha256 -ne $actual) { throw "manifest sha256 $($entry.sha256) != portable zip $actual" }
+          Write-Host "Update manifest portable_zip SHA-256 verified against the packaged zip."
 
       - name: Upload portable package
         uses: actions/upload-artifact@v6

@@ -36,4 +36,7 @@ namespace WinBlaze::UI::NativeBridge
     void TreeLargestFiles(uint64_t limit, TreeNodeHandler handler);
     // Compares currentVersion against a GitHub releases/latest JSON body.
     WbUpdateCheck CheckForUpdate(const std::string& currentVersion, const std::string& responseJson);
+    // Verifies a downloaded artifact's SHA-256 against an update manifest:
+    // 1 = match, 0 = mismatch (abort), 2 = no entry / can't verify.
+    uint8_t VerifyDownload(const std::string& manifestJson, const std::string& kind, const std::string& actualHash);
 }

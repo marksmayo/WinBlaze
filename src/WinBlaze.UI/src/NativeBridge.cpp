@@ -17,6 +17,7 @@ namespace
     using TreeChildrenFn = WbTreeChildrenResult(__stdcall *)(uint64_t, uint64_t, WbTreeNodeCallback, void*);
     using TreeLargestFilesFn = void(__stdcall *)(uint64_t, WbTreeNodeCallback, void*);
     using UpdateCheckFn = WbUpdateCheck(__stdcall *)(WbCStringView, WbCStringView);
+    using VerifyDownloadFn = uint8_t(__stdcall *)(WbCStringView, WbCStringView, WbCStringView);
 
     struct DllApi
     {
@@ -31,6 +32,7 @@ namespace
         TreeChildrenFn tree_children{ nullptr };
         TreeLargestFilesFn tree_largest_files{ nullptr };
         UpdateCheckFn update_check{ nullptr };
+        VerifyDownloadFn verify_download{ nullptr };
     };
 
     DllApi& Api()
@@ -96,6 +98,7 @@ namespace
         // Optional: absence (older DLL) degrades the update check gracefully
         // rather than failing app startup, so it is not in the required set.
         api.update_check = reinterpret_cast<UpdateCheckFn>(GetProcAddress(api.module, "wb_update_check"));
+        api.verify_download = reinterpret_cast<VerifyDownloadFn>(GetProcAddress(api.module, "wb_verify_download"));
 
         if (api.start_scan == nullptr || api.start_incremental_scan == nullptr || api.cancel_scan == nullptr || api.destroy_scan == nullptr || api.load_catalog_snapshot_with_stats == nullptr || api.load_extension_stats == nullptr || api.tree_root == nullptr || api.tree_children == nullptr || api.tree_largest_files == nullptr) {
             throw std::runtime_error("Failed to resolve winblaze_native exports");
@@ -266,5 +269,17 @@ namespace WinBlaze::UI::NativeBridge
         const WbCStringView current{ currentVersion.c_str(), currentVersion.size() };
         const WbCStringView json{ responseJson.c_str(), responseJson.size() };
         return Api().update_check(current, json);
+    }
+
+    uint8_t VerifyDownload(const std::string& manifestJson, const std::string& kind, const std::string& actualHash)
+    {
+        EnsureLoaded();
+        if (Api().verify_download == nullptr) {
+            return 2; // older DLL without the export: indeterminate (proceed on transport trust).
+        }
+        const WbCStringView m{ manifestJson.c_str(), manifestJson.size() };
+        const WbCStringView k{ kind.c_str(), kind.size() };
+        const WbCStringView h{ actualHash.c_str(), actualHash.size() };
+        return Api().verify_download(m, k, h);
     }
 }

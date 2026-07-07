@@ -18,6 +18,7 @@ WinBlaze combines a Rust scanning engine (raw NTFS MFT access with a parallel di
 - **Persistent indexing**: compact binary snapshots reload instantly; incremental rescans diff against the previous state
 - **Memory disciplined**: file paths are derived (not stored) per record — a 2.2M-file index fits in ~1 GB working set and a 323 MB snapshot
 - **Responsive by measurement**: the UI ships its own frame/flush latency counters, and scan-time work is budgeted per frame
+- **Self-updating**: checks GitHub for a newer release on launch (and on demand), then downloads, **SHA-256-verifies**, and installs the update in-app before relaunching — no manual reinstall
 
 ## Performance
 

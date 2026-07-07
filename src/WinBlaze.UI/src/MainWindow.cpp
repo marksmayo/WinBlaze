@@ -8,6 +8,8 @@
 #include <winrt/Windows.Web.Http.h>
 #include <winrt/Windows.Web.Http.Headers.h>
 #include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.Security.Cryptography.h>
+#include <winrt/Windows.Security.Cryptography.Core.h>
 
 #include <filesystem>
 #include <fstream>
@@ -27,22 +29,21 @@ namespace
     // In-app update check. Bump kCurrentVersion with each release (matches the
     // Package.appxmanifest identity). TODO: source it from the exe version
     // resource so there is a single source of truth.
-    const std::string kCurrentVersion = "0.9.0";
+    const std::string kCurrentVersion = "0.9.1";
     constexpr wchar_t kReleasesLatestUrl[] =
         L"https://github.com/marksmayo/WinBlaze/releases/latest";
     constexpr wchar_t kReleaseApiUrl[] =
         L"https://api.github.com/repos/marksmayo/WinBlaze/releases/latest";
 
-    // GETs the GitHub releases/latest body off the UI thread; returns an empty
-    // string on any network/HTTP failure so callers treat it as "unknown".
-    winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> FetchReleaseJsonAsync()
+    // GETs a URL off the UI thread; returns an empty string on any network/HTTP
+    // failure so callers can treat it as "unknown".
+    winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> FetchTextAsync(winrt::hstring url)
     {
         try {
             winrt::Windows::Web::Http::HttpClient client;
             client.DefaultRequestHeaders().UserAgent().TryParseAdd(L"WinBlaze");
             client.DefaultRequestHeaders().Accept().TryParseAdd(L"application/vnd.github+json");
-            winrt::Windows::Foundation::Uri uri{ kReleaseApiUrl };
-            auto response = co_await client.GetAsync(uri);
+            auto response = co_await client.GetAsync(winrt::Windows::Foundation::Uri{ url });
             if (!response.IsSuccessStatusCode()) {
                 co_return winrt::hstring{};
             }
@@ -51,6 +52,11 @@ namespace
         catch (...) {
             co_return winrt::hstring{};
         }
+    }
+
+    winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> FetchReleaseJsonAsync()
+    {
+        co_return co_await FetchTextAsync(winrt::hstring{ kReleaseApiUrl });
     }
 
     // Settings "Check for updates": reports the result into the status text and
@@ -142,6 +148,7 @@ namespace
         std::filesystem::create_directories(stage, ec);
 
         bool ok = false;
+        std::string download_hash;
         try {
             const std::wstring url =
                 L"https://github.com/marksmayo/WinBlaze/releases/download/" + tag +
@@ -156,6 +163,13 @@ namespace
                     auto reader = WSS::DataReader::FromBuffer(content);
                     std::vector<uint8_t> bytes(length);
                     reader.ReadBytes(bytes);
+                    // SHA-256 of the downloaded bytes, for manifest verification.
+                    namespace WSC = winrt::Windows::Security::Cryptography;
+                    namespace WSCC = winrt::Windows::Security::Cryptography::Core;
+                    auto digest = WSCC::HashAlgorithmProvider::OpenAlgorithm(
+                                      WSCC::HashAlgorithmNames::Sha256())
+                                      .HashData(WSC::CryptographicBuffer::CreateFromByteArray(bytes));
+                    download_hash = winrt::to_string(WSC::CryptographicBuffer::EncodeToHexString(digest));
                     std::ofstream out(zip_path, std::ios::binary);
                     out.write(reinterpret_cast<const char*>(bytes.data()),
                               static_cast<std::streamsize>(bytes.size()));
@@ -166,6 +180,27 @@ namespace
         }
         catch (...) {
             ok = false;
+        }
+
+        // Verify the download's SHA-256 against the release's update manifest,
+        // FAIL CLOSED: only apply when it verifiably matches (verdict 1). A hash
+        // mismatch, a missing/blank hash, or a manifest we couldn't fetch all
+        // fall back to the browser download page rather than applying an
+        // unverified update — otherwise blocking the manifest fetch would be
+        // enough to bypass verification.
+        if (ok) {
+            const std::wstring manifest_url =
+                L"https://github.com/marksmayo/WinBlaze/releases/download/" + tag +
+                L"/winblaze-update-manifest.json";
+            const winrt::hstring manifest = co_await FetchTextAsync(winrt::hstring{ manifest_url });
+            uint8_t verdict = 2; // indeterminate until a successful match
+            if (!manifest.empty()) {
+                verdict = WinBlaze::UI::NativeBridge::VerifyDownload(
+                    winrt::to_string(manifest), "portable_zip", download_hash);
+            }
+            if (verdict != 1) {
+                ok = false;
+            }
         }
 
         if (ok) {

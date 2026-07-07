@@ -1625,6 +1625,37 @@ pub extern "C" fn wb_update_check(
     result
 }
 
+/// Verifies a downloaded artifact against a WinBlaze update manifest before it
+/// is applied. Returns:
+///   1 = the manifest lists the `kind`'s SHA-256 and it matches `actual_hash`,
+///   0 = the manifest lists it and it MISMATCHES (caller must abort),
+///   2 = the manifest has no such entry or is unparseable (caller may proceed
+///       on transport trust — e.g. an older release without a manifest).
+/// All views are UTF-8.
+#[no_mangle]
+pub extern "C" fn wb_verify_download(
+    manifest_json: WbCStringView,
+    kind: WbCStringView,
+    actual_hash: WbCStringView,
+) -> u8 {
+    let read = |view: WbCStringView| -> Option<&str> {
+        if view.ptr.is_null() {
+            return None;
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(view.ptr.cast::<u8>(), view.len) };
+        std::str::from_utf8(bytes).ok()
+    };
+    let (Some(manifest), Some(kind), Some(actual)) =
+        (read(manifest_json), read(kind), read(actual_hash))
+    else {
+        return 2;
+    };
+    match winblaze_core::parse_manifest_sha256(manifest, kind) {
+        Some(expected) => u8::from(winblaze_core::hash_matches(&expected, actual)),
+        None => 2,
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn wb_index_snapshot_extension_stats(
     callback: WbExtensionStatCallback,
@@ -1796,6 +1827,37 @@ mod tests {
 
         let older = wb_update_check(view("0.8.0"), view(r#"{"tag_name":"v0.7.9"}"#));
         assert_eq!(older.available, 0);
+    }
+
+    #[test]
+    fn wb_verify_download_matches_mismatches_and_indeterminate() {
+        let manifest = r#"{"artifacts":[{"kind":"portable_zip","sha256":"ABC123"}]}"#;
+        // Match (case-insensitive).
+        assert_eq!(
+            wb_verify_download(view(manifest), view("portable_zip"), view("abc123")),
+            1
+        );
+        // Mismatch -> caller must abort.
+        assert_eq!(
+            wb_verify_download(view(manifest), view("portable_zip"), view("dead")),
+            0
+        );
+        // No such artifact -> indeterminate.
+        assert_eq!(
+            wb_verify_download(view(manifest), view("msi"), view("abc123")),
+            2
+        );
+        // Unparseable manifest -> indeterminate.
+        assert_eq!(
+            wb_verify_download(view("{}"), view("portable_zip"), view("abc123")),
+            2
+        );
+        // Blank hash in the manifest -> indeterminate, not a spurious mismatch.
+        let blank = r#"{"artifacts":[{"kind":"portable_zip","sha256":""}]}"#;
+        assert_eq!(
+            wb_verify_download(view(blank), view("portable_zip"), view("abc123")),
+            2
+        );
     }
 
     #[test]

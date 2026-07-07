@@ -203,6 +203,11 @@ typedef struct WbUpdateCheck
    reports whether a newer release is available. The caller does the fetch. */
 WbUpdateCheck wb_update_check(WbCStringView current_version, WbCStringView response_json);
 
+/* Verifies a downloaded artifact against an update manifest before applying:
+   1 = manifest lists the kind's SHA-256 and it matches actual_hash,
+   0 = it MISMATCHES (caller must abort), 2 = no entry / unparseable. */
+uint8_t wb_verify_download(WbCStringView manifest_json, WbCStringView kind, WbCStringView actual_hash);
+
 #ifdef __cplusplus
 }
 #endif
