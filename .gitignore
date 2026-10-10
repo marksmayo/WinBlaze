@@ -1,4 +1,5 @@
 target/
+benchmarks/runs/
 **/*.rs.bk
 
 # Rust/build artifacts

@@ -1,0 +1,50 @@
+[
+  {
+    "group": "WinDirStat, full",
+    "n": 3,
+    "median_ms": 43206.59,
+    "warm_median_ms": 45180.455,
+    "median_peak_mib": 772.5,
+    "median_cpu_seconds": 128.03
+  },
+  {
+    "group": "WinDirStat, scale",
+    "n": 3,
+    "median_ms": 761.41,
+    "warm_median_ms": 737.355,
+    "median_peak_mib": 67.7,
+    "median_cpu_seconds": 0.77
+  },
+  {
+    "group": "WinDirStat, tiny",
+    "n": 3,
+    "median_ms": 565.85,
+    "warm_median_ms": 541.755,
+    "median_peak_mib": 64.2,
+    "median_cpu_seconds": 0.48
+  },
+  {
+    "group": "WizTree, full",
+    "n": 3,
+    "median_ms": 48340.95,
+    "warm_median_ms": 44844.055,
+    "median_peak_mib": 1296.9,
+    "median_cpu_seconds": 182.94
+  },
+  {
+    "group": "WizTree, scale",
+    "n": 3,
+    "median_ms": 1159.28,
+    "warm_median_ms": 1267.955,
+    "median_peak_mib": 67.7,
+    "median_cpu_seconds": 1.39
+  },
+  {
+    "group": "WizTree, tiny",
+    "n": 3,
+    "median_ms": 1431.49,
+    "warm_median_ms": 1497.595,
+    "median_peak_mib": 63.2,
+    "median_cpu_seconds": 1.09
+  }
+]

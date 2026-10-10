@@ -1,0 +1,9 @@
+{
+  "utc": "2026-10-02T10:30:27.473Z",
+  "scenario": "full-3",
+  "lines": [
+    "\t\t\t\t10514 text UI batching: ready, flushes=152, queued events=8776, last latency=87 ms, last input=0 ms, flush cost=22 ms, peak flush=101 ms, frames=2514, last frame=22 ms, peak frame=568 ms, treemap renders=57/73 requests, coalesced=16, session=idle, results=loaded, working set=853.6 MB, peak=929.6 MB, Cache load: read 0 B in 0 ms, decoded in 0 ms, entries=2886617, load cap=8192 (volumes=1, directories=501037, files=2385579), source=primary, Scan duration: 29909 ms",
+    "\t\t\t\t10515 text UI batching: treemap surface resized, flushes=152, queued events=8776, last latency=87 ms, last input=0 ms, flush cost=22 ms, peak flush=101 ms, frames=2514, last frame=22 ms, peak frame=568 ms, treemap renders=57/73 requests, coalesced=16 Scan throughput: 56896 items/s, 7.9 GB/s, progress=2884195/0, bytes=401.5 GB/401.5 GB Memory: working set=853.6 MB, peak=929.6 MB, summary=2385579 files, 501037 directories, 401.5 GB Cache load: read 0 B in 0 ms, decoded in 0 ms, entries=2886617, load cap=8192 (volumes=1, directories=501037, files=2385579), source=primary",
+    "\t\t\t\t10516 text SLOW SCAN MODE: the fast NTFS scan is unavailable, so this scan is running the much slower standard directory walk. Restart WinBlaze as Administrator for full-speed scans. (A recoverable scan issue was reported (Fast scan unavailable code 16): C:\\: Falling back to a standard directory scan: access denied reading the NTFS master file table (Access is denied. (os error 5)); restart WinBlaze as Administrator for full-speed scans) | Correctness: issues=134, issue codes=Permission denied code 10: 133 | Fast scan unavailable code 16: 1, incremental added=0, removed=0, modified=0, renamed=0, moved=0, last issue=(path omitted), files=2385579, directories=501037, sized catalog entries=8192, totals summary=401.5 GB, catalog sample=0 B, delta=401.5 GB"
+  ]
+}

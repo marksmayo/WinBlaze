@@ -77,14 +77,12 @@ fn deferred_sorted_persist_matches_transaction_persist() {
         tx.upsert_file(&FileRecord {
             id: FileId(id + 100),
             parent_directory_id: DirectoryId(id),
-            name: format!("file-{id}.bin"),
-            full_path: String::new(),
+            name: format!("file-{id}.bin").into(),
+            full_path: String::new().into(),
             size_bytes: id * 10,
             allocation_bytes: id * 10,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: Some(1),
-            modified_utc: Some(2),
-            accessed_utc: None,
+            timestamps: winblaze_core::FileTimestamps::new(Some(1), Some(2), None),
         });
     }
 
@@ -158,14 +156,12 @@ fn buffered_transaction_captures_records() {
     tx.upsert_file(&FileRecord {
         id: FileId(99),
         parent_directory_id: DirectoryId(10),
-        name: String::from("file.txt"),
-        full_path: String::from("C:\\root\\file.txt"),
+        name: String::from("file.txt").into(),
+        full_path: String::from("C:\\root\\file.txt").into(),
         size_bytes: 10,
         allocation_bytes: 16,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: None,
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, None, None),
     });
 
     assert_eq!(tx.snapshot_volumes().len(), 1);
@@ -194,32 +190,28 @@ fn incremental_file_changes_replace_and_remove_records() {
     let previous = vec![FileRecord {
         id: FileId(1),
         parent_directory_id: DirectoryId(10),
-        name: String::from("old.txt"),
-        full_path: String::from("C:\\root\\old.txt"),
+        name: String::from("old.txt").into(),
+        full_path: String::from("C:\\root\\old.txt").into(),
         size_bytes: 10,
         allocation_bytes: 16,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(10),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(10), None),
     }];
     let current = vec![FileRecord {
         id: FileId(1),
         parent_directory_id: DirectoryId(10),
-        name: String::from("new.txt"),
-        full_path: String::from("C:\\root\\new.txt"),
+        name: String::from("new.txt").into(),
+        full_path: String::from("C:\\root\\new.txt").into(),
         size_bytes: 12,
         allocation_bytes: 16,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(12),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(12), None),
     }];
 
     let change_set = tx.apply_incremental_files(&previous, &current);
     assert_eq!(change_set.changes.len(), 1);
     assert_eq!(tx.snapshot_files().len(), 1);
-    assert_eq!(tx.snapshot_files()[0].name, "new.txt");
+    assert_eq!(tx.snapshot_files()[0].name.as_ref(), "new.txt");
     assert_eq!(tx.file_change_sets().len(), 1);
     assert_eq!(tx.lineage_records().len(), 1);
     assert!(tx.lineage_records()[0].renamed);
@@ -239,26 +231,22 @@ fn repository_applies_incremental_transaction_against_persisted_snapshot() {
     initial.upsert_file(&FileRecord {
         id: FileId(1),
         parent_directory_id: DirectoryId(10),
-        name: String::from("old.txt"),
-        full_path: String::from("C:\\root\\old.txt"),
+        name: String::from("old.txt").into(),
+        full_path: String::from("C:\\root\\old.txt").into(),
         size_bytes: 10,
         allocation_bytes: 16,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(10),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(10), None),
     });
     initial.upsert_file(&FileRecord {
         id: FileId(2),
         parent_directory_id: DirectoryId(10),
-        name: String::from("removed.txt"),
-        full_path: String::from("C:\\root\\removed.txt"),
+        name: String::from("removed.txt").into(),
+        full_path: String::from("C:\\root\\removed.txt").into(),
         size_bytes: 5,
         allocation_bytes: 8,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(10),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(10), None),
     });
     repo.apply_transaction(&initial).expect("persist initial");
 
@@ -266,26 +254,22 @@ fn repository_applies_incremental_transaction_against_persisted_snapshot() {
     current.upsert_file(&FileRecord {
         id: FileId(1),
         parent_directory_id: DirectoryId(10),
-        name: String::from("new.txt"),
-        full_path: String::from("C:\\root\\new.txt"),
+        name: String::from("new.txt").into(),
+        full_path: String::from("C:\\root\\new.txt").into(),
         size_bytes: 12,
         allocation_bytes: 16,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(12),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(12), None),
     });
     current.upsert_file(&FileRecord {
         id: FileId(3),
         parent_directory_id: DirectoryId(10),
-        name: String::from("added.txt"),
-        full_path: String::from("C:\\root\\added.txt"),
+        name: String::from("added.txt").into(),
+        full_path: String::from("C:\\root\\added.txt").into(),
         size_bytes: 1,
         allocation_bytes: 1,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(12),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(12), None),
     });
 
     let change_set = repo
@@ -296,15 +280,15 @@ fn repository_applies_incremental_transaction_against_persisted_snapshot() {
     assert!(repo
         .snapshot_files()
         .iter()
-        .any(|file| file.name == "new.txt"));
+        .any(|file| file.name.as_ref() == "new.txt"));
     assert!(repo
         .snapshot_files()
         .iter()
-        .any(|file| file.name == "added.txt"));
+        .any(|file| file.name.as_ref() == "added.txt"));
     assert!(repo
         .snapshot_files()
         .iter()
-        .all(|file| file.name != "removed.txt"));
+        .all(|file| file.name.as_ref() != "removed.txt"));
 
     let reopened = SqliteIndexRepository::open(&storage_dir, IndexBackend::BinaryCache);
     assert_eq!(reopened.snapshot_files().len(), 2);
@@ -326,14 +310,12 @@ fn repository_path_matched_incremental_ignores_ephemeral_file_id_shifts() {
     initial.upsert_file(&FileRecord {
         id: FileId(1),
         parent_directory_id: DirectoryId(10),
-        name: String::from("stable.txt"),
-        full_path: String::from("C:\\root\\stable.txt"),
+        name: String::from("stable.txt").into(),
+        full_path: String::from("C:\\root\\stable.txt").into(),
         size_bytes: 10,
         allocation_bytes: 16,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(10),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(10), None),
     });
     repo.apply_transaction(&initial).expect("persist initial");
 
@@ -341,26 +323,22 @@ fn repository_path_matched_incremental_ignores_ephemeral_file_id_shifts() {
     current.upsert_file(&FileRecord {
         id: FileId(2),
         parent_directory_id: DirectoryId(10),
-        name: String::from("stable.txt"),
-        full_path: String::from("C:\\root\\stable.txt"),
+        name: String::from("stable.txt").into(),
+        full_path: String::from("C:\\root\\stable.txt").into(),
         size_bytes: 10,
         allocation_bytes: 16,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(10),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(10), None),
     });
     current.upsert_file(&FileRecord {
         id: FileId(3),
         parent_directory_id: DirectoryId(10),
-        name: String::from("added.txt"),
-        full_path: String::from("C:\\root\\added.txt"),
+        name: String::from("added.txt").into(),
+        full_path: String::from("C:\\root\\added.txt").into(),
         size_bytes: 1,
         allocation_bytes: 1,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(10),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(10), None),
     });
 
     let change_set = repo
@@ -408,21 +386,19 @@ fn repository_persists_and_recovers_state_on_disk() {
     tx.upsert_file(&FileRecord {
         id: FileId(1),
         parent_directory_id: DirectoryId(10),
-        name: String::from("persisted.txt"),
-        full_path: String::from("C:\\root\\persisted.txt"),
+        name: String::from("persisted.txt").into(),
+        full_path: String::from("C:\\root\\persisted.txt").into(),
         size_bytes: 42,
         allocation_bytes: 64,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(42),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(42), None),
     });
 
     repo.apply_transaction(&tx).expect("persist state");
 
     let reopened = SqliteIndexRepository::open(&storage_dir, IndexBackend::BinaryCache);
     assert_eq!(reopened.snapshot_files().len(), 1);
-    assert_eq!(reopened.snapshot_files()[0].name, "persisted.txt");
+    assert_eq!(reopened.snapshot_files()[0].name.as_ref(), "persisted.txt");
     assert_eq!(reopened.snapshot_directories().len(), 1);
     assert_eq!(reopened.snapshot_volumes().len(), 1);
     assert!(reopened.snapshot().cache_read_bytes > 0);
@@ -459,14 +435,12 @@ fn repository_recovers_from_corrupt_primary_snapshot() {
     tx.upsert_file(&FileRecord {
         id: FileId(9),
         parent_directory_id: DirectoryId(1),
-        name: String::from("recover.txt"),
-        full_path: String::from("C:\\root\\recover.txt"),
+        name: String::from("recover.txt").into(),
+        full_path: String::from("C:\\root\\recover.txt").into(),
         size_bytes: 8,
         allocation_bytes: 16,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: Some(8),
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, Some(8), None),
     });
     repo.apply_transaction(&tx).expect("persist state");
 
@@ -477,7 +451,7 @@ fn repository_recovers_from_corrupt_primary_snapshot() {
 
     let reopened = SqliteIndexRepository::open(&storage_dir, IndexBackend::BinaryCache);
     assert_eq!(reopened.snapshot_files().len(), 1);
-    assert_eq!(reopened.snapshot_files()[0].name, "recover.txt");
+    assert_eq!(reopened.snapshot_files()[0].name.as_ref(), "recover.txt");
     assert!(reopened.snapshot().cache_read_bytes > 0);
     assert!(reopened.snapshot().cache_loaded_from_backup);
 
@@ -605,14 +579,12 @@ fn repository_invalidate_cache_clears_files_and_state() {
     tx.upsert_file(&FileRecord {
         id: FileId(21),
         parent_directory_id: DirectoryId(1),
-        name: String::from("invalidate.txt"),
-        full_path: String::from("C:\\root\\invalidate.txt"),
+        name: String::from("invalidate.txt").into(),
+        full_path: String::from("C:\\root\\invalidate.txt").into(),
         size_bytes: 1,
         allocation_bytes: 1,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: None,
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, None, None),
     });
     repo.apply_transaction(&tx).expect("persist state");
 
@@ -639,14 +611,12 @@ fn repository_compact_cache_removes_auxiliary_files() {
     tx.upsert_file(&FileRecord {
         id: FileId(31),
         parent_directory_id: DirectoryId(1),
-        name: String::from("compact.txt"),
-        full_path: String::from("C:\\root\\compact.txt"),
+        name: String::from("compact.txt").into(),
+        full_path: String::from("C:\\root\\compact.txt").into(),
         size_bytes: 2,
         allocation_bytes: 4,
         attributes: FileAttributes::ARCHIVE,
-        created_utc: None,
-        modified_utc: None,
-        accessed_utc: None,
+        timestamps: winblaze_core::FileTimestamps::new(None, None, None),
     });
     repo.apply_transaction(&tx).expect("persist state");
 

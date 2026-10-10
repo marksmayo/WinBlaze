@@ -1,0 +1,1914 @@
+{
+  "reviewed_utc": "2026-10-03T21:47:46.157156+00:00",
+  "scope": "Repository-wide speed and memory audit; 50 targeted low-risk source changes, 150 additional profiling candidates",
+  "ranking_method": "Qualified changes first, ordered by expected avoided volume-scale memory/work and feature-workload exposure. This is engineering priority, not a measured universal savings order. Shared implementation sites are explicitly separate targets, not independent additive wins. Lower entries are not claimed safe without profiling.",
+  "rows": [
+    {
+      "rank": 1,
+      "candidate": "Stream ACL analysis paths instead of retaining a catalog-sized vector",
+      "source": "src/WinBlaze.Native/src/reports.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "One PathBuf per file removed from peak retained analysis memory",
+      "evidence": "invalid_analysis_does_not_materialize_the_catalog_paths",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 2,
+      "candidate": "Reuse duplicate comparison buffers",
+      "source": "src/WinBlaze.Scanner/src/content.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "20-file test: 2,510,092 cumulative allocated bytes to 150,796 with reuse, then below 50,000 with bounded scratch sizing; related targets overlap",
+      "evidence": "duplicate_detection_reuses_comparison_buffers_across_candidates",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 3,
+      "candidate": "Stream reconstructed JSON file paths",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "20k-file test: 588,894 cumulative path bytes to below 4,096",
+      "evidence": "json_export_streams_reconstructed_paths_without_per_file_allocations",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 4,
+      "candidate": "Borrow stored JSON file paths",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "One full-path clone avoided per legacy/imported JSON file",
+      "evidence": "json_export",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 5,
+      "candidate": "Store file parents as compact u32 indices",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "4 bytes per file removed from construction scratch; 6.3 MiB at 1.66m files",
+      "evidence": "tree_build_uses_compact_parent_indices_and_reuses_child_cursors",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 6,
+      "candidate": "Release file-parent scratch before rollup construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remaining 4 bytes/file freed before rollup arrays are allocated",
+      "evidence": "tree_build_uses_compact_parent_indices_and_reuses_child_cursors",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 7,
+      "candidate": "Release directory-parent scratch before rollup construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "8 bytes/directory released sooner",
+      "evidence": "directory_tree_reuses_count_arrays_as_fill_cursors",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 8,
+      "candidate": "Reuse directory child counts as insertion cursors",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "4 bytes/directory scratch allocation removed",
+      "evidence": "directory_tree_reuses_count_arrays_as_fill_cursors",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 9,
+      "candidate": "Reuse file child counts as insertion cursors",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "4 bytes/directory scratch allocation removed",
+      "evidence": "directory_tree_reuses_count_arrays_as_fill_cursors",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 10,
+      "candidate": "Release directory insertion cursors before rollups",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "4 bytes/directory released sooner",
+      "evidence": "directory_tree_reuses_count_arrays_as_fill_cursors",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 11,
+      "candidate": "Release file insertion cursors before rollups",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "4 bytes/directory released sooner",
+      "evidence": "directory_tree_reuses_count_arrays_as_fill_cursors",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 12,
+      "candidate": "Allocate joined paths at exact capacity",
+      "source": "src/WinBlaze.Core/src/model.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "100+100-character join: 700 cumulative allocated bytes to 201",
+      "evidence": "derived_paths_allocate_the_exact_required_capacity",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 13,
+      "candidate": "Match ASCII export wildcards without temporary arrays",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "20k-file test: 3,848,922 matching allocation bytes to below 4,096",
+      "evidence": "ascii_filtered_export_has_no_per_file_matching_allocations",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 14,
+      "candidate": "Move imported file paths into the catalog",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "One path copy/file removed; shared import budget 7.77 MB to below 5.2 MB",
+      "evidence": "csv_import_avoids_repeated_ancestor_and_record_copies",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 15,
+      "candidate": "Insert owned imported file records",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "One name/path record clone/file removed; shared import budget",
+      "evidence": "csv_import_avoids_repeated_ancestor_and_record_copies",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 16,
+      "candidate": "Insert owned imported directory records",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "One name/path clone/directory removed; shared import budget",
+      "evidence": "csv_import_avoids_repeated_ancestor_and_record_copies",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 17,
+      "candidate": "Reserve imported file map from the exact row count",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Avoid repeated file-map growth and rehash; shared import budget",
+      "evidence": "csv_import_avoids_repeated_ancestor_and_record_copies",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 18,
+      "candidate": "Reserve imported directory map from reconstructed counts",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Avoid repeated directory-map growth; shared import budget",
+      "evidence": "csv_import_avoids_repeated_ancestor_and_record_copies",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 19,
+      "candidate": "Borrow CSV ancestor substrings while reconstructing folders",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove temporary path strings per file per ancestor",
+      "evidence": "csv_import_avoids_repeated_ancestor_and_record_copies",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 20,
+      "candidate": "Trim imported directory separators in place",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove a replacement path allocation/directory",
+      "evidence": "csv_import",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 21,
+      "candidate": "Validate CSV headers using borrowed iterator equality",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove temporary header pointer vector",
+      "evidence": "csv_import",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 22,
+      "candidate": "Borrow search patterns without lowercase copies",
+      "source": "src/WinBlaze.Index/src/query.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove one pattern allocation/query; combined no-match test 4,210 bytes to zero",
+      "evidence": "no_match_search_borrows_filters_and_allocates_no_result_storage",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 23,
+      "candidate": "Borrow normalized search extension text",
+      "source": "src/WinBlaze.Index/src/query.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove one owned lowercase string/extension/query",
+      "evidence": "no_match_search_borrows_filters_and_allocates_no_result_storage",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 24,
+      "candidate": "Prepare short extension lists in stack storage",
+      "source": "src/WinBlaze.Index/src/query.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove pointer-vector allocation for up to eight filters; longer lists retain fallback",
+      "evidence": "no_match_search_borrows_filters_and_allocates_no_result_storage",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 25,
+      "candidate": "Allocate search candidate storage only after a match",
+      "source": "src/WinBlaze.Index/src/query.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove 4 KiB initial result storage for no-match queries",
+      "evidence": "no_match_search_borrows_filters_and_allocates_no_result_storage",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 26,
+      "candidate": "Skip diff maps for identical sorted unique snapshots",
+      "source": "src/WinBlaze.Core/src/model.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "20k-file unchanged diff: 1,114,144 allocated bytes to zero",
+      "evidence": "identical_unique_file_snapshots_skip_diff_lookup_maps",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 27,
+      "candidate": "Skip incremental lookup maps for empty change sets",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "20k-file unchanged apply: 1,114,240 allocated bytes to below 4,096; history retained",
+      "evidence": "unchanged_incremental_apply_keeps_history_without_lookup_maps",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 28,
+      "candidate": "Reserve standard CSV row field capacity",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Avoid the four-to-eight-field allocation growth per standard row",
+      "evidence": "csv_import_avoids_repeated_ancestor_and_record_copies",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 29,
+      "candidate": "Reuse header field counts for foreign CSV row capacity",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Avoid seven-to-fourteen-field growth per nine-column row",
+      "evidence": "foreign_csv_import_moves_columns_and_uses_fixed_date_fields",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 30,
+      "candidate": "Move WinDirStat CSV columns into normalized rows",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove five field-string clones/row; shared foreign-import allocation budget",
+      "evidence": "foreign_csv_import_moves_columns_and_uses_fixed_date_fields",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 31,
+      "candidate": "Move WizTree CSV columns into normalized rows",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove five field-string clones/row; existing interoperability checks",
+      "evidence": "csv_import",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 32,
+      "candidate": "Reserve normalized WinDirStat row storage",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Avoid growing outer converted-row vector",
+      "evidence": "foreign_csv_import_moves_columns_and_uses_fixed_date_fields",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 33,
+      "candidate": "Reserve normalized WizTree row storage",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Avoid growing outer converted-row vector",
+      "evidence": "csv_import",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 34,
+      "candidate": "Parse timestamp components into a fixed six-field array",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove two growable integer-vector allocations/date",
+      "evidence": "foreign_csv_import_moves_columns_and_uses_fixed_date_fields",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 35,
+      "candidate": "Normalize WizTree date text in one exact-sized buffer",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Replace three intermediate date strings with one",
+      "evidence": "csv_import",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 36,
+      "candidate": "Move trimmed WizTree directory paths",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove another directory-path clone during format conversion",
+      "evidence": "csv_import",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 37,
+      "candidate": "Compare ASCII CSV ancestor prefixes without folding copies",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove three lowercase/concatenated strings per ancestor-prefix check; Unicode fallback preserved",
+      "evidence": "csv_import",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 38,
+      "candidate": "Truncate the common CSV ancestor in place",
+      "source": "src/WinBlaze.Index/src/import.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove one owned prefix per common-root reduction",
+      "evidence": "csv_import",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 39,
+      "candidate": "Bound duplicate scratch buffers by candidate file length",
+      "source": "src/WinBlaze.Scanner/src/content.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Small-file comparisons need 2*min(size,64KiB), not a fixed 128KiB",
+      "evidence": "duplicate_detection_reuses_comparison_buffers_across_candidates",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 40,
+      "candidate": "Skip singleton duplicate size buckets",
+      "source": "src/WinBlaze.Scanner/src/content.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Skip sorting/group bookkeeping for sizes that cannot yield duplicates",
+      "evidence": "content_duplicates + duplicate allocation budget",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 41,
+      "candidate": "Avoid content scratch allocation for empty duplicates",
+      "source": "src/WinBlaze.Scanner/src/content.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Zero-length files still undergo metadata validation, with no content buffers",
+      "evidence": "content_duplicates + bounded comparison buffers",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 42,
+      "candidate": "Compile Unicode wildcard patterns once per export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove lowercase/pattern-character arrays per non-ASCII file",
+      "evidence": "unicode_filtered_export_compiles_patterns_once_and_folds_names_once",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 43,
+      "candidate": "Fold Unicode filenames once for all export patterns",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove repeated filename folding for unmatched multi-pattern filters",
+      "evidence": "unicode_filtered_export_compiles_patterns_once_and_folds_names_once",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 44,
+      "candidate": "Reserve Unicode filename character storage exactly",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Avoid growth/reallocation of character arrays per non-ASCII file; Unicode fixture falls from 2,462,715 after initial compilation to below 2,300,000",
+      "evidence": "unicode_filtered_export_compiles_patterns_once_and_folds_names_once",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 45,
+      "candidate": "Compare export source paths without materializing every catalog path",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Avoid joined paths and lowercase allocations per ASCII file when protecting an existing export destination; 20k-file miss allocates under 4096 bytes",
+      "evidence": "overwrite_source_path_checks_do_not_materialize_every_catalog_path",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 46,
+      "candidate": "Stream quotes in analysis CSV fields",
+      "source": "src/WinBlaze.Native/src/reports.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove replacement String allocations per ACL/path field",
+      "evidence": "permission_csv_streams_quotes_and_error_prefixes_without_extra_strings",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 47,
+      "candidate": "Stream analysis error prefixes without format strings",
+      "source": "src/WinBlaze.Native/src/reports.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove a temporary error-prefixed String/error row",
+      "evidence": "permission_csv_streams_quotes_and_error_prefixes_without_extra_strings",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 48,
+      "candidate": "Avoid a full replacement batch for terminal pipeline events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove 512-event empty allocation at completion; later emissions remain supported",
+      "evidence": "terminal_pipeline_flush_does_not_allocate_an_unused_full_batch",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 49,
+      "candidate": "Reject impossible search bounds before scanning candidates",
+      "source": "src/WinBlaze.Index/src/query.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Avoid a whole-catalog walk for reversed size/date bounds",
+      "evidence": "impossible_search_bounds_skip_even_filter_preparation",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 50,
+      "candidate": "Wait for CLI terminal notification instead of polling",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "implemented",
+      "risk": "low; subject to correctness and benchmark validation",
+      "estimated_savings": "Remove 5ms polling latency and repeated wakeups; retain 300s timeout",
+      "evidence": "cli_terminal_callback_notifies_waiter_without_polling + shipped_cli_scans_exports_and_rejects_invalid_commands",
+      "group": "Shared paths and tests overlap; estimates are not additive",
+      "validation": "Workspace tests and strict Clippy passed; 92.78% line coverage; all 450 Release observations validated with n=10 and current binary hashes"
+    },
+    {
+      "rank": 51,
+      "candidate": "Reuse the fallback UTF-16 directory prefix",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 52,
+      "candidate": "Reuse fallback file-path capacity across entries",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 53,
+      "candidate": "Query compression metadata using the already-open file handle",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 54,
+      "candidate": "Combine fallback link count and short identity queries",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 55,
+      "candidate": "Avoid joining paths for fallback directory entries",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 56,
+      "candidate": "Use a smaller first metadata buffer for tiny directories",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 57,
+      "candidate": "Grow directory buffers only when the filesystem requests it",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 58,
+      "candidate": "Pool directory metadata buffers per worker",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 59,
+      "candidate": "Avoid clearing metadata buffers between directory opens",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 60,
+      "candidate": "Select supported metadata classes once per volume",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 61,
+      "candidate": "Reserve child-directory path capacity from exact name length",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 62,
+      "candidate": "Borrow ancestor paths for ordinary child checks",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 63,
+      "candidate": "Avoid duplicate normalized-root conversions",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 64,
+      "candidate": "Avoid duplicate volume-root discovery",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 65,
+      "candidate": "Cache volume information for reparse targets",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 66,
+      "candidate": "Reduce fallback error-path display conversions",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 67,
+      "candidate": "Reuse canonicalization scratch space for followed reparses",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 68,
+      "candidate": "Avoid converting display names twice in logs",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 69,
+      "candidate": "Borrow exact file names during issue classification",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 70,
+      "candidate": "Avoid constructing paths for skipped reparse files",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 71,
+      "candidate": "Pre-reserve identity sets using a bounded directory estimate",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 72,
+      "candidate": "Batch identity claims while holding one shard lock",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 73,
+      "candidate": "Select shard count from measured worker count",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 74,
+      "candidate": "Use worker-local identity prefilters without false positives",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 75,
+      "candidate": "Avoid repeated volume map lookup within one directory batch",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 76,
+      "candidate": "Release identity sets immediately after producer completion",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 77,
+      "candidate": "Shrink sparse identity shards before long idle periods",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 78,
+      "candidate": "Use a measured identity-specific hasher while retaining collision correctness",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 79,
+      "candidate": "Choose directory worker count from a controlled n=10 sweep",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 80,
+      "candidate": "Avoid waking all workers for one newly queued directory",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 81,
+      "candidate": "Queue child directories in batches",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 82,
+      "candidate": "Amortize queue locking across local child discoveries",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 83,
+      "candidate": "Use a bounded worker-local directory queue",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 84,
+      "candidate": "Reduce empty work-queue polling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 85,
+      "candidate": "Move non-shared directory counters to workers",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 86,
+      "candidate": "Merge worker byte totals at progress boundaries",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 87,
+      "candidate": "Avoid work-stealing for shallow single-directory scans",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 88,
+      "candidate": "Reuse worker pipeline buffers across directories",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 89,
+      "candidate": "Tune event batch size with a controlled sweep",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 90,
+      "candidate": "Reuse emptied event batches via a bounded pool",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 91,
+      "candidate": "Use bounded channel capacity derived from byte budgets",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 92,
+      "candidate": "Coalesce superseded non-terminal progress updates",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 93,
+      "candidate": "Reserve issue batches from observed issue density",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 94,
+      "candidate": "Avoid calculating progress intervals until item thresholds pass",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 95,
+      "candidate": "Batch file IDs and shared counter increments per directory",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 96,
+      "candidate": "Avoid copying progress state for unchanged values",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 97,
+      "candidate": "Separate summary delivery from unused per-file CLI callbacks",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 98,
+      "candidate": "Reuse log formatting scratch for bounded diagnostic events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 99,
+      "candidate": "Skip record permutation when IDs are already sorted",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 100,
+      "candidate": "Reserve transaction maps from bounded walk estimates",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 101,
+      "candidate": "Avoid allocating child-count arrays for empty catalogs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 102,
+      "candidate": "Reuse child-count storage as child-fill cursors",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 103,
+      "candidate": "Pre-reserve root traversal order from directory count",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 104,
+      "candidate": "Skip child sorting for zero/one-child ranges",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 105,
+      "candidate": "Cache physical size comparison keys for large child sorts",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 106,
+      "candidate": "Fuse file rollups and extension aggregation when measured useful",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 107,
+      "candidate": "Reuse directory lookup results during file attachment",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 108,
+      "candidate": "Avoid building display-only ordering for unattended export",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 109,
+      "candidate": "Batch adjacent snapshot scalar writes",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 110,
+      "candidate": "Reuse string-length encoding scratch",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 111,
+      "candidate": "Avoid sorting already-sorted auxiliary records",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 112,
+      "candidate": "Reserve snapshot serializer vectors from exact collection sizes",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 113,
+      "candidate": "Borrow auxiliary state when lifetimes permit",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 114,
+      "candidate": "Avoid opening an empty repository before a replacement scan",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 115,
+      "candidate": "Release repository state before CSV output begins",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 116,
+      "candidate": "Reduce redundant backup metadata queries",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 117,
+      "candidate": "Size snapshot read buffers from validated header metadata",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 118,
+      "candidate": "Avoid duplicate checksum passes if a compatible streaming checksum exists",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 119,
+      "candidate": "Benchmark a stack decimal encoder against standard formatting",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 120,
+      "candidate": "Batch one CSV row into reusable scratch space",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 121,
+      "candidate": "Scan quote-free names with a measured fast byte search",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 122,
+      "candidate": "Write constant CSV suffixes in fewer calls",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 123,
+      "candidate": "Borrow parent-path separators consistently",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 124,
+      "candidate": "Reuse parent path lookup across adjacent sibling records",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 125,
+      "candidate": "Buffer large escaped path fragments in fewer writes",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 126,
+      "candidate": "Avoid dynamic filter dispatch for unfiltered CSV",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 127,
+      "candidate": "Avoid evaluating directory selection predicates for full exports",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 128,
+      "candidate": "Estimate output size for optional file preallocation",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 129,
+      "candidate": "Wait on terminal notification instead of 5 ms polling",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 130,
+      "candidate": "Parse CLI arguments without collecting an intermediate vector",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 131,
+      "candidate": "Avoid allocating live UI forwarding state for a quiet CLI",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 132,
+      "candidate": "Suppress transient extension snapshots in unattended mode",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 133,
+      "candidate": "Avoid temporary C strings for unused live directory callbacks",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 134,
+      "candidate": "Avoid capped live file path materialization in unattended mode",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 135,
+      "candidate": "Avoid repeated current-time reads on a running scan",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 136,
+      "candidate": "Expose phase telemetry without enabling per-file logging",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 137,
+      "candidate": "Validate synthetic CSV totals against independent fixture manifests",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 138,
+      "candidate": "Interleave product order across ten paired rounds",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 139,
+      "candidate": "Track process I/O operation counts separately from time",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 140,
+      "candidate": "Record scan/index/persist/export phase durations",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 141,
+      "candidate": "Reject stale example binaries before benchmarking",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 142,
+      "candidate": "Use bounded report publication frequency outside timed work",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 143,
+      "candidate": "Detect background load and annotate affected rounds",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Prior candidate review: scan-export-performance-audit.json"
+    },
+    {
+      "rank": 144,
+      "candidate": "Defer updater network check",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 145,
+      "candidate": "Defer drive enumeration",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 146,
+      "candidate": "Defer icon creation",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 147,
+      "candidate": "Cache font resources",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 148,
+      "candidate": "Defer diagnostics view construction",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 149,
+      "candidate": "Defer treemap GPU initialization",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 150,
+      "candidate": "Avoid hidden-window treemap layout",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 151,
+      "candidate": "Defer full cache decoding until requested",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 152,
+      "candidate": "Reuse warm shader bytecode",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 153,
+      "candidate": "Tune directory worker count",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 154,
+      "candidate": "Tune work-stealing queue capacity",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 155,
+      "candidate": "Batch directory scheduling",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 156,
+      "candidate": "Reduce per-file event frequency",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 157,
+      "candidate": "Reduce allocation metadata calls",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 158,
+      "candidate": "Avoid path normalization per file",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 159,
+      "candidate": "Reserve transaction maps from counts",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 160,
+      "candidate": "Reduce root/session record copies",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 161,
+      "candidate": "Tune MFT read batch size",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 162,
+      "candidate": "Reuse MFT fixup scratch storage",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 163,
+      "candidate": "Reduce record attribute temporary copies",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 164,
+      "candidate": "Avoid duplicate filename decoding",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 165,
+      "candidate": "Reduce non-resident run-list allocations",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 166,
+      "candidate": "Tune MFT parser worker count",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 167,
+      "candidate": "Reduce worker merge contention",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 168,
+      "candidate": "Reserve MFT result capacity from header count",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 169,
+      "candidate": "Reduce orphan resolution passes",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 170,
+      "candidate": "Reduce fallback directory walks",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 171,
+      "candidate": "Reduce simultaneous catalog generations",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 172,
+      "candidate": "Materialize file paths only for returned queries",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 173,
+      "candidate": "Reduce duplicated directory aggregates",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 174,
+      "candidate": "Compact filename storage",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 175,
+      "candidate": "Reduce directory lookup map capacity",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 176,
+      "candidate": "Release ingest scratch before rendering",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 177,
+      "candidate": "Tune index lookup density",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 178,
+      "candidate": "Reduce rollup scratch capacity",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 179,
+      "candidate": "Avoid sorting snapshot rows twice",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 180,
+      "candidate": "Reuse serialization scratch across sections",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 181,
+      "candidate": "Tune snapshot writer buffer size",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 182,
+      "candidate": "Avoid duplicate persisted full paths",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 183,
+      "candidate": "Tune buffered snapshot read size",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 184,
+      "candidate": "Decode file names from borrowed input",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 185,
+      "candidate": "Reduce cache-to-tree record copies",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 186,
+      "candidate": "Stream snapshot checksums",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 187,
+      "candidate": "Reduce snapshot flush frequency",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 188,
+      "candidate": "Partial-select numeric top-K results",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 189,
+      "candidate": "Reuse query scratch buffers",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 190,
+      "candidate": "Cache normalized extensions",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 191,
+      "candidate": "Index common suffix filters",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 192,
+      "candidate": "Bound directory aggregate copies",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 193,
+      "candidate": "Cache query results by generation",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 194,
+      "candidate": "Short-circuit empty patterns",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 195,
+      "candidate": "Avoid sorting already ordered results",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 196,
+      "candidate": "Share result paths across rows",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 197,
+      "candidate": "Reduce directory-only search materialization",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 198,
+      "candidate": "Tune CSV writer buffer size",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 199,
+      "candidate": "Batch CSV rows into chunks",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    },
+    {
+      "rank": 200,
+      "candidate": "Reduce extension summary merge allocations",
+      "source": "benchmarks/performance-improvement-audit.json",
+      "status": "requires-profiling",
+      "risk": "not yet qualified as zero/low; requires current source/profile confirmation",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Prior candidate review: performance-improvement-audit.json"
+    }
+  ],
+  "implementation_note": "50 source-level optimization targets implemented in shared behavioral groups; allocation and behavioral regression tests with observed red/green evidence. Targets sharing code or a workload are not independent measured wins. 150 additional candidates remain unqualified; no safe-savings claim is made for them.",
+  "rejected_experiments": [
+    {
+      "candidate": "Stack-batched CSV numeric formatting",
+      "reason": "n=10 Release CSV buffer medians regressed 20.2% at 100k files and 24.4% at 1m files. Removed before final rebuild."
+    }
+  ]
+}

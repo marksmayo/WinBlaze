@@ -14,6 +14,8 @@ use winblaze_core::{
     ScanSession, ScanState, SearchQuery, VolumeId, VolumeRecord,
 };
 
+use crate::directory_records::DirectoryRecords;
+use crate::file_records::FileRecords;
 use crate::schema::{MIGRATIONS, SCHEMA_VERSION};
 
 const INDEX_MAGIC: &[u8; 4] = b"WBIX";
@@ -141,8 +143,8 @@ impl SqliteIndexRepository {
     }
 
     /// Persists `transaction` to disk without adopting it as this
-    /// repository's in-memory state. Scan-session flushes only ever write —
-    /// nothing reads back through the same repository instance — and
+    /// repository's in-memory state. Scan-session flushes only ever write â€”
+    /// nothing reads back through the same repository instance â€” and
     /// `apply_transaction`'s clone doubles a multi-GB working set just to
     /// populate state that is thrown away when the session ends.
     pub fn persist_transaction(
@@ -166,7 +168,21 @@ impl SqliteIndexRepository {
         lineages: &[FileLineageRecord],
         file_changes: &[FileChangeSet],
     ) -> Result<(), IndexStorageError> {
-        persist_snapshot_with(&self.storage_path, |writer| {
+        // Bound fixed scratch space for small catalogs without changing the
+        // snapshot format. Large catalogs retain the established 1 MiB buffer.
+        // This is a sizing hint: BufWriter can stream records of any length.
+        let records = [
+            volumes.len(),
+            sessions.len(),
+            directories.len(),
+            files.len(),
+            lineages.len(),
+            file_changes.len(),
+        ]
+        .into_iter()
+        .fold(0usize, usize::saturating_add);
+        let capacity = records.saturating_mul(256).clamp(8 * 1024, 1 << 20);
+        persist_snapshot_with(&self.storage_path, capacity, |writer| {
             write_sorted_records(
                 writer,
                 volumes,
@@ -213,14 +229,25 @@ impl SqliteIndexRepository {
         // Path-materialized on both sides: the remap joins files across
         // scans by full path, and scanners no longer store them per file.
         let previous_files = self.state.snapshot_files_with_paths();
-        let current_files =
+        let mut current_files =
             remap_current_files_by_path(&previous_files, transaction.snapshot_files_with_paths());
+        let mut current_directories = transaction.snapshot_directories();
+        let mut current_volumes = transaction.volumes.clone();
+        remap_current_directory_ids_by_path(
+            &self.state.directories,
+            &mut current_directories,
+            &mut current_files,
+            &mut current_volumes,
+        );
         // Set `files` to the remapped set directly rather than cloning the whole
         // transaction (millions of file records) only to overwrite `.files`.
         let current_transaction = BufferedIndexTransaction {
-            volumes: transaction.volumes.clone(),
+            volumes: current_volumes,
             sessions: transaction.sessions.clone(),
-            directories: transaction.directories.clone(),
+            directories: current_directories
+                .into_iter()
+                .map(|record| (record.id, record))
+                .collect(),
             files: current_files
                 .into_iter()
                 .map(|file| (file.id, file))
@@ -270,9 +297,82 @@ struct LoadedIndexState {
     cache_loaded_from_backup: bool,
 }
 
+/// Directory-walk IDs depend on scheduling. Stabilize all references by path
+/// before diffing, so unchanged files do not become false moves. Missing parent
+/// references receive unused IDs and remain dangling rather than aliasing a
+/// remapped directory. This is used only by the path-matched rescan workflow.
+fn remap_current_directory_ids_by_path(
+    previous: &DirectoryRecords,
+    current: &mut [DirectoryRecord],
+    files: &mut [FileRecord],
+    volumes: &mut HashMap<VolumeId, VolumeRecord>,
+) {
+    let previous_by_path: HashMap<&str, DirectoryId> = previous
+        .values()
+        .filter(|record| !record.full_path.is_empty())
+        .map(|record| (record.full_path.as_str(), record.id))
+        .collect();
+    let mut next_id = previous
+        .values()
+        .chain(current.iter())
+        .map(|record| record.id.0)
+        .chain(
+            current
+                .iter()
+                .filter_map(|record| record.parent_directory_id)
+                .map(|id| id.0),
+        )
+        .chain(files.iter().map(|record| record.parent_directory_id.0))
+        .chain(volumes.values().map(|record| record.root_directory_id.0))
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    let mut ids = IdHashMap::with_capacity_and_hasher(current.len(), Default::default());
+    for record in current.iter() {
+        let id = match previous_by_path.get(record.full_path.as_str()) {
+            Some(id) => *id,
+            None => {
+                let id = DirectoryId(next_id);
+                next_id = next_id.saturating_add(1);
+                id
+            }
+        };
+        ids.insert(record.id, id);
+    }
+    for reference in current
+        .iter()
+        .filter_map(|record| record.parent_directory_id)
+        .chain(files.iter().map(|record| record.parent_directory_id))
+        .chain(volumes.values().map(|record| record.root_directory_id))
+    {
+        if !ids.contains_key(&reference) {
+            // Preserve an already-dangling reference when it cannot alias a real directory.
+            let id =
+                if previous.get(&reference).is_some() || ids.values().any(|id| *id == reference) {
+                    let id = DirectoryId(next_id);
+                    next_id = next_id.saturating_add(1);
+                    id
+                } else {
+                    reference
+                };
+            ids.insert(reference, id);
+        }
+    }
+    for record in current {
+        record.id = ids[&record.id];
+        record.parent_directory_id = record.parent_directory_id.map(|id| ids[&id]);
+    }
+    for record in files {
+        record.parent_directory_id = ids[&record.parent_directory_id];
+    }
+    for record in volumes.values_mut() {
+        record.root_directory_id = ids[&record.root_directory_id];
+    }
+}
+
 /// Reassigns each current file's id to the previous scan's id when their full
 /// paths match (so lineage/diff joins across scans), minting fresh ids for
-/// genuinely new paths. Consumes `current` and rewrites ids in place — the
+/// genuinely new paths. Consumes `current` and rewrites ids in place â€” the
 /// records are already owned clones from `snapshot_files_with_paths`, so this
 /// avoids a second full-record clone of every file on the volume.
 fn remap_current_files_by_path(
@@ -281,7 +381,7 @@ fn remap_current_files_by_path(
 ) -> Vec<FileRecord> {
     let previous_by_path: HashMap<&str, &FileRecord> = previous
         .iter()
-        .map(|record| (record.full_path.as_str(), record))
+        .map(|record| (&*record.full_path, record))
         .collect();
     let mut next_id = previous
         .iter()
@@ -292,7 +392,7 @@ fn remap_current_files_by_path(
         .saturating_add(1);
 
     for record in &mut current {
-        if let Some(previous_record) = previous_by_path.get(record.full_path.as_str()) {
+        if let Some(previous_record) = previous_by_path.get(&*record.full_path) {
             record.id = previous_record.id;
         } else {
             record.id = FileId(next_id);
@@ -306,8 +406,8 @@ fn remap_current_files_by_path(
 pub struct BufferedIndexTransaction {
     volumes: HashMap<VolumeId, VolumeRecord>,
     sessions: HashMap<u64, ScanSession>,
-    directories: IdHashMap<DirectoryId, DirectoryRecord>,
-    files: IdHashMap<FileId, FileRecord>,
+    directories: DirectoryRecords,
+    files: FileRecords,
     lineages: Vec<FileLineageRecord>,
     file_changes: Vec<FileChangeSet>,
     committed: bool,
@@ -352,8 +452,8 @@ impl BufferedIndexTransaction {
     pub fn into_record_vecs(self) -> (Vec<VolumeRecord>, Vec<DirectoryRecord>, Vec<FileRecord>) {
         (
             self.volumes.into_values().collect(),
-            self.directories.into_values().collect(),
-            self.files.into_values().collect(),
+            self.directories.into_records(),
+            self.files.into_records(),
         )
     }
 
@@ -372,7 +472,7 @@ impl BufferedIndexTransaction {
         self.files.insert(file.id, file);
     }
 
-    /// Pre-allocates bucket capacity for the file and directory maps. A full
+    /// Ensures capacity for total estimated file and directory counts. A full
     /// scan inserts millions of records into maps that start empty, so without
     /// this the maps rehash ~20 times as they grow. Callers pass an estimate
     /// (the scanner's total record count); over-estimating only wastes a
@@ -416,7 +516,10 @@ impl BufferedIndexTransaction {
         let mut files = self.snapshot_files();
         for file in &mut files {
             if file.full_path.is_empty() {
-                file.full_path = winblaze_core::derive_file_path(&self.directories, file);
+                file.full_path = match self.directories.get(&file.parent_directory_id) {
+                    Some(parent) => winblaze_core::join_path(&parent.full_path, &file.name).into(),
+                    None => file.name.as_ref().into(),
+                };
             }
         }
         files
@@ -436,6 +539,10 @@ impl BufferedIndexTransaction {
         current: &[FileRecord],
     ) -> FileChangeSet {
         let change_set = diff_file_records(previous, current);
+        if change_set.changes.is_empty() {
+            self.file_changes.push(change_set.clone());
+            return change_set;
+        }
         let current_by_id: IdHashMap<FileId, &FileRecord> =
             current.iter().map(|record| (record.id, record)).collect();
         let previous_by_id: IdHashMap<FileId, &FileRecord> =
@@ -544,10 +651,14 @@ fn persist_index_state(
     storage_path: &Path,
     state: &BufferedIndexTransaction,
 ) -> Result<(), IndexStorageError> {
-    persist_snapshot_with(storage_path, |writer| write_state(writer, state))
+    persist_snapshot_with(storage_path, 1 << 20, |writer| write_state(writer, state))
 }
 
-fn persist_snapshot_with<F>(storage_path: &Path, write: F) -> Result<(), IndexStorageError>
+fn persist_snapshot_with<F>(
+    storage_path: &Path,
+    capacity: usize,
+    write: F,
+) -> Result<(), IndexStorageError>
 where
     F: FnOnce(&mut io::BufWriter<fs::File>) -> Result<(), IndexStorageError>,
 {
@@ -560,7 +671,7 @@ where
 
     {
         let file = fs::File::create(&temp_path)?;
-        let mut writer = io::BufWriter::with_capacity(1 << 20, file);
+        let mut writer = io::BufWriter::with_capacity(capacity, file);
         write(&mut writer)?;
         writer.flush()?;
     }
@@ -615,7 +726,7 @@ fn remove_auxiliary_snapshot_files(storage_path: &Path) -> Result<(), IndexStora
 /// Serializes `state` directly into `writer`, borrowing every record instead
 /// of cloning it. The old approach cloned all records twice per flush (once
 /// into sorted `Vec`s, once transitively via string copies) and built the
-/// whole snapshot in one contiguous in-memory buffer — several hundred MB and
+/// whole snapshot in one contiguous in-memory buffer â€” several hundred MB and
 /// multiple seconds of pure copying for a full-drive index.
 fn write_state<W: Write>(
     writer: &mut W,
@@ -833,9 +944,9 @@ fn write_file_records<W: Write, R: std::borrow::Borrow<FileRecord>>(
         push_u64(&mut buffer, file.size_bytes);
         push_u64(&mut buffer, file.allocation_bytes);
         push_u32(&mut buffer, file.attributes.0);
-        push_option_i64(&mut buffer, file.created_utc);
-        push_option_i64(&mut buffer, file.modified_utc);
-        push_option_i64(&mut buffer, file.accessed_utc);
+        push_option_i64(&mut buffer, file.created_utc());
+        push_option_i64(&mut buffer, file.modified_utc());
+        push_option_i64(&mut buffer, file.accessed_utc());
         writer.write_all(&buffer)?;
     }
     Ok(())
@@ -952,12 +1063,12 @@ fn read_session_records<R: Read>(
 
 fn read_directory_records<R: Read>(
     cursor: &mut SnapshotReader<R>,
-) -> Result<IdHashMap<DirectoryId, DirectoryRecord>, IndexStorageError> {
+) -> Result<DirectoryRecords, IndexStorageError> {
     let len = read_len(cursor)?;
     validate_collection_len(cursor, len, 41, "directory records")?;
-    // Insert straight into the pre-sized map instead of a transient Vec that
-    // would then be moved element-by-element into the map.
-    let mut directories = IdHashMap::with_capacity_and_hasher(len, Default::default());
+    // Decode directly into the pre-sized arena and compact ID lookup, keeping
+    // the record allocation transferable to the published read model.
+    let mut directories = DirectoryRecords::with_capacity(len);
     for _ in 0..len {
         let id = DirectoryId(read_u64(cursor)?);
         let parent_directory_id = match read_u8(cursor)? {
@@ -988,24 +1099,26 @@ fn read_directory_records<R: Read>(
 fn read_file_records<R: Read>(
     cursor: &mut SnapshotReader<R>,
     version: u32,
-) -> Result<IdHashMap<FileId, FileRecord>, IndexStorageError> {
+) -> Result<FileRecords, IndexStorageError> {
     let len = read_len(cursor)?;
     let min_bytes_per_item = if version >= 2 { 48 } else { 57 };
     validate_collection_len(cursor, len, min_bytes_per_item, "file records")?;
-    let mut files = IdHashMap::with_capacity_and_hasher(len, Default::default());
+    let mut files = FileRecords::with_capacity(len);
     for _ in 0..len {
         let id = FileId(read_u64(cursor)?);
         let record = FileRecord {
             id,
             parent_directory_id: DirectoryId(read_u64(cursor)?),
-            name: read_string(cursor)?,
-            full_path: read_snapshot_path(cursor, version)?,
+            name: read_string(cursor)?.into(),
+            full_path: read_snapshot_path(cursor, version)?.into(),
             size_bytes: read_u64(cursor)?,
             allocation_bytes: read_u64(cursor)?,
             attributes: FileAttributes(read_u32(cursor)?),
-            created_utc: read_option_i64(cursor)?,
-            modified_utc: read_option_i64(cursor)?,
-            accessed_utc: read_option_i64(cursor)?,
+            timestamps: winblaze_core::FileTimestamps::new(
+                read_option_i64(cursor)?,
+                read_option_i64(cursor)?,
+                read_option_i64(cursor)?,
+            ),
         };
         files.insert(id, record);
     }
@@ -1323,14 +1436,12 @@ mod fuzz_tests {
         txn.insert_file(FileRecord {
             id: FileId(11),
             parent_directory_id: DirectoryId(10),
-            name: String::from("report.txt"),
-            full_path: String::new(),
+            name: String::from("report.txt").into(),
+            full_path: String::new().into(),
             size_bytes: 1234,
             allocation_bytes: 4096,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: Some(1),
-            modified_utc: Some(2),
-            accessed_utc: None,
+            timestamps: winblaze_core::FileTimestamps::new(Some(1), Some(2), None),
         });
 
         let mut buffer = Vec::new();

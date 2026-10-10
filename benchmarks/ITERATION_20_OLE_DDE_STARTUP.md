@@ -1,0 +1,19 @@
+# Iteration 20: disable obsolete OLE DDE initialization
+
+Startup working set remains the sole official bronze: 32.857421875 MiB, versus the retained WinDirStat best of 16.244140625 MiB. This experiment is isolated and does not replace the shipping app or its results.
+
+Microsoft recommends COINIT_DISABLE_OLE1DDE with CoInitializeEx to avoid obsolete OLE 1.0 overhead: [Initializing the COM Library](https://learn.microsoft.com/en-us/windows/win32/learnwin32/initializing-the-com-library). The candidate adds a successful STA CoInitializeEx call with that flag before the existing, unchanged WinRT STA initialization. A noncopyable scope guard balances exactly that extra initialization after the XAML manager and complete window release, including successful S_FALSE initialization. Failed initialization throws before the guard is constructed.
+
+The source starts from iteration 17's full host and bitmap icons with iteration 18's verified SegmentHeap/PMv2 manifest. Rejected iteration 19 /Gw flags are absent. Full rebuild passed. UI SHA256 is 5131414A2D2A053CD8F432C530C4E0D32ECC9C4FBFF94E6AA165CDBC7FDD04DB; native DLL remains 9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62.
+
+The original iteration 18 resource test is RED. After this implementation, one unchanged canonical ten-run cohort measures **16.255859375 MiB**, still **12 KiB above** the retained target. Idle median is 36.27 ms and CPU median 31.25 ms. All ten observations, including the first 23.92578125 MiB, are retained. CPU run 5 is an observed zero; the original strict resource verifier rejects it at the positive-observation assertion before comparing memory. The independently computed memory result is also RED. No favorable retry, prior candidate best, or replacement telemetry is used. The comparison to historical iteration 18 is not proof of a causal improvement.
+
+Artifacts under artifacts/all-gold-loop/iteration-20 include the full source/build command, identities, baseline-resource-red.log, no-ole-dde-startup-default-storage.json, no-ole-dde-resource-gate.json and the unchanged verifier log.
+
+Fidelity checks pass: small/taskbar icon pixels (ui-icons-20261008T060147065Z); twenty matched full-control, owned-window, exact OS runtime, PMv2 and normal-release launches (iteration-9/full-ui-paired-b1790fbf385444739e290b78ace1bea8, summary saved); three no-device discovery/rescan repetitions with changed persisted catalogs (ui-parity-20261008T060246682Z); and three empty-catalog repetitions with no catalog created (ui-parity-20261008T060320501Z). No attached-device parity is claimed.
+
+An owned-input focus probe compares this candidate with shipping. Both UIA root inputs are keyboard-focusable, accept SetFocus and report HasKeyboardFocus=true, then exit normally. Both report foreground process zero, so the prerequisite for interactive keyboard testing is absent. No keystrokes are sent. These are prerequisite observations, not keyboard parity PASS or a candidate regression. See focus-candidate-784c6ff347ec431c8bb533694e8ed1c3 and focus-shipping-d3f7939e93b740ac9cfab4ebe5c1be28.
+
+The host currently uses PreTranslateMessage but does not explicitly bridge NavigateFocus/TakeFocusRequested. Microsoft's [NavigateFocus documentation](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.hosting.desktopwindowxamlsource.navigatefocus) identifies host focus navigation as an integration responsibility. This is a pending behavior hypothesis, not an observed defect; add a behavioral reproduction before implementation. Full keyboard, caption accessibility, theme, updater and attached-device parity remain adoption work.
+
+The candidate is not adopted. All 35 official rows remain visible at 27 gold, 7 silver, 1 bronze; all 70 competitor best records are unchanged. No production code was changed and no competitor benchmark was run. The prior local tiny-UI budget failure remains unresolved. The all-gold objective is not met.

@@ -1,0 +1,2987 @@
+{
+  "reviewed_local_date": "2026-10-04",
+  "versions": {
+    "WinBlaze": "0.9.1 working-tree Release; standard-user, administrator MFT and live Pixel MTP n=10 validation complete",
+    "WinDirStat": "2.8.0",
+    "WizTree": "4.33"
+  },
+  "sources": [
+    {
+      "id": "wb",
+      "title": "WinBlaze source audit",
+      "url": "../src/WinBlaze.UI/src/MainWindow.cpp"
+    },
+    {
+      "id": "wd",
+      "title": "WinDirStat official feature list",
+      "url": "https://windirstat.net/"
+    },
+    {
+      "id": "wdcsv",
+      "title": "WinDirStat export / import documentation",
+      "url": "https://github.com/windirstat/windirstat/wiki/Command-Line-and-CSV"
+    },
+    {
+      "id": "wiz",
+      "title": "WizTree official guide",
+      "url": "https://diskanalyzer.com/guide"
+    },
+    {
+      "id": "wizfeatures",
+      "title": "WizTree official feature list",
+      "url": "https://diskanalyzer.com/download"
+    },
+    {
+      "id": "wbui",
+      "title": "WinBlaze UI implementation",
+      "url": "../src/WinBlaze.UI/src/MainWindow.cpp"
+    },
+    {
+      "id": "wbindex",
+      "title": "WinBlaze CSV importer and schema",
+      "url": "../src/WinBlaze.Index/src/import.rs"
+    },
+    {
+      "id": "wbexport",
+      "title": "WinBlaze export filters and formats",
+      "url": "../src/WinBlaze.Index/src/export.rs"
+    },
+    {
+      "id": "wbscanner",
+      "title": "WinBlaze duplicate verification",
+      "url": "../src/WinBlaze.Scanner/src/content.rs"
+    },
+    {
+      "id": "wbactions",
+      "title": "WinBlaze file-operation limits",
+      "url": "../src/WinBlaze.UI/src/FileActions.h"
+    },
+    {
+      "id": "wbwatch",
+      "title": "WinBlaze recursive watcher",
+      "url": "../src/WinBlaze.UI/src/DirectoryWatcher.h"
+    },
+    {
+      "id": "wbnative",
+      "title": "WinBlaze native bridge and preview cap",
+      "url": "../src/WinBlaze.Native/src/bridge.rs"
+    },
+    {
+      "id": "wbconfig",
+      "title": "WinBlaze scan configuration",
+      "url": "../src/WinBlaze.Scanner/src/types.rs"
+    },
+    {
+      "id": "wdsource",
+      "title": "WinDirStat 2.8.0 source",
+      "url": "https://github.com/windirstat/windirstat/tree/release/v2.8.0"
+    },
+    {
+      "id": "wdcommands",
+      "title": "WinDirStat 2.8.0 commands",
+      "url": "https://github.com/windirstat/windirstat/blob/release/v2.8.0/windirstat/WinDirStatModel.Actions.cpp"
+    },
+    {
+      "id": "wdloader",
+      "title": "WinDirStat 2.8.0 export/import",
+      "url": "https://github.com/windirstat/windirstat/blob/release/v2.8.0/windirstat/CsvLoader.cpp"
+    },
+    {
+      "id": "wdsearch",
+      "title": "WinDirStat 2.8.0 search",
+      "url": "https://github.com/windirstat/windirstat/blob/release/v2.8.0/windirstat/ItemSearch.cpp"
+    },
+    {
+      "id": "wdfilter",
+      "title": "WinDirStat 2.8.0 scan filters",
+      "url": "https://github.com/windirstat/windirstat/blob/release/v2.8.0/windirstat/Filtering.cpp"
+    },
+    {
+      "id": "wdwatch",
+      "title": "WinDirStat 2.8.0 watcher behavior",
+      "url": "https://github.com/windirstat/windirstat/blob/release/v2.8.0/windirstat/Controls/FileWatcherControl.cpp"
+    },
+    {
+      "id": "wdmenu",
+      "title": "WinDirStat 2.8.0 complete menu",
+      "url": "https://github.com/windirstat/windirstat/blob/release/v2.8.0/windirstat/windirstat.rc"
+    },
+    {
+      "id": "wdrelease",
+      "title": "WinDirStat release history",
+      "url": "https://github.com/windirstat/windirstat/releases"
+    },
+    {
+      "id": "wizbinary",
+      "title": "Installed WizTree 4.33 interface strings",
+      "url": "../artifacts/parity-audit/WizTree-installed-strings.txt"
+    },
+    {
+      "id": "audit",
+      "title": "Detailed verification record",
+      "url": "FEATURE_PARITY_AUDIT.md"
+    },
+    {
+      "id": "interop",
+      "title": "n=10 functional format verification",
+      "url": "current-parity-interop-validation.json"
+    },
+    {
+      "id": "wdsearchdlg",
+      "title": "WinDirStat 2.8.0 search controls",
+      "url": "https://github.com/windirstat/windirstat/blob/release/v2.8.0/windirstat/Dialogs/SearchDlg.cpp"
+    },
+    {
+      "id": "wbsearch",
+      "title": "WinBlaze complete-catalog search",
+      "url": "../src/WinBlaze.Index/src/tree_search.rs"
+    },
+    {
+      "id": "wbimport",
+      "title": "WinBlaze scan interoperability",
+      "url": "../src/WinBlaze.Index/src/import.rs"
+    },
+    {
+      "id": "wbduplicates",
+      "title": "WinBlaze verified duplicates and hashes",
+      "url": "../src/WinBlaze.Scanner/src/content.rs"
+    },
+    {
+      "id": "wbhardlinks",
+      "title": "WinBlaze guarded hard-link consolidation",
+      "url": "../src/WinBlaze.Scanner/src/hardlinks.rs"
+    },
+    {
+      "id": "wbmaintenance",
+      "title": "WinBlaze NTFS maintenance",
+      "url": "../src/WinBlaze.Scanner/src/storage_maintenance.rs"
+    },
+    {
+      "id": "wbvirtualdisk",
+      "title": "WinBlaze detached VHD zero-block compaction",
+      "url": "../src/WinBlaze.UI/src/VirtualDisks.h"
+    },
+    {
+      "id": "wbportable",
+      "title": "WinBlaze read-only portable device adapter",
+      "url": "../src/WinBlaze.UI/src/PortableDevices.h"
+    },
+    {
+      "id": "wbshell",
+      "title": "WinBlaze Windows shell verbs",
+      "url": "../src/WinBlaze.UI/src/ShellContext.h"
+    },
+    {
+      "id": "wbcost",
+      "title": "WinBlaze storage tier model",
+      "url": "../src/WinBlaze.Index/src/storage_cost.rs"
+    },
+    {
+      "id": "wbchanges",
+      "title": "WinBlaze observed change history",
+      "url": "../src/WinBlaze.UI/src/DirectoryWatcher.h"
+    },
+    {
+      "id": "wbmultiroot",
+      "title": "WinBlaze combined catalogs",
+      "url": "../src/WinBlaze.Index/src/multiple_roots.rs"
+    },
+    {
+      "id": "wbparitytests",
+      "title": "WinBlaze parity implementation and acceptance evidence",
+      "url": "PARITY_IMPLEMENTATION_PROGRESS.md"
+    },
+    {
+      "id": "wbinteropevidence",
+      "title": "Current n=10 interoperability validation",
+      "url": "current-parity-interop-validation.json"
+    }
+  ],
+  "rows": [
+    {
+      "feature": "Volume and folder scans",
+      "WinBlaze": "Yes",
+      "WinDirStat": "Yes",
+      "WizTree": "Yes",
+      "gap": false,
+      "note": "WinBlaze also falls back to a directory walk.",
+      "sources": [
+        "wbconfig",
+        "wdsource",
+        "wizfeatures"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-scan-csv",
+          "wd-scan-csv",
+          "wiz-scan-csv"
+        ],
+        "coverage": "Existing tiny/scale/dense/full scan tests plus the content-duplicate fixture."
+      },
+      "criterion": "Analyze one filesystem volume or folder.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbconfig"
+          ],
+          "details": "Yes"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Yes"
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizfeatures"
+          ],
+          "details": "Yes"
+        }
+      }
+    },
+    {
+      "feature": "Direct NTFS / MFT scan",
+      "WinBlaze": "Direct local-NTFS scan verified under an administrator token: ten current-binary MFT phase runs and ten full native pipeline runs.",
+      "WinDirStat": "Supported in 2.8.0; accelerated scanner requires elevation.",
+      "WizTree": "Supported; administrator mode required. Folder-MFT option also exposed.",
+      "gap": false,
+      "note": "All three require elevation for the direct MFT route. WinBlaze current administrator phase and full native pipeline tests completed at n=10; standard-user fallback is measured separately.",
+      "sources": [
+        "wbnative",
+        "wdsource",
+        "wiz",
+        "wizbinary"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [],
+        "coverage": "Existing administrator MFT phase/native scan tests; raw dump is a separate operation."
+      },
+      "criterion": "Direct local-NTFS metadata scan with required privileges.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-live-functional-tests",
+          "sources": [
+            "wbnative"
+          ],
+          "details": "Direct local-NTFS scan verified under an administrator token: ten current-binary MFT phase runs and ten full native pipeline runs.",
+          "remaining": "Supported local NTFS and administrator access required; accessible totals and workflow scopes can differ.",
+          "runtime_status": "live-n10-validated"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Supported in 2.8.0; accelerated scanner requires elevation."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz",
+            "wizbinary"
+          ],
+          "details": "Supported; administrator mode required. Folder-MFT option also exposed.",
+          "remaining": "Current positive administrator-token n=10 verification awaits prompt approval.",
+          "runtime_status": "administrator-validation-pending"
+        }
+      }
+    },
+    {
+      "feature": "Treemap",
+      "WinBlaze": "Yes; dense weighted hierarchical GPU treemap",
+      "WinDirStat": "Yes",
+      "WizTree": "Yes",
+      "gap": false,
+      "note": "WinBlaze renders from allocated-byte weights and aggregates budget-limited children. Basic treemap support does not imply parity in size modes, layouts, labels or free-space tiles.",
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizfeatures"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-png",
+          "wiz-png"
+        ],
+        "coverage": "n=10 dedicated rendered PNG workloads plus native area/weight tests and a 9,001-file UI regression. PNG process boundaries differ by product."
+      },
+      "criterion": "Area-weighted hierarchical visualization and navigation.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbui"
+          ],
+          "details": "Yes; dense weighted hierarchical GPU treemap"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Yes"
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizfeatures"
+          ],
+          "details": "Yes"
+        }
+      }
+    },
+    {
+      "feature": "Extension totals",
+      "WinBlaze": "Yes; complete sorted extension totals",
+      "WinDirStat": "Yes",
+      "WizTree": "Yes",
+      "gap": false,
+      "note": "Completed views include every extension and correct denominators; only the in-progress feed uses a top-40 preview.",
+      "sources": [
+        "wbui",
+        "wbnative",
+        "wdsource",
+        "wizbinary"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-extensions",
+          "wiz-extensions"
+        ],
+        "coverage": "n=10 complete extension API/file-type-export workloads; regression covers 43 extensions beyond the former cap."
+      },
+      "criterion": "Display complete scanned totals grouped by extension.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbui",
+            "wbnative"
+          ],
+          "details": "Yes; complete sorted extension totals"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Yes"
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Yes"
+        }
+      }
+    },
+    {
+      "feature": "Largest files",
+      "WinBlaze": "Yes; complete largest-file pages",
+      "WinDirStat": "Yes",
+      "WizTree": "Yes",
+      "gap": false,
+      "note": "WinBlaze has complete 50-row paging ranked by allocated bytes. Its Cleanup view has no logical-size ranking toggle; action differences are scored separately below.",
+      "sources": [
+        "wbui",
+        "wbnative",
+        "wdsource",
+        "wizfeatures"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-largest"
+        ],
+        "coverage": "n=10 native page traversal and serialization; 10,051-file stable paging regression plus actual next/previous UI checks. Competitor view timings require GUI adapters."
+      },
+      "criterion": "Browse largest individual files after a scan.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbui",
+            "wbnative"
+          ],
+          "details": "Yes; complete largest-file pages"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Yes"
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizfeatures"
+          ],
+          "details": "Yes"
+        }
+      }
+    },
+    {
+      "feature": "Search and size/date filters",
+      "WinBlaze": "Complete-index paged filename/path search with logical/allocated sizes, extension and inclusive UTC modification bounds; verified beyond the former 8,192-row display cap.",
+      "WinDirStat": "Complete-tree name/glob/regex search; size/age constraints are scan filters, not combined post-scan search fields.",
+      "WizTree": "Full file-view query/filter facilities; result display limit configurable.",
+      "gap": false,
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "sources": [
+        "wbui",
+        "wbnative",
+        "wdsearchdlg",
+        "wdfilter",
+        "wiz",
+        "wbsearch",
+        "wbparitytests"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "partial",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wiz-filter"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Search the complete scanned catalog with size/date constraints.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbsearch",
+            "wbparitytests"
+          ],
+          "details": "Complete-index paged filename/path search with logical/allocated sizes, extension and inclusive UTC modification bounds; verified beyond the former 8,192-row display cap."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsearchdlg",
+            "wdfilter"
+          ],
+          "details": "Complete-tree name/glob/regex search; size/age constraints are scan filters, not combined post-scan search fields."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Full file-view query/filter facilities; result display limit configurable."
+        }
+      }
+    },
+    {
+      "feature": "CSV export",
+      "WinBlaze": "Added: File > Export CSV; complete catalog",
+      "WinDirStat": "Yes",
+      "WizTree": "Yes",
+      "gap": false,
+      "note": "Schemas differ. WinBlaze exports seven fixed columns and modified time; it omits attributes, owner, created/accessed times and persistent identities. See metadata and interoperability rows.",
+      "sources": [
+        "wbexport",
+        "wdloader",
+        "wiz"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-cached-csv",
+          "wb-scan-csv",
+          "wd-scan-csv",
+          "wiz-scan-csv"
+        ],
+        "coverage": "Cached WinBlaze export is separate from whole-process scan/export."
+      },
+      "criterion": "Export a complete scan to CSV.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbexport"
+          ],
+          "details": "Added: File > Export CSV; complete catalog"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "Yes"
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Yes"
+        }
+      }
+    },
+    {
+      "feature": "Unattended scan + CSV export",
+      "WinBlaze": "Yes; packaged winblaze-cli.exe",
+      "WinDirStat": "Yes: /SaveTo",
+      "WizTree": "Yes: /export",
+      "gap": false,
+      "note": "The portable package and installer include winblaze-cli. Use: winblaze-cli ROOT output.csv. Runs startup, scan, indexing, persistence and atomic CSV export.",
+      "sources": [
+        "wbnative",
+        "wdcommands",
+        "wiz"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-scan-csv"
+        ],
+        "coverage": "The portable package and installer include winblaze-cli. Use: winblaze-cli ROOT output.csv. Runs startup, scan, indexing, persistence and atomic CSV export."
+      },
+      "criterion": "Noninteractive scan/export with an observable completion result.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbnative"
+          ],
+          "details": "Yes; packaged winblaze-cli.exe"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdcommands"
+          ],
+          "details": "Yes: /SaveTo"
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Yes: /export"
+        }
+      }
+    },
+    {
+      "feature": "Import / reopen external CSV scans",
+      "WinBlaze": "Own, WinDirStat and WizTree CSV reopen offline. Optional Owner and reordered English columns are retained; translated fixed-order WinDirStat captions supported. WizTree Local/UTC is explicit.",
+      "WinDirStat": "Reopens own localized CSV/JSON scan schema; no general competitor-schema adapter.",
+      "WizTree": "Reopens WizTree-compatible CSV/TSV; arbitrary competitor headers are not interchangeable.",
+      "gap": false,
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "sources": [
+        "wbindex",
+        "interop",
+        "wdloader",
+        "wizfeatures",
+        "wizbinary",
+        "wbimport",
+        "wbinteropevidence"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "partial",
+        "WizTree": "partial"
+      },
+      "performance": {
+        "jobs": [
+          "wb-import",
+          "wb-import-wd",
+          "wb-import-wiz",
+          "wiz-import",
+          "wb-import-wiz-utc"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Reopen saved scans and ingest competitor CSV formats without rescanning.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbimport",
+            "wbinteropevidence"
+          ],
+          "details": "Own, WinDirStat and WizTree CSV reopen offline. Optional Owner and reordered English columns are retained; translated fixed-order WinDirStat captions supported. WizTree Local/UTC is explicit."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "Reopens own localized CSV/JSON scan schema; no general competitor-schema adapter."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizfeatures",
+            "wizbinary"
+          ],
+          "details": "Reopens WizTree-compatible CSV/TSV; arbitrary competitor headers are not interchangeable."
+        }
+      }
+    },
+    {
+      "feature": "JSON scan export",
+      "WinBlaze": "Own schema_version 1 JSON export.",
+      "WinDirStat": "CSV/JSON scan export in installed 2.8.0.",
+      "WizTree": "No JSON export exposed in audited 4.33 format controls or documented command interface.",
+      "gap": false,
+      "note": "WizTree's public scan export interface offers CSV/TSV. A .json filename alone does not select JSON. This is an interface-level absence, not a claim about undocumented internals.",
+      "sources": [
+        "wbexport",
+        "wdloader",
+        "wizbinary",
+        "interop"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-json",
+          "wd-json"
+        ],
+        "coverage": "n=10 native cached-catalog JSON exports and WinDirStat scan-plus-JSON exports. Different workflow scopes; schema, file counts and byte totals validated."
+      },
+      "criterion": "Export scan metadata directly as JSON.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbexport"
+          ],
+          "details": "Own schema_version 1 JSON export."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "CSV/JSON scan export in installed 2.8.0."
+        },
+        "WizTree": {
+          "basis": "interface-audited + runtime-verified n=10",
+          "sources": [
+            "wizbinary",
+            "interop"
+          ],
+          "details": "10/10 documented /export runs with a .json output filename emitted CSV, not JSON. Installed format/action strings expose CSV/TSV and no JSON exporter."
+        }
+      }
+    },
+    {
+      "feature": "Duplicate detection by file contents",
+      "WinBlaze": "Yes; complete byte-for-byte verification",
+      "WinDirStat": "Full-content hashing in installed 2.8.0; configurable algorithm.",
+      "WizTree": "Metadata candidates only",
+      "gap": false,
+      "note": "WinBlaze verifies complete bytes; WinDirStat 2.8.0 hashes contents; WizTree uses metadata candidates. Newer sparse-hashing documentation was not attributed to installed 2.8.0. GUI duplicate exploration is a separate capability.",
+      "sources": [
+        "wbscanner",
+        "wdsource",
+        "wiz"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "partial"
+      },
+      "performance": {
+        "jobs": [
+          "wb-duplicates",
+          "wd-duplicates"
+        ],
+        "coverage": "Duplicate reports compare entire contents and reject metadata-only decoys; hard-link aliases do not count as reclaimable duplicate storage. Unreadable or changed files produce error rows."
+      },
+      "criterion": "Read complete contents to verify duplicate groups.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbscanner"
+          ],
+          "details": "Yes; complete byte-for-byte verification"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Full-content hashing in installed 2.8.0; configurable algorithm."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Metadata candidates only"
+        }
+      }
+    },
+    {
+      "feature": "Permission / ACL report export",
+      "WinBlaze": "Owner/group/DACL SDDL CSV, including explicit read-error rows.",
+      "WinDirStat": "Structured account/rights permission CSV or JSON in 2.8.0.",
+      "WizTree": "No ACL-report action or export format exposed by audited 4.33 interface.",
+      "gap": false,
+      "note": "These reports differ: WinBlaze provides raw SDDL; WinDirStat provides account/rights records. Neither should be presented as user effective-access or SACL audit verification.",
+      "sources": [
+        "wbnative",
+        "wdcommands",
+        "wdloader",
+        "wizbinary"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-permissions",
+          "wd-permissions"
+        ],
+        "coverage": "Exports every accessible catalog entry with owner/group/DACL and explicit error rows. Privileged SACL audit entries are outside this report."
+      },
+      "criterion": "Export discretionary permission information.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbnative"
+          ],
+          "details": "Owner/group/DACL SDDL CSV, including explicit read-error rows."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdcommands",
+            "wdloader"
+          ],
+          "details": "Structured account/rights permission CSV or JSON in 2.8.0."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No ACL-report action or export format exposed by audited 4.33 interface."
+        }
+      }
+    },
+    {
+      "feature": "Delete / move files inside analyzer",
+      "WinBlaze": "Single-file actions plus confirmed multiple-file/folder move/recycle. Overwrites, overlapping selections and reparse items are refused. Cross-volume folder moves fail safely; batch failures may leave earlier items processed.",
+      "WinDirStat": "Selected-item move/recycle and permanent-delete facilities.",
+      "WizTree": "Shell copy/cut/delete with multiple-file selection; inline rename also exposed.",
+      "gap": false,
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "sources": [
+        "wbactions",
+        "wbui",
+        "wdcommands",
+        "wizfeatures",
+        "wizbinary",
+        "wbparitytests"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-actions"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Move or recycle selected files/folders, including multiple selections.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbactions",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Single-file actions plus confirmed multiple-file/folder move/recycle. Overwrites, overlapping selections and reparse items are refused. Cross-volume folder moves fail safely; batch failures may leave earlier items processed."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdcommands"
+          ],
+          "details": "Selected-item move/recycle and permanent-delete facilities."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizfeatures",
+            "wizbinary"
+          ],
+          "details": "Shell copy/cut/delete with multiple-file selection; inline rename also exposed."
+        }
+      }
+    },
+    {
+      "feature": "Automatic file-system change monitoring",
+      "WinBlaze": "Opt-in recursive notifications trigger a debounced full refresh; imported catalogs excluded.",
+      "WinDirStat": "2.8.0 watcher records change events; watcher handler does not automatically rescan totals.",
+      "WizTree": "Monitoring exposed; documented deleted-item detection does not establish complete automatic add/modify accounting.",
+      "gap": false,
+      "note": "WinBlaze rebuilds after quiet time rather than applying a proven constant-time incremental update. WinDirStat event history is richer; WizTree deletion monitoring is not equivalent to full live catalog refresh.",
+      "sources": [
+        "wbwatch",
+        "wbui",
+        "wdwatch",
+        "wizfeatures",
+        "wizbinary"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "partial",
+        "WizTree": "partial"
+      },
+      "performance": {
+        "jobs": [
+          "wb-watch"
+        ],
+        "coverage": "File menu monitoring observes additions, modifications and removals, then automatically refreshes after quiet time. Internal cache writes are excluded. Imported CSV catalogs cannot monitor. Native timings exclude GUI rescan."
+      },
+      "criterion": "Detect changes and automatically keep displayed scan totals current.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbwatch",
+            "wbui"
+          ],
+          "details": "Opt-in recursive notifications trigger a debounced full refresh; imported catalogs excluded."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdwatch"
+          ],
+          "details": "2.8.0 watcher records change events; watcher handler does not automatically rescan totals."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizfeatures",
+            "wizbinary"
+          ],
+          "details": "Monitoring exposed; documented deleted-item detection does not establish complete automatic add/modify accounting."
+        }
+      }
+    },
+    {
+      "feature": "Treemap PNG export",
+      "WinBlaze": "Dedicated render to fixed 1920 x 1080 PNG.",
+      "WinDirStat": "No image-save command or PNG export implementation found in complete 2.8.0 source/menu.",
+      "WizTree": "PNG export exposed and existing outputs validated.",
+      "gap": false,
+      "note": "Screenshots and clipboard captures are not native PNG-export parity. WinBlaze dimensions are fixed; customization is scored separately.",
+      "sources": [
+        "wbui",
+        "wdmenu",
+        "wdsource",
+        "wiz"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-png",
+          "wiz-png"
+        ],
+        "coverage": "n=10 dedicated 1920x1080 exports; decoded dimensions/nonblank pixels validated; pixel round-trip and dense geometry/UI regressions."
+      },
+      "criterion": "Save a treemap image directly as PNG.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbui"
+          ],
+          "details": "Dedicated render to fixed 1920 x 1080 PNG."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdmenu",
+            "wdsource"
+          ],
+          "details": "No image-save command or PNG export implementation found in complete 2.8.0 source/menu."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "PNG export exposed and existing outputs validated."
+        }
+      }
+    },
+    {
+      "feature": "Raw MFT dump export",
+      "WinBlaze": "UI/shipped CLI stream initialized MFT data including unused records; ten actual C: exports passed NTFS signature/output validation.",
+      "WinDirStat": "MFT scanner exists, but no raw-dump output command in complete 2.8.0 source/menu.",
+      "WizTree": "Installed raw-dump command: ten actual C: exports passed NTFS signature/output validation.",
+      "gap": false,
+      "note": "UI and shipped CLI stream initialized MFT data including unused records. Live administrator n=10 WinBlaze and WizTree dumps passed NTFS signature/output checks; record-by-record completeness is not established.",
+      "sources": [
+        "wbnative",
+        "wdmenu",
+        "wdsource",
+        "wiz",
+        "wizbinary"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-mft",
+          "wiz-mft"
+        ],
+        "coverage": "UI and shipped CLI stream initialized MFT data including unused records. Live administrator n=10 WinBlaze and WizTree dumps passed NTFS signature/output checks; record-by-record completeness is not established."
+      },
+      "criterion": "Export raw MFT records without constructing a scan tree.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-live-functional-tests",
+          "sources": [
+            "wbnative"
+          ],
+          "details": "UI/shipped CLI stream initialized MFT data including unused records; ten actual C: exports passed NTFS signature/output validation.",
+          "remaining": "No independent record-by-record completeness proof.",
+          "runtime_status": "live-n10-validated"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdmenu",
+            "wdsource"
+          ],
+          "details": "MFT scanner exists, but no raw-dump output command in complete 2.8.0 source/menu."
+        },
+        "WizTree": {
+          "basis": "source-and-live-functional-tests",
+          "sources": [
+            "wiz",
+            "wizbinary"
+          ],
+          "details": "Installed raw-dump command: ten actual C: exports passed NTFS signature/output validation.",
+          "remaining": "No independent record-by-record completeness proof.",
+          "runtime_status": "live-n10-validated"
+        }
+      }
+    },
+    {
+      "feature": "Logical / allocated size accounting",
+      "WinBlaze": "Yes; actual allocation and hard-link deduplication",
+      "WinDirStat": "Yes; hardlink semantics documented",
+      "WizTree": "Yes; hardlink semantics documented",
+      "gap": false,
+      "note": "Supported accounting is not proof of equal totals. Access, filters, resident/compressed/sparse handling and link attribution differ; cross-product controlled accounting fixtures are still needed.",
+      "sources": [
+        "wbconfig",
+        "wbnative",
+        "wdloader",
+        "wdsource",
+        "wiz"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-scan-csv",
+          "wd-scan-csv",
+          "wiz-scan-csv"
+        ],
+        "coverage": "Directory walking queries Windows FileStandardInfo and physical file identity for multi-link files. Logical totals retain every name; allocated storage is counted once. Failed queries surface as scan warnings."
+      },
+      "criterion": "Show logical lengths and filesystem allocation with hard-link handling.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbconfig",
+            "wbnative"
+          ],
+          "details": "Yes; actual allocation and hard-link deduplication"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader",
+            "wdsource"
+          ],
+          "details": "Yes; hardlink semantics documented"
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Yes; hardlink semantics documented"
+        }
+      }
+    },
+    {
+      "feature": "Filtered CSV export",
+      "WinBlaze": "Complete-index post-scan filename patterns and logical size/UTC date bounds; files only.",
+      "WinDirStat": "Saved scan filters constrain exported results; no separate post-scan filtered export action.",
+      "WizTree": "Include/exclude and file/path filtering exposed.",
+      "gap": false,
+      "note": "WinDirStat can export a filtered scan, so the former unverified claim was incomplete. It requires scan filtering; it is not the same workflow as filtering an existing catalog.",
+      "sources": [
+        "wbexport",
+        "wdloader",
+        "wdfilter",
+        "wiz"
+      ],
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "partial",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-filter",
+          "wb-advanced-filter",
+          "wiz-filter"
+        ],
+        "coverage": "n=10 basic and advanced filters; exact expected selections, date bounds and byte totals validated."
+      },
+      "criterion": "Export a restricted file set by pattern/size/date rules.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wbexport"
+          ],
+          "details": "Complete-index post-scan filename patterns and logical size/UTC date bounds; files only."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader",
+            "wdfilter"
+          ],
+          "details": "Saved scan filters constrain exported results; no separate post-scan filtered export action."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Include/exclude and file/path filtering exposed."
+        }
+      }
+    },
+    {
+      "feature": "Regex search",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-regex"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Regular-expression matching in the search UI.",
+      "WinBlaze": "Bounded Unicode regex search with invalid-pattern feedback in the actual UI.",
+      "WinDirStat": "Regex search option implemented.",
+      "WizTree": "Regex query syntax exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbsearch",
+            "wbparitytests"
+          ],
+          "details": "Bounded Unicode regex search with invalid-pattern feedback in the actual UI."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsearch"
+          ],
+          "details": "Regex search option implemented."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Regex query syntax exposed."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsearch",
+        "wiz",
+        "wbsearch",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Allocated-size search bounds",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-allocated-search"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Filter search matches by physical allocation, not only logical length.",
+      "WinBlaze": "Inclusive physical-allocation bounds compose with logical size, extensions and UTC dates.",
+      "WinDirStat": "No allocated-size search predicate in installed 2.8.0; the column is display metadata.",
+      "WizTree": "Allocated-size operators supported.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbsearch",
+            "wbparitytests"
+          ],
+          "details": "Inclusive physical-allocation bounds compose with logical size, extensions and UTC dates."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsearchdlg"
+          ],
+          "details": "No allocated-size search predicate in installed 2.8.0; the column is display metadata."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Allocated-size operators supported."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsearchdlg",
+        "wiz",
+        "wbsearch",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Scan-time include/exclude rules",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Avoid excluded folders/files during scanning.",
+      "WinBlaze": "Per-scan relative subtree exclusions and case-insensitive filename wildcards prune directory walking; CR/LF input accepted, invalid parent traversal refused before clearing results. Filtered scans use directory walking.",
+      "WinDirStat": "Folder/file inclusion and exclusion rules.",
+      "WizTree": "Scan exclusion controls exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbnative",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Per-scan relative subtree exclusions and case-insensitive filename wildcards prune directory walking; CR/LF input accepted, invalid parent traversal refused before clearing results. Filtered scans use directory walking."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdfilter"
+          ],
+          "details": "Folder/file inclusion and exclusion rules."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Scan exclusion controls exposed."
+        }
+      },
+      "sources": [
+        "wbconfig",
+        "wdfilter",
+        "wiz",
+        "wbnative",
+        "wbui",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Multiple scan roots in one catalog",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-multiple-roots"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Combine multiple drives or folders in one scan.",
+      "WinBlaze": "One catalog combines up to 16 disjoint filesystem roots, retaining original paths and deduplicating hard-link allocation across roots. Imported combinations reopen through CSV/JSON. Scans are sequential; imported catalogs are session-only.",
+      "WinDirStat": "Multiple-target model and selection.",
+      "WizTree": "Multiple-selection scan dialog exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbmultiroot",
+            "wbnative",
+            "wbparitytests"
+          ],
+          "details": "One catalog combines up to 16 disjoint filesystem roots, retaining original paths and deduplicating hard-link allocation across roots. Imported combinations reopen through CSV/JSON. Scans are sequential; imported catalogs are session-only."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Multiple-target model and selection."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Multiple-selection scan dialog exposed."
+        }
+      },
+      "sources": [
+        "wbconfig",
+        "wdsource",
+        "wizbinary",
+        "wbmultiroot",
+        "wbnative",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "MTP phone/device scanning",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-mtp-live"
+        ],
+        "coverage": "Ten native-adapter startup + real-device metadata walk + CSV snapshots. No equivalent comparator timing adapter; no cross-product performance medal."
+      },
+      "criterion": "Analyze portable devices through Windows MTP rather than filesystem paths.",
+      "WinBlaze": "Read-only Windows Portable Devices metadata scanner verified on a connected Pixel 9 Pro: ten scans passed CSV count/root-total validation, finding 19,917–19,918 files. Seven skipped/error objects per scan; zero unknown sizes. No contents downloaded; reported logical sizes only.",
+      "WinDirStat": "No MTP scanner in 2.8.0; newer documentation describes a later release.",
+      "WizTree": "MTP support documented and device interface exposed.",
+      "note": "WinBlaze positive Pixel metadata scan validated at n=10. Device errors and changing live contents are explicit. WizTree capability remains interface/documentation-audited, not live-scanned.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-live-functional-tests",
+          "sources": [
+            "wbportable",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Read-only Windows Portable Devices metadata scanner verified on a connected Pixel 9 Pro: ten scans passed CSV count/root-total validation, finding 19,917–19,918 files. Seven skipped/error objects per scan; zero unknown sizes. No contents downloaded; reported logical sizes only.",
+          "remaining": "Seven reported errors per scan; no independent complete phone-file inventory ground truth. Device contents changed by one file during the batch.",
+          "runtime_status": "live-n10-validated"
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "No MTP scanner in 2.8.0; newer documentation describes a later release."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizfeatures",
+            "wizbinary"
+          ],
+          "details": "MTP support documented and device interface exposed.",
+          "runtime_status": "hardware-validation-pending",
+          "remaining": "Installed interface/version-history verified; no equivalent live device scan or timing performed for WizTree."
+        }
+      },
+      "sources": [
+        "wbconfig",
+        "wdsource",
+        "wizfeatures",
+        "wizbinary",
+        "wbportable",
+        "wbui",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Treemap logical/allocated size modes",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-png"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Switch treemap area basis between content length and allocation.",
+      "WinBlaze": "Logical/allocated area basis controls live treemap layout, tooltips and configured PNG output.",
+      "WinDirStat": "Logical/physical visualization modes.",
+      "WizTree": "Size-basis controls exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Logical/allocated area basis controls live treemap layout, tooltips and configured PNG output."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Logical/physical visualization modes."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Size-basis controls exposed."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Treemap free/unknown-space tiles",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "partial"
+      },
+      "performance": {
+        "jobs": [
+          "wb-png"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Represent unaccounted and free volume space in the map.",
+      "WinBlaze": "Live allocated-size volume root can display free and unaccounted allocation using checked volume totals. Unaccounted includes excluded/inaccessible files and filesystem overhead. Imported snapshots and folder/logical views do not claim volume free space.",
+      "WinDirStat": "Free/unknown entries implemented.",
+      "WizTree": "Free-space visualization exposed; unknown-space equivalence not established.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Live allocated-size volume root can display free and unaccounted allocation using checked volume totals. Unaccounted includes excluded/inaccessible files and filesystem overhead. Imported snapshots and folder/logical views do not claim volume free space."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Free/unknown entries implemented."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Free-space visualization exposed; unknown-space equivalence not established."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Alternative visualization layouts",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-png"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Offer flame/sunburst or alternative space-filling layouts.",
+      "WinBlaze": "Balanced rectangles, horizontal strips, weighted hierarchical flame graph and annular-sector sunburst. Shared logical/allocated basis, hover/click targets and PNG export. Geometry proportions and actual GUI PNG exports verified.",
+      "WinDirStat": "2.8.0 flame/sunburst and multiple treemap layouts.",
+      "WizTree": "No alternate flame/sunburst layout exposed in audited interface.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Balanced rectangles, horizontal strips, weighted hierarchical flame graph and annular-sector sunburst. Shared logical/allocated basis, hover/click targets and PNG export. Geometry proportions and actual GUI PNG exports verified."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "2.8.0 flame/sunburst and multiple treemap layouts."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No alternate flame/sunburst layout exposed in audited interface."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Configurable PNG export",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-png"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Choose image dimensions and size/free-space rendering options.",
+      "WinBlaze": "Width/height 1..8192, logical/allocated basis, applicable free/unaccounted tiles and grayscale. Actual GUI output decoded at 640x360; grayscale channels and alpha verified.",
+      "WinDirStat": "No native PNG exporter.",
+      "WizTree": "Dimensions, grayscale, free-space and size basis configurable.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Width/height 1..8192, logical/allocated basis, applicable free/unaccounted tiles and grayscale. Actual GUI output decoded at 640x360; grayscale channels and alpha verified."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdmenu"
+          ],
+          "details": "No native PNG exporter."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "Dimensions, grayscale, free-space and size basis configurable."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdmenu",
+        "wiz",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "JSON scan import",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-import-json",
+          "wb-import-wd-json"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Reopen a saved JSON scan.",
+      "WinBlaze": "Own versioned JSON plus English/reordered-key and translated fixed-order WinDirStat JSON reopen offline; numeric sizes, UTC dates and optional Owner validated.",
+      "WinDirStat": "Own JSON scan loader.",
+      "WizTree": "CSV/TSV/MFT import exposed; no JSON format.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbimport",
+            "wbparitytests"
+          ],
+          "details": "Own versioned JSON plus English/reordered-key and translated fixed-order WinDirStat JSON reopen offline; numeric sizes, UTC dates and optional Owner validated."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "Own JSON scan loader."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "CSV/TSV/MFT import exposed; no JSON format."
+        }
+      },
+      "sources": [
+        "wbindex",
+        "wdloader",
+        "wizbinary",
+        "wbimport",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "TSV scan import/export",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-tsv",
+          "wb-import-tsv"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Native tab-separated scan interchange.",
+      "WinBlaze": "Quoted UTF-8 tab-separated complete-catalog export/import, with the same numeric/date validation as CSV.",
+      "WinDirStat": "CSV/JSON formats in 2.8.0.",
+      "WizTree": "CSV/TSV file formats exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbimport",
+            "wbexport",
+            "wbinteropevidence"
+          ],
+          "details": "Quoted UTF-8 tab-separated complete-catalog export/import, with the same numeric/date validation as CSV."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "CSV/JSON formats in 2.8.0."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "CSV/TSV file formats exposed."
+        }
+      },
+      "sources": [
+        "wbindex",
+        "wbexport",
+        "wdloader",
+        "wizbinary",
+        "wbimport",
+        "wbinteropevidence"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Reopen raw MFT dumps",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-mft-reopen"
+        ],
+        "coverage": "Ten real-dump reopen + complete CSV export observations; no equivalent comparator timing adapter, so no cross-product performance medal."
+      },
+      "criterion": "Analyze a previously saved MFT dump.",
+      "WinBlaze": "Offline raw-record import validates fixups and geometry and atomically publishes a catalog. Ten reopens of a real C: dump reconstructed 1,688,653 files with matching exported root totals.",
+      "WinDirStat": "No dump import command.",
+      "WizTree": "MFT input selection/parser exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-live-functional-tests",
+          "sources": [
+            "wbnative",
+            "wbimport",
+            "wbparitytests"
+          ],
+          "details": "Offline raw-record import validates fixups and geometry and atomically publishes a catalog. Ten reopens of a real C: dump reconstructed 1,688,653 files with matching exported root totals.",
+          "runtime_status": "live-n10-validated",
+          "remaining": "Internal catalog totals verified; no independent record-by-record completeness proof."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdmenu"
+          ],
+          "details": "No dump import command."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "MFT input selection/parser exposed."
+        }
+      },
+      "sources": [
+        "wbnative",
+        "wdmenu",
+        "wizbinary",
+        "wbimport",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Export metadata richness",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "partial",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-detailed-json"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Include attributes, owner/identities and more than modified timestamps.",
+      "WinBlaze": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability.",
+      "WinDirStat": "Attributes/owner and modified metadata; format not identical.",
+      "WizTree": "Extended dates, attributes and MFT-record columns exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbexport",
+            "wbimport",
+            "wbnative",
+            "wbparitytests"
+          ],
+          "details": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "Attributes/owner and modified metadata; format not identical."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz",
+            "wizbinary"
+          ],
+          "details": "Extended dates, attributes and MFT-record columns exposed."
+        }
+      },
+      "sources": [
+        "wbexport",
+        "wdloader",
+        "wiz",
+        "wizbinary",
+        "wbimport",
+        "wbnative",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Localized / optional CSV columns",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "partial"
+      },
+      "performance": {
+        "jobs": [
+          "wb-import-wd"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Import exports with localized headers and optional fields.",
+      "WinBlaze": "Translated fixed-order WinDirStat captions, optional Owner and reordered English captions accepted. Owner survives JSON re-export; locale coverage is tested by translated-format fixtures, not every installed UI language.",
+      "WinDirStat": "Own localized column mapping, optional owner support.",
+      "WizTree": "Own optional CSV fields; foreign-schema equivalence not promised.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbimport",
+            "wbinteropevidence"
+          ],
+          "details": "Translated fixed-order WinDirStat captions, optional Owner and reordered English captions accepted. Owner survives JSON re-export; locale coverage is tested by translated-format fixtures, not every installed UI language."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "Own localized column mapping, optional owner support."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Own optional CSV fields; foreign-schema equivalence not promised."
+        }
+      },
+      "sources": [
+        "wbindex",
+        "interop",
+        "wdloader",
+        "wizbinary",
+        "wbimport",
+        "wbinteropevidence"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "CSV timestamp timezone selection",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-import-wiz",
+          "wb-import-wiz-utc"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Preserve explicit UTC versus local-time export/import semantics.",
+      "WinBlaze": "Explicit Local/UTC choice preserves timestamps from installed WizTree exports; n=10 functional cases check the known UTC instant.",
+      "WinDirStat": "Own UTC scan timestamps.",
+      "WizTree": "UTC export option exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbimport",
+            "wbinteropevidence"
+          ],
+          "details": "Explicit Local/UTC choice preserves timestamps from installed WizTree exports; n=10 functional cases check the known UTC instant."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "Own UTC scan timestamps."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz"
+          ],
+          "details": "UTC export option exposed."
+        }
+      },
+      "sources": [
+        "wbindex",
+        "wbexport",
+        "interop",
+        "wdloader",
+        "wiz",
+        "wbimport",
+        "wbinteropevidence"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Interactive duplicate results",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "partial"
+      },
+      "performance": {
+        "jobs": [
+          "wb-duplicates"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Inspect and act on duplicate groups inside the analyzer.",
+      "WinBlaze": "Filter verified groups by path/hash/status, reveal or recycle a selected file, and separately consolidate two chosen paths after confirmation. Group-wide batch duplicate cleanup is not provided.",
+      "WinDirStat": "Duplicate group tab and item actions.",
+      "WizTree": "Metadata candidate expansion, without content verification.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbduplicates",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Filter verified groups by path/hash/status, reveal or recycle a selected file, and separately consolidate two chosen paths after confirmation. Group-wide batch duplicate cleanup is not provided."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Duplicate group tab and item actions."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Metadata candidate expansion, without content verification."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbduplicates",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Configurable duplicate hash algorithms",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-duplicates-sha256",
+          "wb-duplicates-md5",
+          "wb-duplicates-sha1",
+          "wb-duplicates-sha512"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Choose a content-hash algorithm and expose the result.",
+      "WinBlaze": "SHA-256, MD5, SHA-1 or SHA-512 with displayed digests; every reported group is also byte-verified. Standard vectors and actual GUI investigation pass.",
+      "WinDirStat": "Multiple full-content hash algorithms.",
+      "WizTree": "Metadata candidate matching only.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbduplicates",
+            "wbparitytests"
+          ],
+          "details": "SHA-256, MD5, SHA-1 or SHA-512 with displayed digests; every reported group is also byte-verified. Standard vectors and actual GUI investigation pass."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Multiple full-content hash algorithms."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Metadata candidate matching only."
+        }
+      },
+      "sources": [
+        "wbscanner",
+        "wdsource",
+        "wizbinary",
+        "wbduplicates",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Hard-link duplicate consolidation",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-hardlinks"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Replace verified duplicate copies with shared hard links.",
+      "WinBlaze": "Confirmed two-path consolidation locks content against writes, byte-verifies, refuses mismatched owner/group/DACL, named streams, offline/reparse items, and preserves a recovery original if rollback fails. Paths share master metadata and future edits. No automatic group-wide consolidation.",
+      "WinDirStat": "Hardlink deduplication action.",
+      "WizTree": "No verified-content hardlink consolidation exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbhardlinks",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Confirmed two-path consolidation locks content against writes, byte-verifies, refuses mismatched owner/group/DACL, named streams, offline/reparse items, and preserves a recovery original if rollback fails. Paths share master metadata and future edits. No automatic group-wide consolidation."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdcommands"
+          ],
+          "details": "Hardlink deduplication action."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No verified-content hardlink consolidation exposed."
+        }
+      },
+      "sources": [
+        "wbactions",
+        "wbui",
+        "wdcommands",
+        "wizbinary",
+        "wbhardlinks",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Cloud-placeholder duplicate safeguards",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-duplicates"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Skip cloud-backed content reads during duplicate detection by policy.",
+      "WinBlaze": "Offline/recall/reparse candidates are refused before content reads. Guarded read-only handles use no-recall/reparse flags and recheck attributes after open. Actual OFFLINE fixture passes; connected cloud-provider hydration behavior remains unverified.",
+      "WinDirStat": "Cloud-file skip policy implemented.",
+      "WizTree": "No content duplicate scanner; metadata candidate matching only.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbduplicates",
+            "wbparitytests"
+          ],
+          "details": "Offline/recall/reparse candidates are refused before content reads. Guarded read-only handles use no-recall/reparse flags and recheck attributes after open. Actual OFFLINE fixture passes; connected cloud-provider hydration behavior remains unverified."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Cloud-file skip policy implemented."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No content duplicate scanner; metadata candidate matching only."
+        }
+      },
+      "sources": [
+        "wbscanner",
+        "wdsource",
+        "wizbinary",
+        "wbduplicates",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Readable permission exploration",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-permissions"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Browse account/rights rows and filter permissions in a dedicated UI.",
+      "WinBlaze": "Read-only owner/group/ACE browser with resolved accounts/SIDs and rights filter. Regex account/SID exclusions and five ordered account highlight rules support ACE rights thresholds and selectable colors. Invalid regexes are reported; this does not calculate effective access.",
+      "WinDirStat": "Permissions view, account exclusions and highlighting.",
+      "WizTree": "No permission report/view exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbnative",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Read-only owner/group/ACE browser with resolved accounts/SIDs and rights filter. Regex account/SID exclusions and five ordered account highlight rules support ACE rights thresholds and selectable colors. Invalid regexes are reported; this does not calculate effective access."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Permissions view, account exclusions and highlighting."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No permission report/view exposed."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbnative",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Batch/folder cleanup",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-actions"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Perform cleanup actions on folders or multiple selected items.",
+      "WinBlaze": "Multiple-selection files and nonempty folders can be moved or recycled through explicit confirmation and collision/overlap preflight. Partial failures are reported.",
+      "WinDirStat": "Selected-item and folder commands.",
+      "WizTree": "Multi-item shell operations exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbactions",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Multiple-selection files and nonempty folders can be moved or recycled through explicit confirmation and collision/overlap preflight. Partial failures are reported."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdcommands"
+          ],
+          "details": "Selected-item and folder commands."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Multi-item shell operations exposed."
+        }
+      },
+      "sources": [
+        "wbactions",
+        "wbui",
+        "wdcommands",
+        "wizbinary",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Results-row rename",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-actions"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Offer a dedicated rename action from file/folder result rows.",
+      "WinBlaze": "File/folder row supports direct in-place name editing with Enter/Save and Escape/Cancel, collision refusal and catalog refresh. The previous confirmation-dialog action remains available.",
+      "WinDirStat": "No dedicated inline-rename command found in 2.8.0; shell context actions are separate.",
+      "WizTree": "Inline file/folder rename exposed.",
+      "note": "Direct in-place editing and the older dialog action are both provided.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbactions",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "File/folder row supports direct in-place name editing with Enter/Save and Escape/Cancel, collision refusal and catalog refresh. The previous confirmation-dialog action remains available."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdmenu"
+          ],
+          "details": "No dedicated inline-rename command found in 2.8.0; shell context actions are separate."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Inline file/folder rename exposed."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdmenu",
+        "wizbinary",
+        "wbactions",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Explorer shell context menu",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Expose Windows shell verbs for selected items.",
+      "WinBlaze": "Actual Windows shell context menu on results/tree rows, including canonical rename/properties verbs and menu-message forwarding. Native query and owned-popup/cancel tests pass. Rescan after asynchronous shell actions or enable monitoring.",
+      "WinDirStat": "Shell context menu integration.",
+      "WizTree": "Shell context integration exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbshell",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Actual Windows shell context menu on results/tree rows, including canonical rename/properties verbs and menu-message forwarding. Native query and owned-popup/cancel tests pass. Rescan after asynchronous shell actions or enable monitoring."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdcommands"
+          ],
+          "details": "Shell context menu integration."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Shell context integration exposed."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdcommands",
+        "wizbinary",
+        "wbshell",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Change-event history",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "partial"
+      },
+      "performance": {
+        "jobs": [
+          "wb-watch"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "List created/deleted/modified/renamed events with timestamps.",
+      "WinBlaze": "Bounded latest 1,000 observed create/delete/modify/rename events, UTC observation timestamps, path filter and overflow marker. Observation time is not the filesystem mutation timestamp; history is session-only.",
+      "WinDirStat": "Dedicated watcher event rows.",
+      "WizTree": "Deletion monitoring; no complete typed event-history interface established.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbchanges",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Bounded latest 1,000 observed create/delete/modify/rename events, UTC observation timestamps, path filter and overflow marker. Observation time is not the filesystem mutation timestamp; history is session-only."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdwatch"
+          ],
+          "details": "Dedicated watcher event rows."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Deletion monitoring; no complete typed event-history interface established."
+        }
+      },
+      "sources": [
+        "wbwatch",
+        "wbui",
+        "wdwatch",
+        "wizbinary",
+        "wbchanges",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Storage tier / cost analytics",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-storage-cost"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Model storage tiers with user-specified prices and age thresholds.",
+      "WinBlaze": "Allocated bytes classified hot/warm/cold by UTC modification age, with configurable currency/GiB/month prices and unknown-date accounting. Estimates are hypothetical; no files are moved.",
+      "WinDirStat": "Storage Analytics view in 2.8.0.",
+      "WizTree": "No tier-cost model exposed in audited interface.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbcost",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Allocated bytes classified hot/warm/cold by UTC modification age, with configurable currency/GiB/month prices and unknown-date accounting. Estimates are hypothetical; no files are moved."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Storage Analytics view in 2.8.0."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No tier-cost model exposed in audited interface."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbcost",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "NTFS storage maintenance",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-compression",
+          "wb-sparsify",
+          "wb-vhd"
+        ],
+        "coverage": "Measured jobs are listed above where adapters exist. Distinct scopes and missing comparator measurements receive no performance medal."
+      },
+      "criterion": "Expose compression, sparsification or VHD compaction actions.",
+      "WinBlaze": "Confirmed reversible NTFS compression, verified-zero sparse conversion and detached dynamic VHD/VHDX zero-block compaction. Real byte-preserving NTFS fixtures and an owned empty VHDX pass in native and GUI tests. WinDirStat additionally offers filesystem-aware VHD compaction; WinBlaze never attaches the disk.",
+      "WinDirStat": "Compression, sparse-file and VHD maintenance commands.",
+      "WizTree": "No such dedicated maintenance action exposed.",
+      "note": "Support is scored against the stated criterion. Product-specific limits are described in each cell; equivalent support grades are excluded from feature medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbmaintenance",
+            "wbvirtualdisk",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Confirmed reversible NTFS compression, verified-zero sparse conversion and detached dynamic VHD/VHDX zero-block compaction. Real byte-preserving NTFS fixtures and an owned empty VHDX pass in native and GUI tests. WinDirStat additionally offers filesystem-aware VHD compaction; WinBlaze never attaches the disk."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdcommands"
+          ],
+          "details": "Compression, sparse-file and VHD maintenance commands."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No such dedicated maintenance action exposed."
+        }
+      },
+      "sources": [
+        "wbactions",
+        "wbui",
+        "wdcommands",
+        "wizbinary",
+        "wbmaintenance",
+        "wbvirtualdisk",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Flame graph visualization",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-flame-layout",
+          "wb-flame-png"
+        ],
+        "coverage": "n=10 measured adapters have explicit process boundaries; native geometry/control and GPU export are separate workflows."
+      },
+      "criterion": "Render hierarchical weighted horizontal bands with ancestry, size-basis selection and interactive targets.",
+      "WinBlaze": "Balanced rectangles, horizontal strips, weighted hierarchical flame graph and annular-sector sunburst. Shared logical/allocated basis, hover/click targets and PNG export. Geometry proportions and actual GUI PNG exports verified.",
+      "WinDirStat": "2.8.0 flame/sunburst and multiple treemap layouts.",
+      "WizTree": "No alternate flame/sunburst layout exposed in audited interface.",
+      "note": "Explicit subfeature criterion; equal support and WinBlaze advantages above both competitors are omitted from comparison rows and medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Balanced rectangles, horizontal strips, weighted hierarchical flame graph and annular-sector sunburst. Shared logical/allocated basis, hover/click targets and PNG export. Geometry proportions and actual GUI PNG exports verified."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "2.8.0 flame/sunburst and multiple treemap layouts."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No alternate flame/sunburst layout exposed in audited interface."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Sunburst visualization",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-sunburst-layout",
+          "wb-sunburst-png"
+        ],
+        "coverage": "n=10 measured adapters have explicit process boundaries; native geometry/control and GPU export are separate workflows."
+      },
+      "criterion": "Render proportional hierarchy as annular sectors with radial hit testing, size-basis selection and PNG export.",
+      "WinBlaze": "Balanced rectangles, horizontal strips, weighted hierarchical flame graph and annular-sector sunburst. Shared logical/allocated basis, hover/click targets and PNG export. Geometry proportions and actual GUI PNG exports verified.",
+      "WinDirStat": "2.8.0 flame/sunburst and multiple treemap layouts.",
+      "WizTree": "No alternate flame/sunburst layout exposed in audited interface.",
+      "note": "Explicit subfeature criterion; equal support and WinBlaze advantages above both competitors are omitted from comparison rows and medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Balanced rectangles, horizontal strips, weighted hierarchical flame graph and annular-sector sunburst. Shared logical/allocated basis, hover/click targets and PNG export. Geometry proportions and actual GUI PNG exports verified."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "2.8.0 flame/sunburst and multiple treemap layouts."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No alternate flame/sunburst layout exposed in audited interface."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Direct in-place results rename",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-actions"
+        ],
+        "coverage": "n=10 measured adapters have explicit process boundaries; native geometry/control and GPU export are separate workflows."
+      },
+      "criterion": "Edit file/folder names directly in the result row, with commit, cancellation and overwrite refusal.",
+      "WinBlaze": "File/folder row supports direct in-place name editing with Enter/Save and Escape/Cancel, collision refusal and catalog refresh. The previous confirmation-dialog action remains available.",
+      "WinDirStat": "No dedicated inline-rename command found in 2.8.0; shell context actions are separate.",
+      "WizTree": "Inline file/folder rename exposed.",
+      "note": "Explicit subfeature criterion; equal support and WinBlaze advantages above both competitors are omitted from comparison rows and medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbactions",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "File/folder row supports direct in-place name editing with Enter/Save and Escape/Cancel, collision refusal and catalog refresh. The previous confirmation-dialog action remains available."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdmenu"
+          ],
+          "details": "No dedicated inline-rename command found in 2.8.0; shell context actions are separate."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "Inline file/folder rename exposed."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdmenu",
+        "wizbinary",
+        "wbactions",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Rich metadata CSV export/reopen",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "partial",
+        "WizTree": "partial"
+      },
+      "performance": {
+        "jobs": [
+          "wb-detailed-csv"
+        ],
+        "coverage": "n=10 measured adapters have explicit process boundaries; native geometry/control and GPU export are separate workflows."
+      },
+      "criterion": "CSV export includes owner, attributes, created/modified/accessed timestamps and physical file identities; supplied rich metadata is retained on reopen.",
+      "WinBlaze": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability.",
+      "WinDirStat": "Installed 2.8.0 CSV includes owner, attributes and modified metadata; additional created/accessed timestamps and physical identities are not provided by that CSV schema.",
+      "WizTree": "Installed 4.33 exposes optional Created/Last Accessed dates and MFT record number export. Owner export is not exposed in the audited CSV interface. Its schema differs from WinBlaze.",
+      "note": "Composite field set is richer in WinBlaze than either comparator and is omitted from parity medals. Individual competitor metadata capabilities are scored separately below.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbexport",
+            "wbimport",
+            "wbnative",
+            "wbparitytests"
+          ],
+          "details": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "Installed 2.8.0 CSV includes owner, attributes and modified metadata; additional created/accessed timestamps and physical identities are not provided by that CSV schema."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz",
+            "wizbinary"
+          ],
+          "details": "Installed 4.33 exposes optional Created/Last Accessed dates and MFT record number export. Owner export is not exposed in the audited CSV interface. Its schema differs from WinBlaze."
+        }
+      },
+      "sources": [
+        "wbexport",
+        "wdloader",
+        "wiz",
+        "wizbinary",
+        "wbimport",
+        "wbnative",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Permission account exclusions",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-permission-controls"
+        ],
+        "coverage": "n=10 measured adapters have explicit process boundaries; native geometry/control and GPU export are separate workflows."
+      },
+      "criterion": "Exclude displayed account/SID rows using a validated regular expression.",
+      "WinBlaze": "Read-only owner/group/ACE browser with resolved accounts/SIDs and rights filter. Regex account/SID exclusions and five ordered account highlight rules support ACE rights thresholds and selectable colors. Invalid regexes are reported; this does not calculate effective access.",
+      "WinDirStat": "Permissions view, account exclusions and highlighting.",
+      "WizTree": "No permission report/view exposed.",
+      "note": "Explicit subfeature criterion; equal support and WinBlaze advantages above both competitors are omitted from comparison rows and medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbnative",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Read-only owner/group/ACE browser with resolved accounts/SIDs and rights filter. Regex account/SID exclusions and five ordered account highlight rules support ACE rights thresholds and selectable colors. Invalid regexes are reported; this does not calculate effective access."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Permissions view, account exclusions and highlighting."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No permission report/view exposed."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbnative",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "Permission account color rules",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-permission-controls"
+        ],
+        "coverage": "n=10 measured adapters have explicit process boundaries; native geometry/control and GPU export are separate workflows."
+      },
+      "criterion": "Five ordered account/SID highlight rules with configurable ACE rights thresholds and colors.",
+      "WinBlaze": "Read-only owner/group/ACE browser with resolved accounts/SIDs and rights filter. Regex account/SID exclusions and five ordered account highlight rules support ACE rights thresholds and selectable colors. Invalid regexes are reported; this does not calculate effective access.",
+      "WinDirStat": "Permissions view, account exclusions and highlighting.",
+      "WizTree": "No permission report/view exposed.",
+      "note": "Explicit subfeature criterion; equal support and WinBlaze advantages above both competitors are omitted from comparison rows and medals.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbnative",
+            "wbui",
+            "wbparitytests"
+          ],
+          "details": "Read-only owner/group/ACE browser with resolved accounts/SIDs and rights filter. Regex account/SID exclusions and five ordered account highlight rules support ACE rights thresholds and selectable colors. Invalid regexes are reported; this does not calculate effective access."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdsource"
+          ],
+          "details": "Permissions view, account exclusions and highlighting."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wizbinary"
+          ],
+          "details": "No permission report/view exposed."
+        }
+      },
+      "sources": [
+        "wbui",
+        "wdsource",
+        "wizbinary",
+        "wbnative",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "CSV owner metadata",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "full",
+        "WizTree": "none"
+      },
+      "performance": {
+        "jobs": [
+          "wb-detailed-csv"
+        ],
+        "coverage": "n=10 measured adapters have explicit process boundaries; native geometry/control and GPU export are separate workflows."
+      },
+      "criterion": "Export supplied or accessible file owner account metadata in CSV.",
+      "WinBlaze": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability.",
+      "WinDirStat": "Optional Owner CSV column in installed 2.8.0.",
+      "WizTree": "No owner column exposed in audited 4.33 CSV export options.",
+      "note": "Metadata options/schema are audited separately; inaccessible values remain missing, not invented. Default CSV schemas and identity representations differ.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbexport",
+            "wbimport",
+            "wbnative",
+            "wbparitytests"
+          ],
+          "details": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "Optional Owner CSV column in installed 2.8.0."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz",
+            "wizbinary"
+          ],
+          "details": "No owner column exposed in audited 4.33 CSV export options."
+        }
+      },
+      "sources": [
+        "wbexport",
+        "wdloader",
+        "wiz",
+        "wizbinary",
+        "wbimport",
+        "wbnative",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "CSV created/accessed timestamps",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-detailed-csv"
+        ],
+        "coverage": "n=10 measured adapters have explicit process boundaries; native geometry/control and GPU export are separate workflows."
+      },
+      "criterion": "Export created and last-accessed timestamps in addition to modified timestamps.",
+      "WinBlaze": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability.",
+      "WinDirStat": "Installed CSV schema exposes Last Change; no created/accessed fields.",
+      "WizTree": "Optional Export Last Accessed and Created dates option in installed 4.33 interface.",
+      "note": "Metadata options/schema are audited separately; inaccessible values remain missing, not invented. Default CSV schemas and identity representations differ.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbexport",
+            "wbimport",
+            "wbnative",
+            "wbparitytests"
+          ],
+          "details": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "Installed CSV schema exposes Last Change; no created/accessed fields."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz",
+            "wizbinary"
+          ],
+          "details": "Optional Export Last Accessed and Created dates option in installed 4.33 interface."
+        }
+      },
+      "sources": [
+        "wbexport",
+        "wdloader",
+        "wiz",
+        "wizbinary",
+        "wbimport",
+        "wbnative",
+        "wbparitytests"
+      ],
+      "gap": false
+    },
+    {
+      "feature": "CSV physical file references",
+      "support": {
+        "WinBlaze": "full",
+        "WinDirStat": "none",
+        "WizTree": "full"
+      },
+      "performance": {
+        "jobs": [
+          "wb-detailed-csv"
+        ],
+        "coverage": "n=10 measured adapters have explicit process boundaries; native geometry/control and GPU export are separate workflows."
+      },
+      "criterion": "Export a physical file identity or MFT record reference as a CSV field; identity schemas may differ.",
+      "WinBlaze": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability.",
+      "WinDirStat": "No physical file identity column in installed CSV schema.",
+      "WizTree": "Optional Export MFT record number option in installed 4.33 interface.",
+      "note": "Metadata options/schema are audited separately; inaccessible values remain missing, not invented. Default CSV schemas and identity representations differ.",
+      "verification": {
+        "WinBlaze": {
+          "basis": "source-and-functional-tests",
+          "sources": [
+            "wbexport",
+            "wbimport",
+            "wbnative",
+            "wbparitytests"
+          ],
+          "details": "Detailed CSV and JSON include attributes and created/modified/accessed UTC seconds, optional current owner, lossless 64-bit volume and 128-bit file identity, and link count. Rich CSV reopen retains metadata. Basic CSV stays compact for interoperability."
+        },
+        "WinDirStat": {
+          "basis": "source-reviewed",
+          "sources": [
+            "wdloader"
+          ],
+          "details": "No physical file identity column in installed CSV schema."
+        },
+        "WizTree": {
+          "basis": "interface/documentation-audited",
+          "sources": [
+            "wiz",
+            "wizbinary"
+          ],
+          "details": "Optional Export MFT record number option in installed 4.33 interface."
+        }
+      },
+      "sources": [
+        "wbexport",
+        "wdloader",
+        "wiz",
+        "wizbinary",
+        "wbimport",
+        "wbnative",
+        "wbparitytests"
+      ],
+      "gap": false
+    }
+  ],
+  "scoring": "Full support earns gold; partial earns silver; absent earns bronze. Equal support shares the same medal. Unverified support earns no medal. Each feature row is one event.",
+  "version_scope": "Installed WinDirStat 2.8.0 and WizTree 4.33; source/interface evidence is version-scoped. Binary versions and SHA-256 identities are recorded by each runner.",
+  "scoring_policy": "Grades apply to each row's stated criterion. Source/interface review is distinct from a successful runtime check. Equal support rows are omitted and earn no medal; WinBlaze-only advantages above both competitors are omitted and earn no medals; remaining differing support levels remain medal events. Equal grades do not imply identical implementations.",
+  "verification_record": "FEATURE_PARITY_AUDIT.md"
+}

@@ -1,11 +1,13 @@
-//! Raw directory enumeration over `FindFirstFileExW`.
+//! Directory entry sources: batched metadata, large-fetch FindFirst, and std fallback.
 //!
 //! std's `read_dir` already requests `FindExInfoBasic` (skipping 8.3 alias
 //! lookups) but not `FIND_FIRST_EX_LARGE_FETCH`, which batches directory
 //! entries in ~64KB kernel round-trips instead of the small default. The raw
 //! iterator also hands back attributes, sizes, and timestamps directly from
 //! the `WIN32_FIND_DATAW` the enumeration already produced, so the walker
-//! needs no per-entry `metadata()` call at all.
+//! avoids per-entry std metadata calls. The legacy source still opens files
+//! for accurate allocation/link information; the preferred batched source
+//! obtains those values from directory records instead.
 
 use std::ffi::{c_void, OsString};
 use std::fs;
@@ -79,16 +81,17 @@ impl EnumerationError {
     }
 }
 
-/// One directory entry, fully described by the enumeration itself.
+/// One directory entry with allocation and physical identity for storage accounting.
 ///
 /// `name` is the exact on-disk name (`OsString` round-trips unpaired UTF-16
 /// surrogates, which are legal on NTFS); anything that joins paths or reopens
 /// the entry must use it verbatim and only lossy-convert for display.
 pub struct FindEntry {
-    pub name: OsString,
+    pub name: crate::directory_metadata::EntryName,
     pub attributes: u32,
     pub size_bytes: u64,
     pub allocation_bytes: u64,
+    pub physical_identity: Option<(u64, u128)>,
     /// FILETIME (100ns ticks since 1601); zero means "not available".
     pub created_utc: u64,
     pub modified_utc: u64,
@@ -195,17 +198,37 @@ impl Iterator for FindIterator {
 
             let name = OsString::from_wide(name_units);
             let size_bytes = (u64::from(data.nFileSizeHigh) << 32) | u64::from(data.nFileSizeLow);
-            let allocation_bytes = allocation_size_for_entry(
-                &self.directory,
-                &name,
-                data.dwFileAttributes,
-                size_bytes,
-            );
+            let path = self.directory.join(&name);
+            let details = if data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+                None
+            } else {
+                match crate::file_details::query_file_details(&path) {
+                    Ok(details) => Some(details),
+                    Err(error) => {
+                        return Some(Err(EnumerationError {
+                            error,
+                            path: Some(path),
+                        }))
+                    }
+                }
+            };
+            let allocation_bytes = details.as_ref().map_or(0, |details| {
+                if data.dwFileAttributes & (FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_SPARSE_FILE)
+                    != 0
+                {
+                    compressed_file_size(&path).unwrap_or(details.allocation_bytes)
+                } else {
+                    details.allocation_bytes
+                }
+            });
             return Some(Ok(FindEntry {
-                name,
+                name: name.into(),
                 attributes: data.dwFileAttributes,
                 size_bytes,
                 allocation_bytes,
+                physical_identity: details
+                    .filter(|details| details.links > 1)
+                    .map(|details| details.identity),
                 created_utc: filetime(data.ftCreationTime),
                 modified_utc: filetime(data.ftLastWriteTime),
                 accessed_utc: filetime(data.ftLastAccessTime),
@@ -222,31 +245,6 @@ impl Drop for FindIterator {
 
 fn filetime(parts: [u32; 2]) -> u64 {
     (u64::from(parts[1]) << 32) | u64::from(parts[0])
-}
-
-fn allocation_size_for_entry(
-    directory: &Path,
-    name: &std::ffi::OsStr,
-    attributes: u32,
-    size_bytes: u64,
-) -> u64 {
-    if attributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
-        return 0;
-    }
-    if attributes & (FILE_ATTRIBUTE_SPARSE_FILE | FILE_ATTRIBUTE_COMPRESSED) == 0 {
-        return size_bytes;
-    }
-    allocation_size_for_path(&directory.join(name), attributes, size_bytes)
-}
-
-fn allocation_size_for_path(path: &Path, attributes: u32, size_bytes: u64) -> u64 {
-    if attributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
-        return 0;
-    }
-    if attributes & (FILE_ATTRIBUTE_SPARSE_FILE | FILE_ATTRIBUTE_COMPRESSED) == 0 {
-        return size_bytes;
-    }
-    compressed_file_size(path).unwrap_or(size_bytes)
 }
 
 fn compressed_file_size(path: &Path) -> io::Result<u64> {
@@ -287,11 +285,12 @@ fn wide_path_for_win32(path: &Path) -> Vec<u16> {
     wide
 }
 
-/// Directory entry source shared by every walker: the raw large-fetch
-/// enumeration when enabled (falling back to `fs::read_dir` if the open
-/// fails), or `fs::read_dir` outright. Yields one shape either way so the
+/// Directory entry source shared by every walker: batched allocation/identity
+/// records when supported, then large-fetch FindFirst and std fallbacks.
+/// A failed mid-stream batch is reported, never restarted and double counted. Yields one shape either way so the
 /// walk loop exists exactly once per walker.
 pub enum DirEntries {
+    Batched(crate::directory_metadata::DirectoryMetadataIterator),
     Fast(FindIterator),
     // Boxed: fs::ReadDir is ~600 bytes vs the Fast variant's ~24, so an
     // unboxed enum would size every DirEntries to the larger variant.
@@ -301,6 +300,9 @@ pub enum DirEntries {
 /// Opens `directory` honoring the fast-enumeration preference.
 pub fn read_dir_auto(directory: &Path, fast: bool) -> io::Result<DirEntries> {
     if fast {
+        if let Ok(entries) = crate::directory_metadata::read_directory(directory) {
+            return Ok(DirEntries::Batched(entries));
+        }
         // Fall through to fs::read_dir on open failure so exotic paths keep
         // working; error dirs then fail (and report) through one path.
         if let Ok(entries) = read_dir_fast(directory) {
@@ -315,6 +317,20 @@ impl Iterator for DirEntries {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
+            DirEntries::Batched(entries) => entries.next().map(|result| {
+                let entry = result.map_err(EnumerationError::bare)?;
+                Ok(FindEntry {
+                    name: entry.name,
+                    attributes: entry.attributes,
+                    size_bytes: entry.size_bytes,
+                    allocation_bytes: entry.allocation_bytes,
+                    physical_identity: (entry.attributes & FILE_ATTRIBUTE_DIRECTORY == 0)
+                        .then_some(entry.identity),
+                    created_utc: entry.created_utc,
+                    modified_utc: entry.modified_utc,
+                    accessed_utc: entry.accessed_utc,
+                })
+            }),
             DirEntries::Fast(entries) => entries.next(),
             DirEntries::Std(entries) => entries.next().map(|result| {
                 use std::os::windows::fs::MetadataExt;
@@ -329,13 +345,33 @@ impl Iterator for DirEntries {
                 })?;
                 let attributes = metadata.file_attributes();
                 let size_bytes = metadata.len();
-                let allocation_bytes =
-                    allocation_size_for_path(&entry.path(), attributes, size_bytes);
+                let details = if attributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+                    None
+                } else {
+                    Some(
+                        crate::file_details::query_file_details(&entry.path()).map_err(
+                            |error| EnumerationError {
+                                error,
+                                path: Some(entry.path()),
+                            },
+                        )?,
+                    )
+                };
+                let allocation_bytes = details.as_ref().map_or(0, |details| {
+                    if attributes & (FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_SPARSE_FILE) != 0 {
+                        compressed_file_size(&entry.path()).unwrap_or(details.allocation_bytes)
+                    } else {
+                        details.allocation_bytes
+                    }
+                });
                 Ok(FindEntry {
-                    name: entry.file_name(),
+                    name: entry.file_name().into(),
                     attributes,
                     size_bytes,
                     allocation_bytes,
+                    physical_identity: details
+                        .filter(|details| details.links > 1)
+                        .map(|details| details.identity),
                     created_utc: metadata.creation_time(),
                     modified_utc: metadata.last_write_time(),
                     accessed_utc: metadata.last_access_time(),

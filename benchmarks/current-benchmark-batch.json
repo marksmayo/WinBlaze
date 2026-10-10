@@ -1,0 +1,22 @@
+{
+  "completed_utc": "2026-10-09T14:10:11.2318572Z",
+  "state": "complete",
+  "cache": "uncontrolled; no claim of cold cache",
+  "selected_tools": [
+    "WinBlaze"
+  ],
+  "batch_id": "refresh-20261009T135820398Z",
+  "elevation": "standard user token",
+  "profiles": [
+    "tiny",
+    "scale",
+    "fanout-large",
+    "full"
+  ],
+  "scope": "WinBlaze-only refresh; comparator observations retained from prior dated batch",
+  "started_utc": "2026-10-09T13:58:21.1233572Z",
+  "competitor_refresh_policy": "reuse-complete-version-baselines-v1",
+  "error": null,
+  "requested_runs": 10,
+  "administrator_completed_utc": "2026-10-09T14:11:11.0314563Z"
+}

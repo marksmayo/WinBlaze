@@ -372,14 +372,16 @@ impl NtfsStreamState {
         on_event(ScanEvent::FileFound(FileRecord {
             id: entry.file_id,
             parent_directory_id: DirectoryId(entry.parent_directory_id.unwrap_or(NTFS_ROOT_RECORD)),
-            name,
-            full_path: String::new(),
+            name: name.into(),
+            full_path: String::new().into(),
             size_bytes: entry.size_bytes,
             allocation_bytes: entry.allocation_bytes,
             attributes: entry.attributes,
-            created_utc: entry.created_utc,
-            modified_utc: entry.modified_utc,
-            accessed_utc: entry.accessed_utc,
+            timestamps: winblaze_core::FileTimestamps::new(
+                entry.created_utc,
+                entry.modified_utc,
+                entry.accessed_utc,
+            ),
         }));
         if retain {
             self.retained_files.insert(entry.file_id.0, entry);
@@ -412,14 +414,16 @@ impl NtfsStreamState {
                 parent_directory_id: DirectoryId(
                     entry.parent_directory_id.unwrap_or(NTFS_ROOT_RECORD),
                 ),
-                name: entry.name.clone(),
-                full_path: String::new(),
+                name: entry.name.clone().into(),
+                full_path: String::new().into(),
                 size_bytes: entry.size_bytes,
                 allocation_bytes: entry.allocation_bytes,
                 attributes: entry.attributes,
-                created_utc: entry.created_utc,
-                modified_utc: entry.modified_utc,
-                accessed_utc: entry.accessed_utc,
+                timestamps: winblaze_core::FileTimestamps::new(
+                    entry.created_utc,
+                    entry.modified_utc,
+                    entry.accessed_utc,
+                ),
             }));
             return;
         }
@@ -666,6 +670,24 @@ pub struct VolumeMftReader {
 }
 
 const VOLUME_READ_CHUNK: usize = 4 * 1024 * 1024;
+
+/// Raw initialized MFT bytes in logical record order, including free records.
+/// Unlike the scan fast path this never removes free extents or parses records.
+pub fn open_mft_dump(root: &Path) -> io::Result<VolumeMftReader> {
+    let mut volume = open_volume_handle(root)?;
+    let geometry = read_volume_geometry(&mut volume)?;
+    let extents = read_mft_extents(&mut volume, &geometry)?;
+    Ok(VolumeMftReader {
+        volume,
+        extents,
+        extent_index: 0,
+        consumed_in_extent: 0,
+        bytes_per_sector: geometry.bytes_per_sector as usize,
+        chunk: Vec::new(),
+        chunk_pos: 0,
+        chunk_len: 0,
+    })
+}
 
 impl VolumeMftReader {
     fn total_bytes(&self) -> u64 {
@@ -1737,6 +1759,87 @@ fn enable_backup_privilege() -> io::Result<()> {
     }
 }
 
+/// Reopens raw NTFS file records without opening the source volume.
+/// Fixups are validated before parsing; truncated or torn input is rejected.
+/// Record bytes are streamed through a bounded buffer using declared record geometry.
+pub fn read_mft_dump(
+    root: &Path,
+    mut input: impl Read,
+) -> Result<NtfsEnumeration, NtfsEnumerationError> {
+    let mut record = vec![0_u8; NTFS_RECORD_SIZE];
+    let mut entries = IdHashMap::default();
+    let mut extensions = Vec::new();
+    let mut known_size = NTFS_RECORD_SIZE;
+    loop {
+        record.resize(48, 0);
+        match input.read_exact(&mut record[..1]) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => break,
+            Err(error) => return Err(error.into()),
+        }
+        let truncated = |error: io::Error| {
+            if error.kind() == io::ErrorKind::UnexpectedEof {
+                NtfsEnumerationError::InvalidRecord("Truncated MFT record".into())
+            } else {
+                error.into()
+            }
+        };
+        input.read_exact(&mut record[1..]).map_err(truncated)?;
+        let zero_slot = record.iter().all(|&byte| byte == 0);
+        let size = if zero_slot {
+            known_size
+        } else {
+            le_u32(&record, 0x1c) as usize
+        };
+        if !(1024..=65536).contains(&size) || !size.is_power_of_two() {
+            return Err(NtfsEnumerationError::InvalidRecord(
+                "Unsupported MFT record size".into(),
+            ));
+        }
+        if !zero_slot && &record[..4] != FILE_RECORD_SIGNATURE {
+            return Err(NtfsEnumerationError::InvalidRecord(
+                "Invalid raw MFT signature".into(),
+            ));
+        }
+        record.resize(size, 0);
+        input.read_exact(&mut record[48..]).map_err(truncated)?;
+        if zero_slot {
+            if record.iter().all(|&byte| byte == 0) {
+                continue;
+            }
+            return Err(NtfsEnumerationError::InvalidRecord(
+                "Invalid unallocated MFT slot".into(),
+            ));
+        }
+        known_size = size;
+        let sectors = le_u16(&record, 6).saturating_sub(1) as usize;
+        if sectors == 0
+            || size % sectors != 0
+            || size / sectors < 512
+            || !(size / sectors).is_power_of_two()
+            || !apply_record_fixups(&mut record, size / sectors)
+        {
+            return Err(NtfsEnumerationError::InvalidRecord(
+                "Invalid or torn MFT fixups".into(),
+            ));
+        }
+        match parse_record(&record)? {
+            ParsedRecordOutcome::Entry(entry) => {
+                entries.insert(entry.file_id.0, entry);
+            }
+            ParsedRecordOutcome::Extension(extension) => extensions.push(extension),
+            ParsedRecordOutcome::None => {}
+        }
+    }
+    if entries.is_empty() {
+        return Err(NtfsEnumerationError::InvalidRecord(
+            "No live MFT entries".into(),
+        ));
+    }
+    apply_extension_sizes(&mut entries, extensions);
+    parse_entries(root, entries, None)
+}
+
 pub fn parse_mft_records(
     root: &Path,
     bytes: &[u8],
@@ -1979,14 +2082,16 @@ fn parse_entries(
             let file = FileRecord {
                 id: FileId(entry.file_id.0),
                 parent_directory_id: DirectoryId(entry.parent_directory_id.unwrap_or(5)),
-                name: entry.name.clone(),
-                full_path: String::new(),
+                name: entry.name.clone().into(),
+                full_path: String::new().into(),
                 size_bytes: entry.size_bytes,
                 allocation_bytes: entry.allocation_bytes,
                 attributes: entry.attributes,
-                created_utc: entry.created_utc,
-                modified_utc: entry.modified_utc,
-                accessed_utc: entry.accessed_utc,
+                timestamps: winblaze_core::FileTimestamps::new(
+                    entry.created_utc,
+                    entry.modified_utc,
+                    entry.accessed_utc,
+                ),
             };
             if let Some(callback) = on_event.as_mut() {
                 (*callback)(ScanEvent::FileFound(file.clone()));
@@ -3008,6 +3113,61 @@ mod tests {
     }
 
     #[test]
+    fn reopens_raw_mft_dump_offline_and_rejects_truncated_or_torn_records() {
+        let mut bytes = Vec::new();
+        for mut record in [
+            build_record(5, true, 5, "", 0),
+            build_record(10, true, 5, "Users", 0),
+            build_record(11, false, 10, "file.txt", 7),
+        ] {
+            record.copy_within(0x30..500, 0x38);
+            record[0x14..0x16].copy_from_slice(&0x38u16.to_le_bytes());
+            record[4..6].copy_from_slice(&0x30u16.to_le_bytes());
+            record[6..8].copy_from_slice(&3u16.to_le_bytes());
+            record[0x30..0x36].copy_from_slice(&[0xab, 0xcd, 0, 0, 0, 0]);
+            record[510..512].copy_from_slice(&[0xab, 0xcd]);
+            record[1022..1024].copy_from_slice(&[0xab, 0xcd]);
+            bytes.extend_from_slice(&record);
+        }
+        let reopened = read_mft_dump(Path::new(r"MFT:\"), bytes.as_slice()).unwrap();
+        assert_eq!(reopened.files.len(), 1);
+        assert_eq!(reopened.files[0].name.as_ref(), "file.txt");
+        assert_eq!(reopened.files[0].size_bytes, 7);
+        assert!(reopened
+            .directories
+            .iter()
+            .any(|record| record.full_path == r"MFT:\Users"));
+        assert!(read_mft_dump(Path::new(r"MFT:\"), &bytes[..bytes.len() - 1]).is_err());
+        bytes[510] ^= 1;
+        assert!(read_mft_dump(Path::new(r"MFT:\"), bytes.as_slice()).is_err());
+    }
+
+    #[test]
+    fn reopens_large_mft_records_using_their_declared_geometry() {
+        let mut bytes = Vec::new();
+        for mut record in [
+            build_record(5, true, 5, "", 0),
+            build_record(11, false, 5, "large-record.bin", 7),
+        ] {
+            record.resize(4096, 0);
+            record.copy_within(0x30..500, 0x60);
+            record[0x14..0x16].copy_from_slice(&0x60u16.to_le_bytes());
+            record[0x1c..0x20].copy_from_slice(&4096u32.to_le_bytes());
+            record[4..6].copy_from_slice(&0x30u16.to_le_bytes());
+            record[6..8].copy_from_slice(&9u16.to_le_bytes());
+            record[0x30..0x42].fill(0);
+            record[0x30..0x32].copy_from_slice(&[0xab, 0xcd]);
+            for sector in 1..=8 {
+                record[sector * 512 - 2..sector * 512].copy_from_slice(&[0xab, 0xcd]);
+            }
+            bytes.extend_from_slice(&record);
+        }
+        let reopened = read_mft_dump(Path::new(r"MFT:\"), bytes.as_slice()).unwrap();
+        assert_eq!(reopened.files.len(), 1);
+        assert_eq!(reopened.files[0].name.as_ref(), "large-record.bin");
+    }
+
+    #[test]
     fn parses_directories_and_files_from_mft_records() {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&build_record(5, true, 5, "", 0));
@@ -3017,7 +3177,7 @@ mod tests {
         let result = parse_mft_records(Path::new(r"C:\"), &bytes).expect("parse mft");
         assert_eq!(result.files.len(), 1);
         assert_eq!(result.directories.len(), 2);
-        assert_eq!(result.files[0].name, "file.txt");
+        assert_eq!(result.files[0].name.as_ref(), "file.txt");
         // File records no longer store a path; the parent directory carries it.
         assert!(result.files[0].full_path.is_empty());
         let parent = result
@@ -3107,7 +3267,7 @@ mod tests {
 
         let result = parse_mft_records(Path::new(r"C:\"), &bytes).expect("parse");
         assert_eq!(result.files.len(), 1);
-        assert_eq!(result.files[0].name, "good.txt");
+        assert_eq!(result.files[0].name.as_ref(), "good.txt");
     }
 
     #[test]
@@ -3153,7 +3313,7 @@ mod tests {
 
         let result = parse_mft_records(Path::new(r"C:\"), &bytes).expect("parse");
         assert_eq!(result.files.len(), 1);
-        assert_eq!(result.files[0].name, "Program Files");
+        assert_eq!(result.files[0].name.as_ref(), "Program Files");
     }
 
     #[test]
@@ -3165,7 +3325,7 @@ mod tests {
         let result = parse_mft_records(Path::new(r"C:\"), &bytes).expect("parse");
         assert_eq!(result.files.len(), 1);
         assert_eq!(result.summary.files_seen, 1);
-        assert_eq!(result.files[0].name, "second.txt");
+        assert_eq!(result.files[0].name.as_ref(), "second.txt");
     }
 }
 

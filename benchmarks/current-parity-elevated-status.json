@@ -1,0 +1,6 @@
+{
+  "state": "pending",
+  "requested_runs": 10,
+  "detail": "Current-build iteration refresh did not start: Windows administrator prompt was canceled. Earlier positive n=10 validation remains historical evidence.",
+  "utc": "2026-10-04T11:31:15.922Z"
+}

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -157,6 +157,37 @@ typedef struct WbTreeNode
     uint8_t has_modified_utc;
 } WbTreeNode;
 
+typedef struct WbPermissionRow {
+    WbCStringView kind, account, sid, rights;
+    uint32_t mask;
+    uint8_t inherited;
+} WbPermissionRow;
+typedef void(__stdcall* WbPermissionCallback)(const WbPermissionRow* row, void* user_data);
+
+typedef struct WbDuplicateRow {
+    uint64_t group, logical_bytes;
+    WbCStringView path, digest, status;
+    uint8_t is_error;
+} WbDuplicateRow;
+typedef void(__stdcall* WbDuplicateCallback)(const WbDuplicateRow* row, void* user_data);
+typedef struct WbDuplicateResult {
+    uint64_t groups, errors, reclaimable_bytes;
+    uint32_t status;
+} WbDuplicateResult;
+
+typedef struct WbSearchFilter {
+    WbCStringView pattern;
+    WbCStringView extensions;
+    uint64_t min_logical, max_logical, min_allocated, max_allocated;
+    int64_t modified_after, modified_before;
+    uint64_t offset, limit;
+    uint32_t flags, mode, sort;
+} WbSearchFilter;
+typedef struct WbSearchResult {
+    uint64_t emitted, total;
+    uint32_t status;
+} WbSearchResult;
+
 typedef struct WbTreeChildrenResult
 {
     uint64_t emitted;
@@ -173,6 +204,8 @@ typedef struct WbScanSessionHandle
 typedef void(__stdcall* WbEventCallback)(const WbEvent* event, void* user_data);
 
 WbScanSessionHandle wb_scan_session_start(WbCStringView root_path, WbEventCallback callback, void* user_data);
+// Complete scan/index/persistence with Completed, Failed, or Cancelled callbacks only.
+WbScanSessionHandle wb_scan_session_start_terminal(WbCStringView root_path, WbEventCallback callback, void* user_data);
 WbScanSessionHandle wb_scan_session_start_incremental(WbCStringView root_path, WbEventCallback callback, void* user_data);
 void wb_scan_session_cancel(WbScanSessionHandle handle);
 void wb_scan_session_destroy(WbScanSessionHandle handle);
@@ -183,13 +216,38 @@ void wb_index_snapshot_extension_stats(WbExtensionStatCallback callback, void* u
 /* Emits the display-tree root; returns 1 when a root exists, 0 for an empty
    index. The root node's name is its full mount-point path. */
 uint8_t wb_tree_root(WbTreeNodeCallback callback, void* user_data);
+// Synchronous complete catalog export: 0 success, 1 invalid path, 2 no catalog,
+// 3 write failure, 4 internal error. UTF-8 CSV; directory counts exclude self.
+// Atomic CSV import: 0 success, 1 invalid path, 2 malformed CSV, 3 read failure.
+uint32_t wb_import_scan(WbCStringView input_path, uint32_t format, uint32_t timezone);
+uint32_t wb_export_tsv(WbCStringView output_path);
+uint32_t wb_import_csv(WbCStringView input_path);
+// WizTree timestamp convention: 0 = exporting PC local time, 1 = UTC.
+uint32_t wb_import_csv_options(WbCStringView input_path, uint32_t timezone);
+uint32_t wb_export_csv(WbCStringView output_path);
+uint32_t wb_export_json(WbCStringView output_path);
+typedef struct WbCsvFilter {
+    WbCStringView patterns; // Semicolon-separated filename wildcards; empty = all files.
+    uint64_t min_bytes;
+    uint64_t max_bytes;
+    int64_t modified_after_utc;
+    int64_t modified_before_utc;
+    uint32_t flags; // 1 minimum, 2 maximum, 4 after, 8 before. Inclusive bounds.
+} WbCsvFilter;
+uint32_t wb_export_csv_filtered(WbCStringView output_path, WbCsvFilter filter);
+// Single extension (bin, .bin, *.bin), files only. Invalid filter returns 1.
+uint32_t wb_export_csv_extension(WbCStringView output_path, WbCStringView extension);
 /* Emits direct children of directory parent_id, largest physical size first,
    capped at 4096 starting at offset; total lets callers page and render a
    "+N more" row. */
+uint32_t wb_permission_rows(WbCStringView path, WbPermissionCallback callback, void* user_data);
+WbDuplicateResult wb_duplicate_results(uint32_t algorithm, WbDuplicateCallback callback, void* user_data);
+WbSearchResult wb_tree_search(WbSearchFilter filter, WbTreeNodeCallback callback, void* user_data);
 WbTreeChildrenResult wb_tree_children(uint64_t parent_id, uint64_t offset, WbTreeNodeCallback callback, void* user_data);
 /* Emits the largest files by allocation size, descending; node.name carries
    the full display path. */
 void wb_tree_largest_files(uint64_t limit, WbTreeNodeCallback callback, void* user_data);
+WbTreeChildrenResult wb_tree_largest_files_page(uint64_t offset, uint64_t limit, WbTreeNodeCallback callback, void* user_data);
 
 typedef struct WbUpdateCheck
 {
@@ -208,6 +266,27 @@ WbUpdateCheck wb_update_check(WbCStringView current_version, WbCStringView respo
    0 = it MISMATCHES (caller must abort), 2 = no entry / unparseable. */
 uint8_t wb_verify_download(WbCStringView manifest_json, WbCStringView kind, WbCStringView actual_hash);
 
+uint32_t wb_export_analysis(WbCStringView path, uint32_t kind);
+uint32_t wb_dump_mft(WbCStringView root, WbCStringView path);
+
 #ifdef __cplusplus
 }
 #endif
+
+extern "C" WbScanSessionHandle __stdcall wb_scan_session_start_rules(WbCStringView root, WbCStringView excluded, WbCStringView included, WbEventCallback callback, void* data);
+
+struct WbStoragePolicy { int64_t now_utc; uint64_t warm_after_days; uint64_t cold_after_days; double monthly_prices[3]; };
+struct WbStorageEstimate { uint64_t allocated_bytes[3]; uint64_t files[3]; uint64_t unknown_dates; double monthly_cost; double all_hot_cost; uint32_t status; };
+extern "C" WbStorageEstimate __stdcall wb_storage_cost(WbStoragePolicy policy);
+
+extern "C" uint32_t __stdcall wb_storage_maintenance(WbCStringView path, uint32_t operation);
+
+struct WbMultiScanResult { uint64_t roots, files, logical_bytes, allocated_bytes, warnings; uint32_t status; };
+extern "C" WbMultiScanResult __stdcall wb_scan_roots(WbCStringView paths);
+
+extern "C" uint32_t __stdcall wb_consolidate_duplicates(WbCStringView master, WbCStringView duplicate);
+
+extern "C" uint32_t __stdcall wb_export_json_metadata(WbCStringView path);
+extern "C" uint32_t __stdcall wb_export_csv_metadata(WbCStringView path);
+
+extern "C" uint32_t __stdcall wb_validate_scan_rules(WbCStringView excluded, WbCStringView included);

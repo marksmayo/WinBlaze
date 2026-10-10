@@ -1,0 +1,200 @@
+[
+  {
+    "ts_ms": 1790934944661,
+    "event": "scanner.session_started",
+    "root": "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\benchmark-datasets\\tiny",
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790934944726,
+    "event": "scanner.summary",
+    "root": null,
+    "files": 72,
+    "directories": 13,
+    "bytes": 73728,
+    "allocated_bytes": 73728
+  },
+  {
+    "ts_ms": 1790934944726,
+    "event": "scanner.completed",
+    "root": null,
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790934968268,
+    "event": "scanner.session_started",
+    "root": "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\benchmark-datasets\\tiny",
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790934968276,
+    "event": "scanner.summary",
+    "root": null,
+    "files": 72,
+    "directories": 13,
+    "bytes": 73728,
+    "allocated_bytes": 73728
+  },
+  {
+    "ts_ms": 1790934968277,
+    "event": "scanner.completed",
+    "root": null,
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790934981956,
+    "event": "scanner.session_started",
+    "root": "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\benchmark-datasets\\tiny",
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790934981965,
+    "event": "scanner.summary",
+    "root": null,
+    "files": 72,
+    "directories": 13,
+    "bytes": 73728,
+    "allocated_bytes": 73728
+  },
+  {
+    "ts_ms": 1790934981966,
+    "event": "scanner.completed",
+    "root": null,
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790934999657,
+    "event": "scanner.session_started",
+    "root": "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\benchmark-datasets\\scale",
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790934999702,
+    "event": "scanner.summary",
+    "root": null,
+    "files": 16384,
+    "directories": 545,
+    "bytes": 0,
+    "allocated_bytes": 0
+  },
+  {
+    "ts_ms": 1790934999703,
+    "event": "scanner.completed",
+    "root": null,
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790935017956,
+    "event": "scanner.session_started",
+    "root": "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\benchmark-datasets\\scale",
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790935018007,
+    "event": "scanner.summary",
+    "root": null,
+    "files": 16384,
+    "directories": 545,
+    "bytes": 0,
+    "allocated_bytes": 0
+  },
+  {
+    "ts_ms": 1790935018007,
+    "event": "scanner.completed",
+    "root": null,
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790935027892,
+    "event": "scanner.session_started",
+    "root": "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\benchmark-datasets\\scale",
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790935027935,
+    "event": "scanner.summary",
+    "root": null,
+    "files": 16384,
+    "directories": 545,
+    "bytes": 0,
+    "allocated_bytes": 0
+  },
+  {
+    "ts_ms": 1790935027936,
+    "event": "scanner.completed",
+    "root": null,
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790935048336,
+    "event": "scanner.session_started",
+    "root": "C:\\",
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790935048347,
+    "event": "scanner.session_started",
+    "root": "C:\\",
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  },
+  {
+    "ts_ms": 1790935141629,
+    "event": "scanner.summary",
+    "root": null,
+    "files": 2383007,
+    "directories": 500270,
+    "bytes": 429048902623,
+    "allocated_bytes": 429048902623
+  },
+  {
+    "ts_ms": 1790935141634,
+    "event": "scanner.completed",
+    "root": null,
+    "files": null,
+    "directories": null,
+    "bytes": null,
+    "allocated_bytes": null
+  }
+]

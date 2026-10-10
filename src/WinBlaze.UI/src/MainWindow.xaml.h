@@ -1,9 +1,13 @@
-#pragma once
+﻿#pragma once
 
 #include "pch.h"
+#include "TreemapGeometry.h"
 #include "NativeBridge.h"
+#include "DirectoryWatcher.h"
+#include "ColorResourceCache.h"
 
 #include <map>
+#include <functional>
 #include <unordered_set>
 
 namespace winrt::WinBlaze::UI::implementation
@@ -39,6 +43,28 @@ namespace winrt::WinBlaze::UI::implementation
         void OnStartClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnIncrementalScanClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void BeginScanFromCurrentRoot(bool incremental = false);
+        void RefreshScanControls();
+        void BrowseForFolder();
+        winrt::fire_and_forget ImportCsv();
+        winrt::fire_and_forget ExportTreemapPng();
+        HRESULT SaveTreemapPng(std::wstring const& path, int width = 1920, int height = 1080, bool grayscale = false);
+        winrt::fire_and_forget ExportCsv();
+        winrt::fire_and_forget ExportCatalog(bool json, bool filtered, uint32_t analysis = 0);
+        winrt::fire_and_forget InvestigateDuplicates();
+        winrt::fire_and_forget ShowChangeHistory();
+        winrt::fire_and_forget ExplorePermissions();
+        void ShowWindowsMenu(std::wstring const& path);
+        winrt::fire_and_forget ScanMultipleRoots(std::wstring paths = {});
+        winrt::fire_and_forget RunMaintenance();
+        winrt::fire_and_forget ConsolidateDuplicates();
+        winrt::fire_and_forget ScanPortableDevice();
+        winrt::fire_and_forget ShowStorageCosts();
+        winrt::fire_and_forget ManageItems();
+        winrt::fire_and_forget RenameItem(std::wstring path);
+        void AddInlineRename(Microsoft::UI::Xaml::Controls::StackPanel const& row, Microsoft::UI::Xaml::Controls::TextBlock const& label, std::wstring const& path, bool folder);
+        winrt::fire_and_forget CommitInlineRename(std::wstring path, std::wstring new_name, Microsoft::UI::Xaml::Controls::TextBox editor);
+        winrt::fire_and_forget RunFileAction(std::wstring path, bool move);
+        void RestartMonitoring();
         void OnCancelClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnStartTapped(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&);
         void OnSearchClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -111,6 +137,7 @@ namespace winrt::WinBlaze::UI::implementation
         void FocusSearchBox();
         void FocusRootPathBox();
         void NavigateToSection(ShellSection section);
+        mutable ::WinBlaze::ColorResourceCache<Microsoft::UI::Xaml::Media::SolidColorBrush> m_color_resources;
         Microsoft::UI::Xaml::Media::SolidColorBrush MakeBrush(Windows::UI::Color const& color) const;
         void ApplyCardStyle(Microsoft::UI::Xaml::Controls::Border const& card) const;
         void ApplyCompactCardStyle(Microsoft::UI::Xaml::Controls::Border const& card) const;
@@ -193,6 +220,7 @@ namespace winrt::WinBlaze::UI::implementation
             std::wstring path;
             std::wstring kind;
             std::wstring size_text;
+            ::WinBlaze::UI::Treemap::HierarchyTile shape{};
         };
 
         void UpdateTreeSnapshotPreview(std::vector<TreeCatalogEntry> const& entries);
@@ -307,6 +335,10 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::TextBlock m_sidebar_status_text{ nullptr };
         AppView m_active_view{ AppView::Explorer };
         std::map<AppView, Microsoft::UI::Xaml::Controls::Button> m_sidebar_items;
+        std::function<void()> m_build_search_panel;
+        std::function<void()> m_build_detail_panel;
+        std::function<void()> m_build_runtime_panel;
+        std::function<void(AppView)> m_build_view_host;
         Microsoft::UI::Xaml::Controls::Border m_summary_card{ nullptr };
         Microsoft::UI::Xaml::Controls::Border m_dashboard_card{ nullptr };
         Microsoft::UI::Xaml::Controls::StackPanel m_dashboard_content{ nullptr };
@@ -319,7 +351,12 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::Border m_support_card{ nullptr };
         Microsoft::UI::Xaml::Controls::StackPanel m_support_content{ nullptr };
         Microsoft::UI::Xaml::Controls::Grid m_explorer_lower_grid{ nullptr };
+        Microsoft::UI::Xaml::Controls::TextBox m_scan_excludes{ nullptr };
+        Microsoft::UI::Xaml::Controls::TextBox m_scan_includes{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_root_path_box{ nullptr };
+        Microsoft::UI::Xaml::Controls::Button m_browse_folder_button{ nullptr };
+        Microsoft::UI::Xaml::Controls::ComboBox m_drive_box{ nullptr };
+        Microsoft::UI::Xaml::Controls::TextBlock m_root_validation_text{ nullptr };
         Microsoft::UI::Xaml::Controls::Button m_start_scan_button{ nullptr };
         Microsoft::UI::Xaml::Controls::Button m_incremental_scan_button{ nullptr };
         Microsoft::UI::Xaml::Controls::Button m_cancel_scan_button{ nullptr };
@@ -361,6 +398,12 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::TextBox m_search_box{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_extension_box{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_min_size_box{ nullptr };
+        Microsoft::UI::Xaml::Controls::TextBox m_max_size_box{ nullptr };
+        Microsoft::UI::Xaml::Controls::TextBox m_min_allocated_box{ nullptr };
+        Microsoft::UI::Xaml::Controls::TextBox m_max_allocated_box{ nullptr };
+        mutable uint64_t m_search_offset{};
+        mutable uint64_t m_search_total{};
+        mutable uint32_t m_search_status{};
         Microsoft::UI::Xaml::Controls::TextBox m_modified_after_box{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_modified_before_box{ nullptr };
         Microsoft::UI::Xaml::Controls::ComboBox m_match_mode_box{ nullptr };
@@ -410,9 +453,25 @@ namespace winrt::WinBlaze::UI::implementation
         bool m_ui_flush_requested{ false };
         bool m_treemap_render_requested{ false };
         bool m_shell_ready{ false };
+        bool m_initializing_shell{ true };
         // Guards the once-per-launch background update check (see OnWindowLoaded).
         bool m_update_check_started{ false };
         bool m_session_active{ false };
+        bool m_export_active{ false };
+        bool m_monitor_enabled{ false }, m_watch_dirty{ false };
+        std::wstring m_watch_root;
+        std::deque<::WinBlaze::ChangeEvent> m_change_history;
+        uint64_t m_change_history_dropped{};
+        std::unique_ptr<::WinBlaze::DirectoryWatcher> m_watcher;
+        Microsoft::UI::Dispatching::DispatcherQueueTimer m_watch_timer{ nullptr };
+        Microsoft::UI::Xaml::Controls::ToggleMenuFlyoutItem m_monitor_item{ nullptr };
+        std::chrono::steady_clock::time_point m_watch_due{};
+        bool m_png_export_grayscale{};
+        std::wstring m_png_export_path;
+        HRESULT m_png_export_result{ E_FAIL };
+        std::wstring m_benchmark_png_path;
+        bool m_imported_snapshot{ false };
+        uint64_t m_largest_files_offset{ 0 };
         bool m_has_results{ false };
         bool m_has_error{ false };
         bool m_show_current_state{ true };
@@ -449,6 +508,16 @@ namespace winrt::WinBlaze::UI::implementation
         std::wstring m_treemap_render_status{ L"Direct2D/D3D render stack has not been probed." };
         bool m_treemap_probe_frame_rendered{ false };
         bool m_treemap_render_dirty{ true };
+        bool m_treemap_logical_size{};
+        Microsoft::UI::Xaml::Controls::ComboBox m_treemap_size_basis{ nullptr };
+        bool m_treemap_strips{};
+        int m_visualization_layout{};
+        bool m_treemap_volume_space{};
+        std::wstring m_multiple_root_paths;
+        uint64_t m_multiple_root_warnings{};
+        uint64_t m_volume_space_total{}, m_volume_space_free{};
+        std::wstring m_volume_space_cache_root;
+        Microsoft::UI::Xaml::Controls::TextBlock m_volume_space_summary{ nullptr };
         int m_treemap_render_width{ 0 };
         int m_treemap_render_height{ 0 };
         // Cached treemap GPU render stack. The original probe rebuilt the D3D

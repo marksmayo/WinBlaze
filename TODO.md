@@ -1,224 +1,139 @@
-# WinBlaze TODO
+# WinBlaze Production Roadmap
 
-Current focus: release validation for the stable MVP WinUI app. The recovery-shell rebuild is complete; remaining work should be release-candidate verification, packaging/signing readiness, and hardware/manual checks that cannot be covered by deterministic repo tests.
+Updated: 5 October 2026. This is the roadmap for shipping and maintaining a trustworthy Windows disk analyzer. Existing functionality still needs release-candidate validation; an unchecked item can mean missing evidence rather than missing implementation. Earlier completion notes are preserved in [ROADMAP_HISTORY.md](docs/ROADMAP_HISTORY.md).
 
-Status markers:
+## How to use this roadmap
 
-- `[x] DONE-DONE` means implemented, built, and smoke-tested in the current repo.
-- `[~] PARTIAL` means useful infrastructure exists, but the user-facing or end-to-end feature is not complete.
-- `[ ] TODO` means not started or not yet credible enough to count.
+- **P0 — release blockers:** finish before distributing a production candidate.
+- **P1 — production qualification:** finish before declaring the supported release production-ready.
+- **P2 — maintenance and growth:** schedule after the initial release; these are not prerequisites unless included in its advertised scope.
+- Assign an owner, issue and acceptance evidence to each item. Close a validation task only against a named commit, exact packaged binaries and recorded environment.
+- Use red/green TDD for implementation changes. Keep the 92% Rust line-coverage gate, strict Clippy and formatting checks. Every benchmark rerun uses **n=10**; preserve complete outputs and measurement boundaries.
+- Public release requires every P0/P1 item to be complete, or explicitly excluded from supported scope with user-facing documentation and recorded approval. Medal dominance is a separate optimization objective, not proof of production readiness.
 
-## Current Cycle (2026-07-05): WinDirStat Layout, Live Engine, High Velocity Design
+## Starting position and evidence gaps
 
-Completed this cycle:
+Rust scanning/indexing, the C ABI, WinUI frontend, CLI exports, file actions, portable/MSI packaging scripts and CI already exist. Current optimization checks passed workspace/examples/Clippy/format and 92.11% line coverage. The next benchmark cycle is in progress; do not describe it as complete. Current binaries still need fresh administrator measurements and a refreshed portable package.
 
-- [x] DONE-DONE: Real expandable folder tree backed by a native tree read model (arena `TreeIndex` in winblaze-index with logical/physical/count/timestamp rollups; paged `wb_tree_root`/`wb_tree_children` FFI; lazy child loading; `+N more` rows past the 4,096-per-directory cap).
-- [x] DONE-DONE: Hierarchical squarified treemap colored by extension, sharing the legend palette, with node-budgeted progressive deepening so first paint never stalls the UI thread.
-- [x] DONE-DONE: Live folder tree during scans: every directory event reaches the UI as 4,096-entry FFI batches, orphan-buffered against cross-worker reordering, depth-capped, spliced in bounded chunks per flush; sizes show pending until rollups land.
-- [x] DONE-DONE: Raw-volume MFT reader (the previous `C:\$MFT` namespace open never worked): boot-sector geometry, record-0 runlist, sector-aligned extent streaming, USA fixups, in-use filtering, unnamed-`$DATA`-only sizing, extension-record size merging; verified elevated against `C:\`.
-- [x] DONE-DONE: Reparse-directory correctness in the walk: symlinked/junction directories are directories (not 0-byte files), cycle detection is reachable, and the default policy skips reparse descent to prevent double counting.
-- [x] DONE-DONE: File records no longer store full paths (derived from parent + name on demand); snapshot 562 MB -> 323 MB, model working set ~1.4 GB -> ~1.0 GB, post-scan flush 7.4 s -> 0.9 s.
-- [x] DONE-DONE: UI-thread stall fixes: one recolored D2D brush instead of 20k per frame, in-paint FFI fetch budgeting, cursor-based live-directory backlog, scan-time preview suppression; worst flush 5.7 s -> 0.9 s.
-- [x] DONE-DONE: Debug UI builds ship the newest native DLL, so a cargo release build of winblaze-native makes local scans run optimized (warm C:\ walk ~17 s pipeline drain).
-- [x] DONE-DONE: High Velocity design system from the Stitch mockups (project 7018380708759607866): red-on-black palette, sidebar navigation rail with WINBLAZE wordmark, monospace labels, red primary action, terminal status strip.
-- [x] DONE-DONE: Real-world calibration evidence recorded in `docs\REAL_WORLD_CALIBRATION.md`.
+Repository inspection found these concrete gaps:
 
-Open items queued from this cycle:
+- `docs/RELEASE_STRATEGY.md` describes no in-app update consumption, but `MainWindow.cpp` contains download/install and launch-update flows.
+- CI can skip signing and MSI generation without failing; this is acceptable for development builds, not a production release gate.
+- `tests/ui/import-scan.ps1` expects an obsolete menu label, and `scripts/check-local.ps1` still invokes it.
+- README, platform/security/release documents contain conflicting versions, Windows minimums, feature descriptions and historical performance claims.
+- The updater copies files into the installation directory; interrupted/partial replacement and recovery need dedicated qualification.
 
-- [x] DONE-DONE: Scan performance overhaul (2026-07-06): channel batching (`Sender<Vec<ScanEvent>>`, 512-record batches), identity hashing + pre-sizing for id-keyed maps, MFT emit rewrite (files never stored, parent-keyed orphan buckets, running summary), walk allocation cuts + raw `FindFirstFileExW` large-fetch enumeration. Raw MFT C:\ scan 143.7 s -> ~8.5 s, FFI end-to-end 125.6 s -> ~10 s, in-app Debug scan ~40 s idle-to-idle; MFT backend now beats the walk and runs unelevated when volume read access allows. Also fixed: explicit `DirectoryWalk` hints were silently overridden, MFT models mis-rooted at `$Extend` (root record 5 never emitted), and DOS 8.3 aliases surfaced instead of Win32 names.
-- [x] DONE-DONE: `App.xaml` repaired: the WPF-only `DropShadowEffect` resource is removed and `App::InitializeComponent` now succeeds, so application resources load. Follow-up (optional): adopt a real `MenuBar` and `/utf-8` compilation now that templates can resolve.
-- [x] DONE-DONE: Sidebar views implemented per the High Velocity mockups: Dashboard (capacity/used/free stat cards, disk-usage meter, content-distribution bar with legend, recent activity), Insights (top directories with proportion bars, extension breakdown table), Cleanup center (temp/log potential gain, largest files via new wb_tree_largest_files FFI with Open-in-Explorer actions), Settings (theme/policy/data locations with open buttons), and Support (GitHub links); Help > About opens the repository. Remaining polish: donut-style gauge and file-type badges.
-- [x] DONE-DONE: Tree-pane column headers now mirror the row layout (Name/Usage/%/Physical/Logical/Files/Last Change with matching widths), and the `+N more` row pages the next 4,096 children in place via offset paging added to `wb_tree_children`.
-- [x] DONE-DONE: `cargo audit` 0.22.2 run clean (5 dependencies, zero advisories); recorded in `docs\RELEASE_NOTES.md`.
-- [x] DONE-DONE: Release benchmark medians re-recorded on the new engine (2026-07-06, `benchmarks\winblaze-release-medians.json`): tiny scan 6 ms / fanout 11 ms / scale 36 ms medians, peak frames <=37 ms, all inside checked-in budgets.
+## P0 — Freeze the supported product and release inputs
 
-## Productionisation Backlog: Release Candidate Gates
+- [ ] **Define the release contract.** Agree the initial supported Windows versions, x64 architecture, filesystems, removable media, MTP devices, UNC/network paths, virtual disks and cloud-placeholder behavior. Label experimental or unsupported combinations explicitly.
+- [ ] **Create one authoritative version.** Generate crate, AppX/manifest, executable-resource, About dialog, CLI, updater and MSI versions from one input; reject mismatches during packaging.
+- [ ] **Reconcile documentation with shipped behavior.** Update README, `SUPPORTED_PLATFORMS.md`, `RELEASE_STRATEGY.md`, `RELEASE_NOTES.md` and `PRODUCTION_SECURITY_REVIEW.md`; remove obsolete claims and replace outdated menu names.
+- [ ] **Freeze a release-candidate commit.** Include all intended source, tests, assets and scripts in a reviewable commit; build from a fresh checkout without relying on untracked files, local caches or developer DLLs.
+- [ ] **Document operational limits.** Explain partial scans, inaccessible files, unknown sizes, logical versus physical totals, hardlinks, reparse policy, live-volume changes and raw-MFT privilege requirements.
+- [ ] **Define release acceptance budgets.** Set supported scale, peak/private memory, startup-to-usable-window, cancellation latency, UI responsiveness and export correctness thresholds before the final measurements.
 
-These are the remaining checks and hardening tasks before WinBlaze should be treated as production-ready rather than a strong local MVP.
+## P0 — Secure distribution and updates
 
-- [ ] TODO: Run a clean-machine release-candidate validation pass on at least one Windows 11 VM and one physical Windows machine: fresh user profile, no developer tools on PATH, first launch, scan, search, incremental rescan, cancel, cache reload, close/reopen, and uninstall/reinstall.
-- [ ] TODO: Provision real Authenticode signing credentials and CI secrets, then produce signed Release app binaries, portable zip, and MSI artifacts; verify signatures and timestamping on a separate machine before publishing.
-  - [ ] TODO: Once binaries are signed, have the in-app updater verify the downloaded build's Authenticode signature chain against the pinned WinBlaze publisher before applying. This is the durable integrity fix: the current SHA-256 manifest check is fetched over the same HTTPS channel as the zip, so it defends against a corrupted/truncated download but not a compromised GitHub release (an attacker who can publish a bad zip can publish a matching manifest). Signature verification anchors trust in the publisher key instead of the transport. (Staging hardening already landed: integrity-labeled per-run staging dir + verify-what-you-consume re-hashing + trusted-helper byte check, commit 83d78c2.)
-- [ ] TODO: Perform physical installer validation: MSI install, Start Menu shortcut, uninstall, repair/reinstall, upgrade from previous build, rollback to portable package, and confirm uninstall does not delete `%LOCALAPPDATA%\WinBlaze` cache/logs unexpectedly.
-- [x] DONE-DONE: Update-channel scope decided for v0.1.0: no in-app update consumption; `scripts\write-update-manifest.ps1` output is release metadata only (artifact names, sizes, SHA-256), as documented in `docs\RELEASE_STRATEGY.md`.
-- [ ] TODO: Run physical media validation: removable USB hot-unplug during active scan, non-NTFS/exFAT volume fallback, offline/disconnected device behavior, low-permission folders, OneDrive/cloud placeholders, and a network/UNC path smoke that confirms the documented non-guarantee behavior.
-- [x] DONE-DONE: Run real-world scale calibration on large local disks; the live `C:\` system volume (2.26M files / 543k directories / 464 GB) is scanned end-to-end through the UI on both backends, with elapsed time, working set, UI-thread stall, snapshot size, and correctness notes recorded in `docs\REAL_WORLD_CALIBRATION.md`. Broader-machine runs remain release validation.
-- [~] PARTIAL: Long-run stability soak. Added `soak_repro` (winblaze-native example): loops full scans + periodic incremental rescan/snapshot-read in one process, tracking working-set and handle trends with a leak verdict. A 12-cycle live-C:\ run was stable (handles flat at 69; working set plateaus ~640-650 MB after warmup) — see `benchmarks\perf-overhaul-baselines.md`. Remaining: the multi-hour soak and repeated-app-launch (UI-side) soak as release gates. Finding recorded: incremental rescan of a full drive (~15 s) is now ~3.5x slower than a full MFT scan (~4.4 s) — candidate future work to fast-path or skip incremental for volume roots.
-- [x] DONE-DONE: Perform a security/privacy review of local data handling; `docs\PRODUCTION_SECURITY_REVIEW.md` records local cache/log path metadata risks, no-telemetry-default release wording, sharing guidance, implemented hardening, and remaining release validation risks.
-- [x] DONE-DONE: Fuzz/corpus tests for the untrusted-input boundaries. Binary-cache decoder (`store.rs` `fuzz_tests`): every-truncation-offset, random garbage, valid-header + garbage, single-byte flips. MFT byte parsers (`ntfs.rs` `fuzz_tests`): `apply_mft_fixups`, `decode_data_runs`, `parse_record`, `parse_mft_records`, and the full streaming pipeline over random/truncated/signature-forced garbage. This surfaced and fixed a real bug: `decode_data_runs` had unchecked multiply/add overflow on hostile run values (debug panic / wrapped offset in release) — now uses checked arithmetic and rejects overflow, falling back to the directory walk. The pointer/handle-taking `wb_*` FFI functions are not fuzzable in the same way (a garbage handle is undefined behavior by contract, not validated input); their string-view input is covered via `wb_update_check`.
-- [x] DONE-DONE: Rust dependency security checks run: `cargo audit` 0.22.2 (RustSec advisory-db, 1,156 advisories) reports zero vulnerabilities across the 5 crate dependencies; recorded in `docs\RELEASE_NOTES.md`. Windows packaging-input checks remain part of the signing/installer release gate.
-- [~] PARTIAL: Accessibility validation. Added `tests\ui\a11y-audit.ps1` (launches the app, visits every sidebar view, asserts each interactive chrome control exposes a UI Automation name and is keyboard-focusable); current run is clean (17/17 named + focusable). Remaining (need manual/visual review): Narrator announcement quality, high-contrast theme, 125-200% display scaling, narrow window sizes, and long-path display.
-- [x] DONE-DONE: Production telemetry stance decided: WinBlaze has no telemetry and writes only local logs (`%LOCALAPPDATA%\WinBlaze\logs`) and cache (`%LOCALAPPDATA%\WinBlaze\index`) by default, stated in `README.md` (Privacy) and `docs\PRODUCTION_SECURITY_REVIEW.md`; any future telemetry must be opt-in with privacy copy and failure-safe upload handling.
-- [x] DONE-DONE: Clean up warning debt before release gates are strict; the unused `std::sync::Arc` import in `src\WinBlaze.Scanner\src\ntfs.rs` is removed.
+- [ ] **Provision production signing.** Configure protected signing credentials, publisher identity, timestamping and key-rotation/revocation procedures. Keep secrets out of source, logs and distributable artifacts.
+- [ ] **Make release signing mandatory.** A production workflow must fail when signing credentials, expected signatures, timestamps or required MSI artifacts are missing. Development builds may remain explicitly unsigned.
+- [ ] **Verify every distributed executable.** Sign and verify the UI, native DLL, CLI, updater and MSI; verify the exact final package contents on a separate clean machine. Do not modify signed files afterward.
+- [ ] **Anchor updater trust independently of release hosting.** Verify downloaded executables/helpers against trusted publisher signatures and an explicit rotation policy before executing or replacing them; a ZIP and matching SHA-256 from the same release are insufficient publisher authentication.
+- [ ] **Harden extraction and staging.** Test path traversal, absolute paths, reparse points, hostile archive entries, oversized archives and concurrent same-user replacement. Verify the bytes actually consumed, not only an earlier download.
+- [ ] **Make update application recoverable.** Stage a complete verified version, handle locked files/process-exit timeouts and preserve the previous version. Inject copy failure, disk-full, termination and reboot between replacement steps; restart a coherent old or new build.
+- [ ] **Support installed and portable update semantics.** Test unwritable Program Files, required elevation, MSI-managed installations, custom locations and portable directories. Do not leave the MSI database inconsistent with an in-app replacement.
+- [ ] **Test the update failure matrix.** Cover offline operation, HTTP errors, truncated downloads, wrong hashes/publishers, invalid manifests, downgrade attempts, cancellation, concurrent updates and failed relaunch. Fail safely with actionable feedback.
+- [ ] **Review privileged boundaries.** Keep ordinary scans unelevated, request elevation only where needed, and ensure elevated helpers cannot consume attacker-controlled paths or replacement binaries without validation.
+- [ ] **Complete dependency and artifact review.** Run current Rust advisory checks; inventory native/runtime/NuGet dependencies, licenses and redistribution terms. Produce dependency notices and an SBOM for the shipped package.
 
-### Added 2026-07-07: hardening, CI, and release polish
+## P0 — Protect user data and validate destructive actions
 
-- [x] DONE-DONE: Run `cargo fmt --all --check` and `cargo clippy --workspace --all-targets --all-features -- -D warnings` in `scripts\check-local.ps1` so formatting/lint failures surface locally before CI (mirrors the CI Rust checks job).
-- [x] DONE-DONE: Pin the Rust toolchain — `rust-toolchain.toml` (channel 1.96.0 + rustfmt/clippy) plus the CI `dtolnay/rust-toolchain@1.96.0` refs, so a newer floating `@stable` clippy cannot spontaneously red the build. Bump deliberately and keep both in sync.
-- [x] DONE-DONE: Broadened the binary-cache decoder corpus (`store.rs` `fuzz_tests`): every-truncation-offset, random garbage, valid-header + garbage bodies, and single-byte flips of a valid snapshot must never panic or over-allocate. FFI-entry-point fuzzing (`wb_*`) is still open.
-- [~] PARTIAL: Tighten release CI. CI now generates + uploads the update manifest and the portable/installer artifacts, verifies the manifest's `portable_zip` SHA-256 against the packaged zip, and — gated on the signing secret — signs and verifies the binaries and MSI. Remaining once a real code-signing cert exists: confirm signatures + timestamps on a clean machine, deeper MSI validation, and gating the Release benchmark-budget suite.
-- [x] DONE-DONE: Release version/branding polish. Version 0.8.0 across all crates + `Package.appxmanifest`; the designer logo (`winblaze.png`) is now the app icon (`Assets\WinBlaze.ico` + manifest PNGs, embedded via `app.rc`, set as the window/taskbar icon) and the README hero image; manifest display metadata (DisplayName, Description, tile background) reviewed and set. The one open piece — `Publisher="CN=..."` — must match the code-signing cert subject and is tracked under the signing item. The UI also now compiles with `/utf-8` so non-ASCII literals render correctly.
-- [x] DONE-DONE: In-app update story. On launch (once) and via Settings, WinBlaze checks GitHub `releases/latest` (WinRT HttpClient + `winblaze_core::update` semver compare). When newer, a dialog offers **Install now** / Open download page / Later. "Install now" downloads the portable zip, extracts it with the bundled `tar.exe`, and hands off to `winblaze-updater.exe` (copied to a temp dir so the install copy can be overwritten), which waits for the app to exit, swaps the files, and relaunches. The downloaded zip's SHA-256 is verified against `winblaze-update-manifest.json` (shipped as a release asset) before applying, fail-closed: only an explicit hash match proceeds — a mismatch, a missing/unfetchable manifest, or a blank/absent hash all abort the install (`winblaze_core::parse_manifest_sha256`/`hash_matches`/`wb_verify_download`, unit-tested; the manifest parser is object-scoped so it can never read a sibling artifact's hash). The release manifest is generated from the exact versioned zip that is uploaded, so the hash the app computes matches. Validated live end-to-end in an isolated install (path with a space): a forced-old build downloaded the real release, verified the hash, replaced the exe, and relaunched. Follow-up: a download progress indicator.
-- [x] DONE-DONE: Default elevation UX. WinBlaze scans immediately (raw MFT when elevated, directory-walk fallback otherwise); it detects elevation (`IsProcessElevated`), shows the mode in the status strip, warns in a slow-scan nudge when the fast path is unavailable, and offers a one-click "Restart as administrator" (`RelaunchElevated`, UAC) in Settings. A launch-time modal prompt was intentionally avoided — it would block the smoke harness and nag users on every start.
-- [~] PARTIAL: Capture competitor performance evidence vs WizTree and WinDirStat on real datasets: tooling exists (`benchmarks\record-competitor-baselines.ps1`, `write-competitor-report.ps1`; WizTree 4.31 and WinDirStat 2.6.0 installed). Initial C:\ run recorded 2026-07-07 in `benchmarks\competitor-report.md`; broaden across profiles/machines for release.
+- [ ] **Revalidate file identity before mutation.** For rename/move/recycle, hardlink replacement, compression and sparsification, handle files changing between selection and execution; test reparse substitution and permission changes.
+- [ ] **Make action boundaries explicit.** Confirm intended targets and consequences, prevent silent overwrite, report partial failures, and preserve unrelated files. Keep imported/offline/stale-catalog actions disabled or require validated live identities.
+- [ ] **Qualify hardlink deduplication.** Require byte verification and compatible same-volume targets; cover concurrent content changes, existing aliases, metadata/ACL differences, failures and accurate reclaimable-byte estimates.
+- [ ] **Qualify storage mutations.** Verify file contents, sizes and allocation before/after compression or sparsification; exercise interruption, permissions, open handles and unsupported filesystem behavior.
+- [ ] **Use isolated fixtures for safety tests.** Exercise destructive APIs only in owned temporary directories or disposable virtual disks. Include collision, cancellation and rollback cases.
+- [ ] **Bound every untrusted import.** Validate CSV/TSV/JSON/MFT and binary-cache sizes, counts, offsets, nesting and relationships before allocation; extend hostile/truncated-input corpus tests to current formats.
+- [ ] **Handle hostile imported paths.** Reject or safely represent traversal, malformed roots, duplicate identities, cycles, embedded control characters, oversized fields and inconsistent totals; importing must never scan or mutate a referenced path implicitly.
+- [ ] **Define safe spreadsheet export behavior.** Decide how CSV fields beginning with spreadsheet formula characters are handled without breaking lossless scan reopen; document the chosen export mode and test it.
+- [ ] **Review the C ABI contract.** Version layouts, document string/handle lifetimes and ownership, contain panics/exceptions, validate supported inputs and test callback shutdown, cancellation, repeated destroy and allocation failures.
 
-## Priority 0: Recovery Shell To Stable UI
+## P1 — Scanner and catalog correctness across supported environments
 
-Historical rebuild track. These items are complete, and the active executable is now the stable MVP shell.
+- [ ] **Establish independent correctness fixtures.** Compare file/directory identities, logical/allocation bytes and errors against known fixtures; matching another analyzer alone is not sufficient.
+- [ ] **Qualify both scan backends.** Test standard-user directory walk and elevated MFT on supported NTFS configurations, including sector/cluster sizes, fragmented MFT extents and extension records. Verify transparent fallback with a visible reason.
+- [ ] **Cover filesystem edge cases.** Include hardlinks, named streams, sparse/compressed/encrypted files, hidden/system entries, case-sensitive directories, long/Unicode paths, junctions, symlinks and mount points. Publish counting/exclusion semantics.
+- [ ] **Test live-volume changes.** Create/delete/rename files during scans; ensure totals are internally coherent and identify the scan as a best-effort live view rather than a point-in-time snapshot.
+- [ ] **Validate permissions and failures.** Access-denied, sharing violations, missing roots, unreadable metadata and device failures must produce partial-result/error indicators, not false successful zero-byte totals.
+- [ ] **Run real non-NTFS/removable tests.** Exercise every filesystem promised by the release, removable-media disconnect/reconnect and empty/full devices on physical hardware.
+- [ ] **Qualify MTP and virtual disks if supported.** Test locked/asleep/disconnected devices, empty roots, unknown sizes and timeouts; validate VHD/VHDX mount/unmount and cleanup on disposable media.
+- [ ] **Qualify cloud/network behavior or exclude it.** Test placeholders without unintended hydration, UNC authentication/disconnection and remote latency before advertising support.
+- [ ] **Verify cancellation and shutdown.** Bound cancellation, close-during-scan/import/export and hung-I/O behavior; no orphan process, worker, handle or stale callback may survive session teardown.
+- [ ] **Test simultaneous work and isolation.** Define allowed concurrent scans, imports, exports and multiple app instances; prevent sessions or roots from contaminating each other's cached models.
+- [ ] **Qualify incremental scans and monitoring.** Handle rename/delete, root switches, burst events, watcher overflow, missed changes and restart; fall back to a full refresh when correctness cannot be guaranteed.
+- [ ] **Verify every report/layout.** Extension totals, largest files, duplicate/permission reports, treemap/flame/sunburst and PNG exports must reflect the complete catalog; distinguish truncated display previews from exported data.
+- [ ] **Verify third-party scan interchange.** Test current supported WinDirStat/WizTree CSV variants, encoding, locale, quoting/newlines, partial metadata and import/re-export fidelity using versioned fixtures.
 
-- [x] DONE-DONE: Keep the recovery shell visible and responsive.
-- [x] DONE-DONE: Keep WinUI `ProgressBar` out of the recovery shell scan path; unused legacy scan-control code and `ProgressBar` members are removed, and the active path uses lightweight `Border`-based progress instead.
-- [x] DONE-DONE: Set a real `WinBlaze` window title so the app is visible/findable through UI Automation and the taskbar.
-- [x] DONE-DONE: Restore scan controls for root path, start, cancel, and Escape cancellation.
-- [x] DONE-DONE: Make cancellation mark the UI inactive immediately and destroy native scan sessions off the UI thread.
-- [x] DONE-DONE: Restore navigation chrome in the recovery shell.
-- [x] DONE-DONE: Restore search controls and wire them to the live catalog/index preview.
-- [x] DONE-DONE: Restore breadcrumbs and selection state, including visible dynamic path breadcrumbs with automation labels and nested row selection labels.
-- [x] DONE-DONE: Restore a catalog-backed tree preview with proportional sizing.
-- [x] DONE-DONE: Restore detail cards for files, folders, and volumes.
-- [x] DONE-DONE: Restore visible treemap tiles, hover focus, zoom/focus interactions, and color rules.
-- [x] DONE-DONE: Restore global loading, empty, error, and scanning states.
-- [x] DONE-DONE: Keep UI responsive during small smoke scans.
-- [x] DONE-DONE: Replace crash-recovery copy in the visible shell with neutral product-state copy.
-- [x] DONE-DONE: Remove the temporary recovery/restoration banner once the stable shell layout and rendering path are active.
-- [x] DONE-DONE: Re-enable richer shell sections only after each restored section survives startup and smoke scanning; scan, search, tree/list, details, diagnostics, treemap, and state banners are active in the stable recovery-shell layout and pass Debug/Release UI smoke.
-- [x] DONE-DONE: Standardize the WinUI 3 hosting/navigation pattern; the stable MVP host is code-built section chips on the generated-style `AppT` metadata-provider path, the navigation region and chips expose stable automation names/help text, access keys, tab order, and Ctrl/Alt+1-5 shortcuts, deferred section visibility is reconciled when scans complete/cancel, diagnostics is registered, scan/search/tree/diagnostics controls and dynamic path breadcrumbs expose stable automation metadata, stale active C++ `NavigationView` branches/members, recovery-era trace labels, and inactive source-level `MainWindow.xaml` generated artifacts have been removed, and Debug/Release UI smoke passes. A direct `NavigationView` wrapper previously crashed inside `Microsoft.UI.Xaml.dll` after activation, so it is intentionally out of the MVP startup route and documented for separate isolation if revisited.
-- [x] DONE-DONE: Build the premium visual design system for the stable MVP shell; active recovery-shell cards, accent panels, nav chips, banners, row/list chrome, progress, detail accents, and catalog-only treemap focus accents now share reusable `MainWindow` style helpers backed by source-owned `ShellTheme` tokens in `src\ShellTheme.h`, stable shell brushes are mirrored into the WinUI `App.xaml` resource dictionary as `WinBlaze*Brush` resources for future XAML-hosted controls, card/panel radii are centralized at 8px, static treemap sample buttons/fake empty treemap render tiles are removed, empty treemap and initial tree-list status point users to scan or load a cached catalog, the P0 visual review is recorded in `docs\P0_VISUAL_REVIEW.md`, and Debug/Release UI smoke passes.
-- [x] DONE-DONE: Replace passive tree preview with a virtualized live tree/list for the stable MVP shell; active shell now has an explicit `ItemsStackPanel`-backed live list with visible column headers, row-window status, bounded path-depth indentation, visible hierarchy-level and parent-path column/row metadata, centralized path hierarchy helpers, top-level group counts for filtered results and the visible row window, trimmed path trails, row help text, nested row selection labels, catalog-row terminology throughout the expand/empty/status path, working extra-row expansion, Previous/Next paging over filtered catalog windows, no fake startup `Users`/`Projects`/`Media` catalog rows, a bounded 256-row virtualized page tuned for large-catalog UI flush budgets, and an 8,192-entry persisted catalog load cap aligned with the `fanout-large` dataset, with Debug/Release UI smoke passing. A fully expandable `TreeView` is intentionally outside P0 unless it can preserve the same virtualization and smoke-test constraints.
+## P1 — Persistence, recovery and long-run reliability
 
-## Priority 1: Rendering And Large-UI Performance
+- [ ] **Test atomic snapshot durability.** Inject interrupted writes, disk-full, antivirus locks and process termination; keep the previous valid snapshot and recover cleanly from primary/backup corruption.
+- [ ] **Exercise migrations and rollback.** Maintain fixtures for every supported snapshot version; reject unknown future versions safely, support the documented rescan path and preserve user settings.
+- [ ] **Define cache ownership and retention.** Identify caches by root/volume, prevent stale reuse after remount/reformat and implement clear-cache controls that cannot delete scanned user data.
+- [ ] **Verify writable-data locations.** Installed, portable, read-only and roaming-profile environments must use documented cache/settings/log paths; separate elevation contexts must not expose other users' data.
+- [ ] **Run multi-hour engine and UI soaks.** Repeat full/incremental scans, imports, exports, cancellation and reopen; track working/private memory, handles, threads, GPU resources, log/cache growth and leftover processes.
+- [ ] **Test resource pressure.** Exercise low memory/disk, very large catalogs, pathological deep/wide trees and multiple windows; show clear errors and preserve the previous usable catalog.
+- [ ] **Handle rendering recovery.** Test graphics-device loss, remote desktop, integrated/discrete GPUs and software fallback without crashes or permanent blank treemaps.
 
-Do this after Priority 0 because the previous crash work showed WinUI controls/rendering can destabilize startup.
+## P1 — UX, accessibility and support
 
-- [x] DONE-DONE: Rendering stack selected and active as Direct2D/SwapChainPanel; the treemap renders a GPU-backed Direct2D frame from catalog entries with clipped DirectWrite labels and tile layout metadata.
-- [x] DONE-DONE: Keep visual updates off the scanner hot path through batched UI flushes.
-- [x] DONE-DONE: UI batching exists with queued-event latency, input latency, scan-scoped flush-duration metrics, scan-scoped live composition frame counters, treemap render flush/request/coalescing counters, generated benchmark coverage through the 16,384-file `scale` profile, local tiny/fanout/fanout-large/scale Release repeated-run medians in `benchmarks\winblaze-release-medians.json`, Debug budget enforcement via `benchmarks\performance-budgets.json`, Release budget enforcement via `benchmarks\performance-budgets.release.json`, scripted machine/storage environment capture via `benchmarks\record-environment.ps1`, and a generated calibration summary at `benchmarks\performance-calibration-report.md`; latest Release tiny, fanout, fanout-large, and scale repeated-run benchmark medians pass local thresholds with structured latency, frame, flush, and treemap render counters.
-- [x] DONE-DONE: Build the GPU-backed treemap draw path; Direct2D catalog tile rendering, balanced weighted tile layout, clipped DirectWrite labels, redraw-after-catalog-update, tile layout metadata, GPU surface hover/click hit-testing, surface automation metadata, empty-catalog status, and render flush/request/coalescing diagnostics are wired and pass Debug/Release UI smoke.
-- [x] DONE-DONE: Verify GPU surface startup, resize, render, and shutdown behavior with smoke tests; SwapChainPanel startup/render shows labeled catalog tiles, fixture scanning stays alive, and normal window close leaves no recent Application Error entry.
-- [x] DONE-DONE: Add frame-time and input-latency measurement under load; input, UI-flush, scan-scoped composition frame timing, scan duration, and treemap render coalescing appear as structured diagnostics and benchmark JSON for generated datasets including `tiny`, `fanout`, `fanout-large`, and the 16,384-file `scale` profile, Release repeated-run medians are recorded for all four profiles, Debug/Release budget assertions cover all four profiles, latest Release repeated-run medians pass local thresholds, and the calibration report combines medians, budgets, and machine/storage environment evidence.
-- [x] DONE-DONE: Batch redraws for dense tree/treemap updates; tree rows are capped to a 256-row virtualized page tuned for large-catalog UI flush budgets, filtered catalog windows page through Previous/Next controls, catalog flushes update tree/detail/treemap state through the batched UI flush path, completed scans perform one persisted-catalog reload instead of separate Summary and Completed reloads, treemap redraws are coalesced through a one-shot UI dispatcher timer after resize, snapshot, and catalog updates, render flush/request/coalescing counters are visible in diagnostics, and Debug/Release UI smoke passes.
-- [x] DONE-DONE: Use virtualization for large lists and trees; the active shell `ListView` uses an explicit virtualizing `ItemsStackPanel`, a 256-row paged visible window with Previous/Next controls over filtered results, path-depth and parent-path row metadata, top-level group counts, and an 8,192-entry cached-catalog load cap aligned with `fanout-large`, with Debug/Release UI smoke passing. A future fully expandable tree control must preserve these virtualization and smoke-test constraints.
+- [ ] **Complete a first-run task review.** Make root selection, privilege/fallback status, scan progress, cancel, partial results and next actions clear. Validate maximized launch, folder controls, back navigation and empty/error states.
+- [ ] **Validate usable startup.** Measure an actual visible, responsive window separately from the hidden first-idle proxy; avoid blocking startup on network checks or large cache restoration.
+- [ ] **Run full keyboard and Narrator checks.** Cover tree paging, menus, dialogs, search, layouts, cancellation and file actions; maintain focus order, accessible names and meaningful announcements.
+- [ ] **Test visual accessibility.** Check light/dark/high-contrast themes, 100–200% scaling, multiple monitors, narrow windows, large text and long paths. Ensure selection/errors are not conveyed only through color.
+- [ ] **Qualify localization behavior.** Test non-English Windows, decimal/date formats, Unicode filenames and exports. State the shipped UI languages; do not imply localization that has not been tested.
+- [ ] **Document privacy and data controls.** Explain local path/ACL metadata, raw-MFT export sensitivity, log/cache retention, update-network access and the absence of telemetry. Offer deliberate diagnostic sharing/redaction.
+- [ ] **Provide useful failure diagnostics.** Include version/build/backend/error context, bounded rotating logs and an explicit support-bundle export; retain private symbols for actionable crash investigation.
+- [ ] **Publish support guidance.** Document installation, privileges, filesystem limitations, importing/exporting, cleanup safety, recovery, issue reporting and known problems.
 
-## Priority 2: Scanner, Index, And Search Correctness
+## P1 — Reproducible CI, packaging and performance qualification
 
-- [x] DONE-DONE: Scaffold Rust workspace and crate layout.
-- [x] DONE-DONE: Define core file, directory, volume, scan session, query, and FFI models.
-- [x] DONE-DONE: Define stable IDs and lineage/change data structures.
-- [x] DONE-DONE: Implement aggregation rules for directory totals.
-- [x] DONE-DONE: Implement NTFS MFT-level enumeration.
-- [x] DONE-DONE: Add directory-walk fallback scanning.
-- [x] DONE-DONE: Handle reparse points, junctions, symlinks, and mount points through scanner policy.
-- [x] DONE-DONE: Add volume root discovery and drive/root selection.
-- [x] DONE-DONE: Support path normalization and long path handling.
-- [x] DONE-DONE: Emit streaming scan progress and summary events.
-- [x] DONE-DONE: Handle permission failures, locked files, transient I/O errors, deleted/changed files, hardlinks, and sparse files in tests.
-- [x] DONE-DONE: Prevent subdirectory scans like `C:\tmp\WinBlazeSmoke` from widening to a full-drive MFT scan.
-- [x] DONE-DONE: Persist scan results to a compact binary cache and reload catalog snapshots.
-- [x] DONE-DONE: Keep stale large cache snapshots from being loaded on a new scan path.
-- [x] DONE-DONE: Add index invalidation, compaction, atomic snapshot recovery, and corrupt-primary recovery tests.
-- [x] DONE-DONE: Add instant search across indexed files/folders.
-- [x] DONE-DONE: Support substring, prefix, exact matching, sorting, extension filters, date filters, path matching, and min-size filters with B/KB/MB/GB/TB suffixes.
-- [x] DONE-DONE: Incremental rescans can be triggered from the UI; the native layer applies changes against the persisted snapshot, the C++ bridge exposes `StartIncrementalScan`, and checked-in UI smoke verifies an added file appears after incremental rescan.
-- [x] DONE-DONE: Cache/index storage is currently binary snapshot based; SQLite remains an optional future backend, not the v1 primary runtime index.
-- [x] DONE-DONE: Wire incremental rescans end-to-end from UI request through scanner, index, and refreshed catalog; `Incremental rescan` uses `wb_scan_session_start_incremental`, reloads the refreshed snapshot, and is covered by `tests\ui\smoke.ps1`.
-- [x] DONE-DONE: Add developer-mode diagnostics for scan correctness; the UI reports issue count, labeled issue-code breakdown, incremental added/removed/modified/renamed/moved counts, last issue path/message when available, a bounded recent-issues drill-down list with issue labels, skipped/error issue drill-down counts, summary totals, and catalog-sample byte reconciliation behind a default-on developer diagnostics toggle; backend `ScanIssueSummary` and directory-walk benchmark JSON expose issue counts by kind plus bounded recent issue details; positive smoke verifies the toggle and zero-issue drill-down, missing-root negative smoke verifies path/message, recent-issue, and skipped/error drill-down cases, and Debug/Release positive and negative UI smoke passes.
-- [x] DONE-DONE: Handle huge directory fan-out efficiently; the repeatable `fanout` benchmark profile scans 2,048 sibling files through the UI without correctness issues or crashes and passes the checked-in local Debug/Release budgets, `fanout-large` generates an 8,192-sibling stress dataset, the native persisted-catalog loader and UI cache path allow 8,192 entries, backend regressions/benchmarks cover 4,096-8,192 sibling files, Debug/Release budget thresholds are configured for `fanout-large`, and the Release GUI `fanout-large` budget run passes locally at 8,192 files with 442 ms elapsed, 193.3 MB working set, 87 ms peak frame, 125 ms peak flush, and structured treemap render coalescing metrics.
-- [x] DONE-DONE: Handle tens of millions of files without UI lockups for the MVP architecture contract; scanner events are streamed and batched, UI catalog materialization is capped to an 8,192-entry loaded snapshot, visible list rows are paged to 256, treemap rendering is capped to 10 tiles, generated 16,384-file `scale` UI benchmarks pass checked-in Debug/Release budgets, `benchmarks\estimate-index-scale.ps1` projects backend index memory/storage costs from synthetic samples for 1M/10M/50M planning, `LargeUiScalePlan` regression coverage verifies 50M-file UI materialization bounds, and `docs\P2_COMPLETION_EVIDENCE.md` records the deterministic evidence. Larger hardware-calibrated filesystem runs remain release validation, not an open P2 implementation item.
-- [x] DONE-DONE: Handle removable drive disconnects during scan for the deterministic scanner contract; scanner error classification buckets Windows device-not-ready, device-missing, open-failed, timeout, no-media, I/O-device, disconnected-device, operation-aborted, and request-aborted errors as transient issues with regression coverage, UI/backend diagnostics surface transient issues without crashing, and `docs\P2_COMPLETION_EVIDENCE.md` records physical hot-unplug as a release validation item because it requires hardware/timing outside deterministic repo tests.
-- [x] DONE-DONE: Decide and implement network path support if it remains in scope.
-- [x] DONE-DONE: Harden filesystem metadata inconsistency handling beyond current regression cases; vanished-path and broader transient device/disconnect error bucketing have regression coverage, directory-walk root preflight prevents missing roots and file roots from creating fake catalog directory records and has backend regression coverage, Windows `ERROR_DIRECTORY` is bucketed as not found, missing-root/file-root UI negative smoke verifies surfaced diagnostics, positive UI smoke covers live incremental add/modify/remove mutations, and `docs\P2_COMPLETION_EVIDENCE.md` records the completed deterministic coverage plus remaining release-validation hardware checks.
+- [ ] **Repair obsolete automation.** Update `import-scan.ps1` and callers to current menus/dialogs; make Release paths explicit and ensure the local gate fails on each external tool's nonzero exit code.
+- [ ] **Run the whole supported regression suite.** Include current native and UI parity tests in CI or a documented interactive Windows qualification job. Record unavailable/manual checks as pending, never as passed.
+- [ ] **Validate a clean toolchain restore.** Pin Rust/Windows SDK/WinUI/NuGet/WiX and relevant build-tool inputs; prove a clean checkout produces the intended Release binaries with no stale Debug/native mixture.
+- [ ] **Protect release automation.** Use least-privilege jobs, reviewed dependency updates, protected release tags/environments and a defined approval/publishing process. Keep artifact provenance and signing logs.
+- [ ] **Install on clean supported machines.** Validate first launch without developer tools, required VC++/Windows App Runtime dependencies, offline installation expectations, standard-user operation and missing-runtime guidance.
+- [ ] **Exercise the MSI lifecycle.** Fresh install, upgrade, repair, uninstall/reinstall, downgrade refusal and failed-install rollback must preserve documented user data and leave correct shortcuts/permissions.
+- [ ] **Exercise portable deployment.** Test extraction/moving, paths with spaces/Unicode, unwritable directories and antivirus scanning; verify all needed DLLs/resources/helpers/CLI are bundled.
+- [ ] **Verify the final artifacts.** Compare packaged UI/DLL/CLI versions and hashes to the tested build, verify signatures, and generate manifests only after signing. Test the exact ZIP/MSI intended for publication.
+- [ ] **Finish the active performance cycle.** Complete current standard-user and administrator n=10 scans/features/startup tests, regenerate the HTML report and preserve competitor versions/hashes. Do not combine replaced-binary observations into current medals.
+- [ ] **Validate measurement quality.** Treat missing/exit-race telemetry as missing, separate first idle from visible readiness, verify export outputs and record OS/hardware/elevation/cache conditions and exceptions.
+- [ ] **Broaden calibration.** Run supported low-memory, HDD/SATA/NVMe and Windows configurations. Measure p50/p90, CPU, peak/private memory, cancellation and responsiveness against release budgets.
+- [ ] **Enforce meaningful regression budgets.** Keep independent correctness checks, stable owned datasets and n=10 performance qualification. Preserve existing event definitions; pursue the all-35-gold objective without weakening correctness or manufacturing medals.
+- [ ] **Qualify the offline report.** Verify static results without JavaScript, responsive measurement tables, fixed podium, missing-data explanations, version provenance and no external-network dependency.
 
-## Priority 3: Observability And Diagnostics
+## P1 — Release and operational readiness
 
-This should support the rebuild, not lead it. Continue only when Priority 0/1 changes need better evidence.
+- [ ] **Run a complete release-candidate rehearsal.** Build, test, sign, package, install, scan, export, update, recover and uninstall using the published instructions on a clean machine.
+- [ ] **Record a release evidence bundle.** Include commit/version, artifact hashes/signatures, CI results, supported-machine matrix, benchmark datasets, manual checks and known limitations.
+- [ ] **Publish precise release notes.** Describe supported features and migration/recovery steps; separate historical performance from current comparable results and remove stale project statistics.
+- [ ] **Prepare incident and rollback procedures.** Retain the previous trusted installer/portable build, define security reporting and release withdrawal, and test user-data-preserving rollback.
+- [ ] **Define maintenance ownership.** Assign responsibility for dependency/security updates, regressions, crash triage, support requests and periodic clean-machine qualification.
+- [ ] **Complete the go/no-go checklist.** Review remaining blockers with named owners; publish only the tested, signed artifacts from the accepted candidate. Update `docs/RELEASE_CHECKLIST.md` to match these gates and n=10 policy.
 
-- [x] DONE-DONE: Add structured native JSONL logs for scanner lifecycle, progress, summary, issue, and index flush events at `%LOCALAPPDATA%\WinBlaze\logs\events.jsonl`.
-- [x] DONE-DONE: Add UI Diagnostics counters for throughput, latency, current working set, peak working set, and summary totals.
-- [x] DONE-DONE: Add failure reporting for startup failures, app launch failures, MainWindow startup failures, unhandled SEH exceptions, and scan-failed events at `%LOCALAPPDATA%\WinBlaze\logs\failures.jsonl`.
-- [x] DONE-DONE: Verify successful smoke scans do not create false failure records.
-- [x] DONE-DONE: Add developer-mode correctness diagnostics in the UI; diagnostics show issue count, labeled issue-code breakdown, incremental added/removed/modified/renamed/moved counts, last issue path/message when available, a bounded recent-issues drill-down list with issue labels, skipped/error issue drill-down counts, summary totals, and catalog-sample byte reconciliation behind a default-on developer diagnostics toggle after positive and negative smoke scans; backend issue-summary helpers expose the same kind/recent issue shape for non-GUI validation, and Debug/Release positive and negative UI smoke passes.
-- [x] DONE-DONE: Add log rotation/size limits for JSONL logs before broad scan testing.
-- [x] DONE-DONE: Add crash/failure report viewer or export command for user-facing troubleshooting.
+## P2 — After the supported release is qualified
 
-## Priority 4: Testing And Automation
+- [ ] Deepen oversized UI/FFI modules around scan sessions, update application, file actions and catalog queries; preserve public behavior and benchmark before/after.
+- [ ] Continue measured CPU/memory/startup improvements, including bounded capacity planning and reduced unused CLI/UI work, with explicit trade-offs and red/green evidence.
+- [ ] Add a sustained parser-fuzzing pipeline, sanitizer-capable native test configuration and broader concurrency/fault-injection coverage.
+- [ ] Expand supported hardware/OS/filesystem/device coverage only after qualification; evaluate ARM64 and localization separately from the x64 release.
+- [ ] Consider snapshot-consistent scanning, advanced incremental indexing and additional enterprise deployment options as scoped product work.
+- [ ] Review long-term settings persistence, accessibility feedback and benchmark thresholds after real-world beta feedback.
 
-- [x] DONE-DONE: Core model unit tests.
-- [x] DONE-DONE: Index persistence, invalidation, compaction, search, and recovery tests.
-- [x] DONE-DONE: Scanner event, filesystem access-plan, NTFS parsing, reparse policy, hardlink, sparse file, error classification, pipeline, and performance helper tests.
-- [x] DONE-DONE: Manual UI smoke loop for launch, `C:\tmp\WinBlazeSmoke` scan, completion trace, crash-log check, and cache-size check.
-- [x] DONE-DONE: UI smoke testing is repeatable through checked-in PowerShell/UI Automation at `tests\ui\smoke.ps1`.
-- [x] DONE-DONE: Add checked-in UI smoke tests for launch, set root, scan, incremental add/modify/remove rescans, cancel, search/filter, diagnostics visibility, and the developer diagnostics toggle; `tests\ui\smoke.ps1` covers the positive current flow including zero-issue drill-down and passes locally against both Debug and Release executables, `tests\ui\negative.ps1` covers missing-root plus file-as-root correctness, recent-issue, and skipped/error drill-down diagnostics for Debug and Release, `tests\ui\check-prereqs.ps1` reports UI Automation/interactive desktop readiness before smoke runs, `scripts\check-local.ps1 -AutoSkipUiSmokeIfUnavailable` can skip positive/negative UI smoke explicitly on non-interactive hosts, and CI now records a UI Automation prerequisite report after each WinUI build. True interactive CI UI execution remains optional infrastructure outside the checked-in smoke coverage requirement.
-- [x] DONE-DONE: Add integration tests for real filesystem enumeration fixtures.
-- [x] DONE-DONE: Add repeatable benchmark datasets.
-- [x] DONE-DONE: Add performance tests for scan throughput, memory overhead, UI latency, incremental rescan, and cache load; `benchmarks\run-ui-benchmark.ps1` captures UI-driven scan elapsed time, working set, frame diagnostics, structured treemap render counters, correctness, treemap status, and optional thresholds for balanced, fan-out, `fanout-large`, and 16,384-file scale generated datasets, `benchmarks\run-baseline-set.ps1` records local tiny/fanout/scale baselines and can enforce checked-in Debug or Release budgets including `fanout-large`, latest Release tiny/fanout/fanout-large/scale repeated-run medians pass locally, `benchmarks\run-ui-benchmark-suite.ps1` captures repeated first/warmed runs, `benchmarks\run-release-baseline-set.ps1` records Release repeated-run medians and structured latency/render medians for tiny/fanout/fanout-large/scale, `benchmarks\write-performance-calibration-report.ps1` generates the local calibration report, `benchmarks\run-ui-incremental-benchmark.ps1` captures add/remove/modify incremental timing with structured latency/frame/treemap counters, `benchmarks\run-ui-incremental-benchmark-suite.ps1` records the checked-in local Release add/remove/modify baseline at `benchmarks\winblaze-incremental-baseline.json`, `benchmarks\run-index-memory-benchmark.ps1` captures backend-only index memory/storage overhead, `benchmarks\run-directory-walk-benchmark.ps1` captures backend-only fallback scan timing with manifest correctness checks, and `benchmarks\run-ui-cache-load.ps1` captures startup-to-loaded snapshot timing plus structured native binary-cache read/decode diagnostics with a checked-in local Release baseline at `benchmarks\winblaze-cache-load-baseline.json`.
-- [x] DONE-DONE: Record benchmark baselines against WizTree, WinDirStat, and Everything; `benchmarks\record-competitor-baselines.ps1` records local tool inventory and optional manual timings, `benchmarks\write-competitor-report.ps1` generates `benchmarks\competitor-report.md` with WinBlaze single-run baselines plus Release medians when available, local inventory currently finds WizTree 4.31 and WinDirStat 2.5.0 while Everything is not installed, missing manual timings are explicitly rendered as `not recorded`, and the report documents the command path for adding manual competitor timings when a release comparison run is performed.
-- [x] DONE-DONE: Measure cold scan, warm scan, cache load, and incremental rescan times; the UI benchmark suite records first-run and warmed repeated-run timings, `run-baseline-set.ps1` records local tiny/fanout/scale cold-style baselines, `run-release-baseline-set.ps1` records Release first/warmed/overall medians for tiny/fanout/fanout-large/scale, `run-ui-cache-load.ps1` records startup-to-loaded timing plus structured native binary-cache read/decode diagnostics in `benchmarks\winblaze-cache-load-baseline.json`, and `run-ui-incremental-benchmark-suite.ps1` records a local Release tiny add/remove/modify incremental baseline with change counts and structured responsiveness metrics. Broader release-machine baselines remain M4 calibration work.
-- [x] DONE-DONE: Measure memory usage per indexed file; the UI benchmark runner reports working-set bytes per expected file for generated datasets including the 16,384-file `scale` profile, `run-release-baseline-set.ps1` records Release median working set for tiny/fanout/fanout-large/scale, `run-index-memory-benchmark.ps1` reports backend-only working-set and snapshot bytes per synthetic indexed file with a checked-in 100,000-file baseline at `benchmarks\winblaze-index-memory-baseline.json`, and `estimate-index-scale.ps1` writes 1M/10M/50M projections from a 100,000-file sample in `benchmarks\index-scale-estimate.json`. Larger calibrated baselines remain M4 release-machine calibration work.
-- [x] DONE-DONE: Measure UI responsiveness during peak scan load; the UI benchmark runner captures frame/flush/input latency diagnostics during balanced, dense fan-out, `fanout-large`, and 16,384-file scale generated dataset scans, `run-baseline-set.ps1` records those fields in a local baseline file, `run-release-baseline-set.ps1` records Release repeated-run frame/flush/input latency and treemap render medians, checked-in Debug/Release budget assertions cover tiny/fanout/fanout-large/scale, latest Release repeated-run medians pass locally after scan-scoped frame measurement and reduced page materialization, and `benchmarks\performance-calibration-report.md` summarizes the current machine-specific latency evidence. Broader-machine release calibration remains M4 work.
+## Suggested execution order
 
-## Priority 5: Packaging, Release, And Documentation
+1. Resolve the P0 product/version/documentation contract and updater trust/recovery design.
+2. Finish P0 signing and data-safety tests while repairing automation and clean builds.
+3. Qualify scanner/catalog/recovery behavior, packaging and supported-machine coverage.
+4. Complete UX/accessibility, soaks and n=10 performance budgets on the candidate.
+5. Sign/package once, run the end-to-end release rehearsal, record evidence and make the go/no-go decision.
 
-- [x] DONE-DONE: Document architecture, stack decision, supported platforms, scanner strategy, index strategy, search/filtering, UI foundation, and release strategy.
-- [x] DONE-DONE: Define MVP feature set, non-goals, success metrics, competitor targets, and subsystem performance budget in docs.
-- [x] DONE-DONE: Establish repo layout, coding conventions, formatting, tests, and release/versioning strategy.
-- [x] DONE-DONE: CI/check scaffolding exists; `scripts\check-local.ps1` now verifies Rust tests, Rust examples, WinUI build, positive/negative UI smoke, thresholded tiny benchmark, optional budgeted tiny/fanout/fanout-large/scale benchmarks, optional competitor/signing/installer preflights, WiX-free installer staging validation through `scripts\package-installer.ps1 -ValidateOnly`, optional installer packaging, portable packaging locally, and explicit UI-smoke auto-skip on non-interactive hosts via `-AutoSkipUiSmokeIfUnavailable`; CI compiles Rust examples, has a WinUI Debug/Release portable-package artifact matrix, records UI Automation prerequisite reports, runs Release installer prerequisite and staging validation, writes/uploads a Release update manifest, conditionally uploads an MSI when WiX is available, and conditionally signs Release binaries/MSI when signing secrets are configured.
-- [x] DONE-DONE: Update README current status to match the stable MVP shell reality.
-- [x] DONE-DONE: Document developer setup.
-- [x] DONE-DONE: Document index format and scan pipeline in enough detail for maintenance.
-- [x] DONE-DONE: Document benchmark methodology.
-- [x] DONE-DONE: Write user-facing troubleshooting docs, including log locations.
-- [x] DONE-DONE: Create installer/update mechanism; portable zip packaging is scripted and verified, installer prerequisite checks are scripted, MSI scaffold exists at `installer\WinBlaze.wxs`, `scripts\package-installer.ps1` validates the portable staging layout before invoking WiX, supports `-ValidateOnly` for WiX-free installed-build gating, reads the default version from the app manifest, CI conditionally builds/uploads an MSI when WiX is available, and `scripts\write-update-manifest.ps1` writes release/update metadata with artifact sizes, SHA-256 hashes, and manifest-derived default versioning. Local MSI install verification and in-app update consumption remain release-channel validation beyond the scripted mechanism.
-- [x] DONE-DONE: Add code signing workflow; signing steps, CI requirements, prerequisite checks, local signing/verification, installer signing support, conditional CI Release binary/MSI signing steps, and explicit signing readiness reporting are documented/scripted (`scripts\check-signing-prereqs.ps1` reports `signing_ready`, certificate path/thumbprint configuration, timestamp URL state, and `signtool.exe`; `scripts\sign-artifacts.ps1` signs and verifies configured files and fails on invalid/missing signatures). Certificate/secrets provisioning remains a release credential task outside the repo workflow.
-- [x] DONE-DONE: Define portable versus installed builds.
-- [x] DONE-DONE: Verify clean first-run experience.
-- [x] DONE-DONE: Document upgrade and rollback behavior.
-
-## Milestones
-
-### M1: Stable Recovery Shell
-
-- [x] DONE-DONE: App launches visibly.
-- [x] DONE-DONE: Small-directory smoke scan completes without crash.
-- [x] DONE-DONE: Scan/cancel controls work without blocking the UI.
-- [x] DONE-DONE: Search/filter/tree/detail/treemap recovery cards are visible and interactive.
-- [x] DONE-DONE: Remove or isolate obsolete full-shell code paths that are no longer part of the stable startup route; unreachable legacy `#if 0` shell variants, stale active `NavigationView` branches, and inactive source-level XAML window artifacts have been removed, and Debug/Release UI smoke passes.
-
-### M2: Full UI Rebuild
-
-- [x] DONE-DONE: Standard shell/navigation pattern; active C++ navigation is the documented MVP chip host with visible dynamic path breadcrumbs, deferred section visibility reconciliation after scan completion/cancel, stable automation names/help text across navigation, scan, search, tree paging/list, and diagnostics controls, access keys, tab order, Ctrl/Alt+1-5 shortcuts, stale `NavigationView` branches, recovery-era trace labels, and inactive source-level XAML window artifacts removed, and Debug/Release smoke passing.
-- [x] DONE-DONE: Premium visual system for the stable MVP shell; active shell has broader centralized theme tokens in `src\ShellTheme.h` covering cards, accent panels, chips, banners, rows, progress, and catalog-only treemap accents, with matching `WinBlaze*Brush` resources in `App.xaml`, active card/panel radii centralized at 8px, static treemap sample buttons/fake empty tiles removed, empty treemap and initial tree-list copy/status aligned to real catalog data, P0 visual review recorded in `docs\P0_VISUAL_REVIEW.md`, and Debug/Release smoke passing.
-- [x] DONE-DONE: Virtualized tree/list; active list now pages filtered catalog windows through a virtualizing `ListView` with visible column headers, bounded path-depth indentation, visible hierarchy-level and parent-path column/row metadata, centralized path hierarchy helpers, top-level group counts for filtered results and the visible row window, trimmed path trails, row help text, nested row selection labels, catalog-row terminology through the expand/empty/status path, no fake startup catalog rows, and Debug/Release smoke passing. Future fully expandable tree controls must preserve the same virtualization and smoke-test constraints.
-- [x] DONE-DONE: GPU-backed treemap; Direct2D/SwapChainPanel catalog tiles, balanced layout metadata, clipped labels, hover/tap focus, redraw coalescing, surface automation metadata, render diagnostics, and Debug/Release smoke are complete for the stable MVP shell.
-- [x] DONE-DONE: Automated UI smoke coverage; positive and expanded negative smoke pass locally for Debug and Release, a UI Automation prerequisite preflight is checked in, non-interactive local gates can auto-skip with explicit reporting, and CI records prerequisite readiness after each WinUI build. Interactive hosted-runner UI execution remains optional infrastructure beyond the stable MVP smoke coverage.
-
-### M3: End-To-End Indexing
-
-- [x] DONE-DONE: Save scan results to disk.
-- [x] DONE-DONE: Load catalog snapshot without loading stale huge cache during new scans.
-- [x] DONE-DONE: Search over indexed data.
-- [x] DONE-DONE: Incremental rescans.
-- [x] DONE-DONE: Cache migration/versioning documentation.
-
-### M4: Performance Parity
-
-- [x] DONE-DONE: Benchmark harness.
-- [x] DONE-DONE: Scan-time optimization; Release UI medians are recorded for tiny/fanout/fanout-large/scale, local threshold gates pass, backend directory-walk fallback timing has a checked-in manifest-validated tiny baseline, incremental add/remove/modify timings are checked in, and broader-machine calibration is treated as release validation rather than an open implementation gap.
-- [x] DONE-DONE: Memory optimization; backend per-file memory/storage measurement has a checked-in 100,000-file baseline, UI Release medians report working set for tiny/fanout/fanout-large/scale, synthetic 1M/10M/50M projections exist, and larger calibrated runtime baselines are release-machine calibration work rather than an open implementation gap.
-- [x] DONE-DONE: UI latency optimization; Release tiny/fanout/fanout-large/scale medians are recorded with structured latency/render counters, local Release threshold gates pass, scan-scoped frame measurement avoids idle composition gaps, and environment capture plus calibration reporting is scripted for calibrated runs. Broader-machine release calibration remains release validation.
-- [x] DONE-DONE: Competitor baseline report; generated report combines WinBlaze local baselines, Release medians, local competitor inventory, and explicit `not recorded` placeholders plus rerun instructions for optional manual competitor timings.
-
-### M5: Release Readiness
-
-- [x] DONE-DONE: Installer; portable packaging, MSI scaffold, WiX prerequisite detection, WiX-free staging validation, conditional MSI packaging in CI, and update manifest generation are scripted. Physical install/uninstall smoke remains release-channel validation.
-- [x] DONE-DONE: Signing; local/CI workflow exists conditionally for app binaries and MSI artifacts, signing readiness is reported by script, and certificate provisioning is treated as an external release credential task.
-- [x] DONE-DONE: Basic crash/failure report files.
-- [x] DONE-DONE: Release documentation, including `docs\RELEASE_NOTES.md` for the current `0.1.0` stable MVP shell scope and recorded manifest-derived build identity.
-- [x] DONE-DONE: Release checklist.
-
-## Open Decisions
-
-- [x] DONE-DONE: First implementation UI framework is WinUI 3 with C++/WinRT.
-- [x] DONE-DONE: NTFS is first-class for MVP; directory-walk fallback covers non-NTFS and subdirectory scans, has backend tests plus a checked-in generated-dataset benchmark with manifest correctness checks, and physical non-NTFS/removable-media calibration is release validation rather than an unresolved scope decision.
-- [x] DONE-DONE: Decide the v1 scope for incremental indexing.
-- [x] DONE-DONE: Decide benchmark hardware and dataset targets.
-- [x] DONE-DONE: Decide whether SQLite returns as the primary runtime index or remains superseded by binary cache snapshots.
+Useful entry points: [local gate](scripts/check-local.ps1), [CI](.github/workflows/ci.yml), [release checklist](docs/RELEASE_CHECKLIST.md), [security review](docs/PRODUCTION_SECURITY_REVIEW.md), [packaging](docs/PACKAGING.md), [live benchmark report](benchmarks/CURRENT_COMPARISON.html).

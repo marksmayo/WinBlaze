@@ -1,0 +1,32 @@
+{
+  "batch_id": "20261004T103915509Z",
+  "requested_runs": 10,
+  "state": "complete",
+  "started_utc": "2026-10-04T10:39:15.5270782Z",
+  "cache": "uncontrolled; sequential repeats",
+  "sample_interval_ms": 10,
+  "elevation": "administrator token",
+  "fixture": null,
+  "selected_tools": [
+    "WinBlaze",
+    "WinDirStat",
+    "WizTree"
+  ],
+  "jobs": [
+    {
+      "id": "wb-mft",
+      "tool": "WinBlaze",
+      "kind": "mft",
+      "operation": "raw-mft-dump",
+      "scope": "Startup + raw C: NTFS MFT dump to local SSD; administrator token; no scan tree/GUI"
+    },
+    {
+      "id": "wiz-mft",
+      "tool": "WizTree",
+      "kind": "mft",
+      "operation": "raw-mft-dump",
+      "scope": "Startup + raw C: NTFS MFT dump to local SSD; administrator token; no scan tree/GUI"
+    }
+  ],
+  "completed_utc": "2026-10-04T10:47:17.8950634Z"
+}

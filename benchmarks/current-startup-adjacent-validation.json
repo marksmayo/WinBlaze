@@ -1,0 +1,53 @@
+{
+  "method": "Adjacent sequential n=10 control and optimized builds; scheduling and caches uncontrolled; no per-target attribution.",
+  "results": [
+    {
+      "scope": "idle",
+      "metric": "initialization_ms",
+      "control": 89.755,
+      "optimized": 80.275,
+      "percent_lower": 10.562085677678112,
+      "n": 10
+    },
+    {
+      "scope": "idle",
+      "metric": "cpu_ms_at_idle",
+      "control": 132.8125,
+      "optimized": 117.1875,
+      "percent_lower": 11.76470588235294,
+      "n": 10
+    },
+    {
+      "scope": "idle",
+      "metric": "working_set_bytes_at_idle",
+      "control": 36890624.0,
+      "optimized": 34852864.0,
+      "percent_lower": 5.5237883750624555,
+      "n": 10
+    },
+    {
+      "scope": "ready",
+      "metric": "ready_ms",
+      "control": 433.605,
+      "optimized": 414.97,
+      "percent_lower": 4.297690294161735,
+      "n": 10
+    },
+    {
+      "scope": "ready",
+      "metric": "cpu_ms",
+      "control": 476.5625,
+      "optimized": 453.125,
+      "percent_lower": 4.918032786885246,
+      "n": 10
+    },
+    {
+      "scope": "ready",
+      "metric": "working_set_bytes",
+      "control": 128833536.0,
+      "optimized": 127696896.0,
+      "percent_lower": 0.882254757022271,
+      "n": 10
+    }
+  ]
+}

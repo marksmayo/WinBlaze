@@ -1,0 +1,15 @@
+[
+  {
+    "tool": "WinBlaze",
+    "profile": "full",
+    "action": "Show search panel while standard-user scan active",
+    "dispatch_and_first_capture_ms": 935,
+    "response_verified": false,
+    "note": "Search controls were not exposed in captured accessibility tree; no valid input latency obtained",
+    "scan_ms": 49540,
+    "peak_frame_interval_ms": 608,
+    "peak_flush_ms": 35,
+    "scope": "exploratory interaction run after dense/incremental tests; excluded from original three-run medians",
+    "utc": "2026-10-02T11:06:52.646Z"
+  }
+]

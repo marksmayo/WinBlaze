@@ -1,0 +1,377 @@
+{
+  "baseline_path": "C:\\Users\\markm\\Github\\WinBlaze\\benchmarks\\runs\\optimization-baseline-20261003T000609897Z",
+  "generated_utc": "2026-10-09T14:10:11.216Z",
+  "note": "Sequential before/after observations on a live disk with uncontrolled caches; percentages are descriptive, not causal estimates. Negative means lower after. The current build also includes parity features and per-file allocation queries, so changes are not isolated optimization savings. GUI startup includes frontend changes since the old baseline. Unsampled short-process resources are missing, not zero. Nine tested production optimizations are implemented; 91 other audit items are not new production optimizations.",
+  "rows": [
+    {
+      "scope": "tiny scan/index/persist/CSV process",
+      "metric": "Elapsed",
+      "unit": "ms",
+      "before": 80.76,
+      "after": 36.2,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -55.17582961862308
+    },
+    {
+      "scope": "tiny scan/index/persist/CSV process",
+      "metric": "Sampled CPU lower bound",
+      "unit": "CPU-s",
+      "before": 0.0625,
+      "after": 0.015619999999999998,
+      "before_n": 4,
+      "after_n": 3,
+      "change_percent": -75.00800000000001
+    },
+    {
+      "scope": "tiny scan/index/persist/CSV process",
+      "metric": "Sampled peak working set",
+      "unit": "MiB",
+      "before": 5.84765625,
+      "after": 5.322265625,
+      "before_n": 4,
+      "after_n": 10,
+      "change_percent": -8.984635938543754
+    },
+    {
+      "scope": "tiny scan/index/persist/CSV process",
+      "metric": "Sampled peak private bytes",
+      "unit": "MiB",
+      "before": 1.939453125,
+      "after": 1.517578125,
+      "before_n": 4,
+      "after_n": 10,
+      "change_percent": -21.75226586102719
+    },
+    {
+      "scope": "scale scan/index/persist/CSV process",
+      "metric": "Elapsed",
+      "unit": "ms",
+      "before": 147.82,
+      "after": 69.68,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -52.86158841834663
+    },
+    {
+      "scope": "scale scan/index/persist/CSV process",
+      "metric": "Sampled CPU lower bound",
+      "unit": "CPU-s",
+      "before": 0.16406500000000002,
+      "after": 0.09375,
+      "before_n": 10,
+      "after_n": 8,
+      "change_percent": -42.85801359217383
+    },
+    {
+      "scope": "scale scan/index/persist/CSV process",
+      "metric": "Sampled peak working set",
+      "unit": "MiB",
+      "before": 10.74609375,
+      "after": 5.111328125,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -52.43547800799709
+    },
+    {
+      "scope": "scale scan/index/persist/CSV process",
+      "metric": "Sampled peak private bytes",
+      "unit": "MiB",
+      "before": 5.5390625,
+      "after": 1.126953125,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -79.65444287729196
+    },
+    {
+      "scope": "fanout-large scan/index/persist/CSV process",
+      "metric": "Elapsed",
+      "unit": "ms",
+      "before": 124.935,
+      "after": 46.379999999999995,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -62.87669588185857
+    },
+    {
+      "scope": "fanout-large scan/index/persist/CSV process",
+      "metric": "Sampled CPU lower bound",
+      "unit": "CPU-s",
+      "before": 0.039065,
+      "after": 0.015619999999999998,
+      "before_n": 6,
+      "after_n": 6,
+      "change_percent": -60.01535901702292
+    },
+    {
+      "scope": "fanout-large scan/index/persist/CSV process",
+      "metric": "Sampled peak working set",
+      "unit": "MiB",
+      "before": 7.453125,
+      "after": 4.93359375,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -33.80503144654088
+    },
+    {
+      "scope": "fanout-large scan/index/persist/CSV process",
+      "metric": "Sampled peak private bytes",
+      "unit": "MiB",
+      "before": 4.064453125,
+      "after": 0.916015625,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -77.462758289284
+    },
+    {
+      "scope": "full scan/index/persist/CSV process",
+      "metric": "Elapsed",
+      "unit": "ms",
+      "before": 22850.135000000002,
+      "after": 17080.21,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -25.251163723978006
+    },
+    {
+      "scope": "full scan/index/persist/CSV process",
+      "metric": "Sampled CPU lower bound",
+      "unit": "CPU-s",
+      "before": 150.3125,
+      "after": 61.578120000000006,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -59.03326735966735
+    },
+    {
+      "scope": "full scan/index/persist/CSV process",
+      "metric": "Sampled peak working set",
+      "unit": "MiB",
+      "before": 914.62890625,
+      "after": 448.013671875,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -51.01689124260608
+    },
+    {
+      "scope": "full scan/index/persist/CSV process",
+      "metric": "Sampled peak private bytes",
+      "unit": "MiB",
+      "before": 1150.654296875,
+      "after": 469.890625,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -59.16317991631799
+    },
+    {
+      "scope": "GUI startup (frontend also changed since baseline)",
+      "metric": "First idle proxy",
+      "unit": "ms",
+      "before": 113.35499999999999,
+      "after": 50.17,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -55.7408142560981
+    },
+    {
+      "scope": "tiny engine only (allocation queries added since baseline)",
+      "metric": "Scan time",
+      "unit": "ms",
+      "before": 2.5,
+      "after": 1,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -60
+    },
+    {
+      "scope": "tiny engine only (allocation queries added since baseline)",
+      "metric": "Sampled CPU lower bound",
+      "unit": "CPU-s",
+      "before": 0.015625,
+      "after": 0.015625,
+      "before_n": 4,
+      "after_n": 3,
+      "change_percent": 0
+    },
+    {
+      "scope": "tiny engine only (allocation queries added since baseline)",
+      "metric": "Sampled peak working set",
+      "unit": "MiB",
+      "before": 3.4296875,
+      "after": 2.58203125,
+      "before_n": 9,
+      "after_n": 10,
+      "change_percent": -24.715261958997722
+    },
+    {
+      "scope": "scale engine only (allocation queries added since baseline)",
+      "metric": "Scan time",
+      "unit": "ms",
+      "before": 20.5,
+      "after": 15,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -26.829268292682926
+    },
+    {
+      "scope": "scale engine only (allocation queries added since baseline)",
+      "metric": "Sampled CPU lower bound",
+      "unit": "CPU-s",
+      "before": 0.03125,
+      "after": 0.015625,
+      "before_n": 7,
+      "after_n": 5,
+      "change_percent": -50
+    },
+    {
+      "scope": "scale engine only (allocation queries added since baseline)",
+      "metric": "Sampled peak working set",
+      "unit": "MiB",
+      "before": 3.76171875,
+      "after": 2.89453125,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -23.052959501557634
+    },
+    {
+      "scope": "fanout-large engine only (allocation queries added since baseline)",
+      "metric": "Scan time",
+      "unit": "ms",
+      "before": 7.5,
+      "after": 6,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -20
+    },
+    {
+      "scope": "fanout-large engine only (allocation queries added since baseline)",
+      "metric": "Sampled CPU lower bound",
+      "unit": "CPU-s",
+      "before": 0.015625,
+      "after": 0.015625,
+      "before_n": 7,
+      "after_n": 2,
+      "change_percent": 0
+    },
+    {
+      "scope": "fanout-large engine only (allocation queries added since baseline)",
+      "metric": "Sampled peak working set",
+      "unit": "MiB",
+      "before": 5.345703125,
+      "after": 5.029296875,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -5.918889294848374
+    },
+    {
+      "scope": "full engine only (allocation queries added since baseline)",
+      "metric": "Scan time",
+      "unit": "ms",
+      "before": 21899,
+      "after": 15516,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -29.1474496552354
+    },
+    {
+      "scope": "full engine only (allocation queries added since baseline)",
+      "metric": "Sampled CPU lower bound",
+      "unit": "CPU-s",
+      "before": 159.71875,
+      "after": 59.4921875,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -62.75190765016631
+    },
+    {
+      "scope": "full engine only (allocation queries added since baseline)",
+      "metric": "Sampled peak working set",
+      "unit": "MiB",
+      "before": 59.064453125,
+      "after": 49.509765625,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -16.176713733011475
+    },
+    {
+      "scope": "Administrator native full pipeline",
+      "metric": "Scan + index publication to Completed",
+      "unit": "ms",
+      "before": 5830,
+      "after": 3074,
+      "before_n": 3,
+      "after_n": 10,
+      "change_percent": -47.27272727272727
+    },
+    {
+      "scope": "Administrator native full pipeline",
+      "metric": "Whole process including deferred write/tree queries",
+      "unit": "ms",
+      "before": 6733.1774000000005,
+      "after": 4391.449500000001,
+      "before_n": 3,
+      "after_n": 10,
+      "change_percent": -34.77894255392706
+    },
+    {
+      "scope": "Administrator native full pipeline",
+      "metric": "Sampled CPU lower bound",
+      "unit": "CPU-s",
+      "before": 11.53125,
+      "after": 5.421875,
+      "before_n": 3,
+      "after_n": 10,
+      "change_percent": -52.981029810298104
+    },
+    {
+      "scope": "Administrator native full pipeline",
+      "metric": "Sampled peak working set",
+      "unit": "MiB",
+      "before": 1048.9140625,
+      "after": 613.50390625,
+      "before_n": 3,
+      "after_n": 10,
+      "change_percent": -41.510565242326514
+    },
+    {
+      "scope": "224-file feature fixture / wb-scan-csv",
+      "metric": "Elapsed",
+      "unit": "ms",
+      "before": 44.935,
+      "after": 44.385000000000005,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -1.223990208078329
+    },
+    {
+      "scope": "224-file feature fixture / wb-cache-load",
+      "metric": "Elapsed",
+      "unit": "ms",
+      "before": 39.49,
+      "after": 33.015,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -16.396556090149407
+    },
+    {
+      "scope": "224-file feature fixture / wb-cached-csv",
+      "metric": "Elapsed",
+      "unit": "ms",
+      "before": 43.46,
+      "after": 35.215,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -18.971468016566952
+    },
+    {
+      "scope": "224-file feature fixture / wb-extensions",
+      "metric": "Elapsed",
+      "unit": "ms",
+      "before": 41.269999999999996,
+      "after": 33.645,
+      "before_n": 10,
+      "after_n": 10,
+      "change_percent": -18.475890477344304
+    }
+  ]
+}

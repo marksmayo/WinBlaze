@@ -1,0 +1,692 @@
+[
+  {
+    "run": 1,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 8,
+      "working_set_bytes": 7778304,
+      "working_set_bytes_per_file": 777,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 2,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 11,
+      "working_set_bytes": 8429568,
+      "working_set_bytes_per_file": 842,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 3,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 7,
+      "working_set_bytes": 7823360,
+      "working_set_bytes_per_file": 782,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 4,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 8,
+      "working_set_bytes": 8441856,
+      "working_set_bytes_per_file": 844,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 5,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 6,
+      "working_set_bytes": 8441856,
+      "working_set_bytes_per_file": 844,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 6,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 7,
+      "working_set_bytes": 7823360,
+      "working_set_bytes_per_file": 782,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 7,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 7,
+      "working_set_bytes": 7790592,
+      "working_set_bytes_per_file": 779,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 8,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 6,
+      "working_set_bytes": 7806976,
+      "working_set_bytes_per_file": 780,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 9,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 8,
+      "working_set_bytes": 7790592,
+      "working_set_bytes_per_file": 779,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 10,
+    "files": 10000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 10000,
+      "elapsed_ms": 7,
+      "working_set_bytes": 8433664,
+      "working_set_bytes_per_file": 843,
+      "snapshot_bytes": 1030056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 1,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 66,
+      "working_set_bytes": 37408768,
+      "working_set_bytes_per_file": 374,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 2,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 63,
+      "working_set_bytes": 37400576,
+      "working_set_bytes_per_file": 374,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 3,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 68,
+      "working_set_bytes": 37376000,
+      "working_set_bytes_per_file": 373,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 4,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 66,
+      "working_set_bytes": 37335040,
+      "working_set_bytes_per_file": 373,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 5,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 57,
+      "working_set_bytes": 37347328,
+      "working_set_bytes_per_file": 373,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 6,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 68,
+      "working_set_bytes": 37355520,
+      "working_set_bytes_per_file": 373,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 7,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 80,
+      "working_set_bytes": 38387712,
+      "working_set_bytes_per_file": 383,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 8,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 71,
+      "working_set_bytes": 37371904,
+      "working_set_bytes_per_file": 373,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 9,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 64,
+      "working_set_bytes": 37371904,
+      "working_set_bytes_per_file": 373,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 10,
+    "files": 100000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 100000,
+      "elapsed_ms": 71,
+      "working_set_bytes": 38424576,
+      "working_set_bytes_per_file": 384,
+      "snapshot_bytes": 10300056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 1,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 728,
+      "working_set_bytes": 333111296,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 2,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 764,
+      "working_set_bytes": 333312000,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 3,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 674,
+      "working_set_bytes": 333119488,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 4,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 656,
+      "working_set_bytes": 333086720,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 5,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 643,
+      "working_set_bytes": 333099008,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 6,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 618,
+      "working_set_bytes": 333103104,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 7,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 617,
+      "working_set_bytes": 333111296,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 8,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 614,
+      "working_set_bytes": 333086720,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 9,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 605,
+      "working_set_bytes": 333053952,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  },
+  {
+    "run": 10,
+    "files": 1000000,
+    "binary": {
+      "tool": "WinBlaze index memory",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\index_memory.exe",
+      "sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "native_dll_sha256": null,
+      "identity_sha256": "65826ADF7CEC5EDF8B51BF365AB3B6E8DB438F8C491ABA92D737FBE6F879F153",
+      "observed_utc": "2026-10-09T14:09:49.9060314Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "metrics": {
+      "files": 1000000,
+      "elapsed_ms": 613,
+      "working_set_bytes": 333086720,
+      "working_set_bytes_per_file": 333,
+      "snapshot_bytes": 103000056,
+      "snapshot_bytes_per_file": 103
+    }
+  }
+]

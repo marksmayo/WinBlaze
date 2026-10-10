@@ -1,0 +1,1066 @@
+{
+  "metric": "Quick folder · timing variability",
+  "profile": "tiny",
+  "files": 72,
+  "directories": 13,
+  "runs": 10,
+  "formula": "R-7 (p75 - p25) / median ×100",
+  "scope": "unchanged startup + complete scan/index/persistence + CSV export",
+  "ranking": "Provisional: fixed startup/finalization costs first for72files; source-audited existing optimizations are not new wins.",
+  "baseline": {
+    "WinBlaze": 43.60231051986697,
+    "WinDirStat": 13.873034732978292,
+    "WizTree": 11.405354330708658
+  },
+  "guardrails": [
+    "No padded runtime",
+    "No excluded slow runs",
+    "No changed medal definitions",
+    "All files and output correctness retained",
+    "Already implemented candidates are not new wins",
+    "Ranking provisional until phase evidence"
+  ],
+  "rows": [
+    {
+      "rank": 1,
+      "phase": "Process startup",
+      "candidate": "Borrow command arguments instead of cloning",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 61
+    },
+    {
+      "rank": 2,
+      "phase": "Process startup",
+      "candidate": "Avoid formatting usage text on valid arguments",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 62
+    },
+    {
+      "rank": 3,
+      "phase": "Process startup",
+      "candidate": "Reduce native CLI import initialization",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 63
+    },
+    {
+      "rank": 4,
+      "phase": "Process startup",
+      "candidate": "Remove unused CLI linker dependencies",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 64
+    },
+    {
+      "rank": 5,
+      "phase": "Process startup",
+      "candidate": "Keep startup logging lazy until first event",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 65
+    },
+    {
+      "rank": 6,
+      "phase": "Process startup",
+      "candidate": "Avoid redundant cache-root normalization",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 66
+    },
+    {
+      "rank": 7,
+      "phase": "Process startup",
+      "candidate": "Resolve executable-independent config once",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 67
+    },
+    {
+      "rank": 8,
+      "phase": "Process startup",
+      "candidate": "Avoid loading previous snapshots for replacement scans",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 68
+    },
+    {
+      "rank": 9,
+      "phase": "Process startup",
+      "candidate": "Avoid CLI initialization of GUI preview state",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 69
+    },
+    {
+      "rank": 10,
+      "phase": "Process startup",
+      "candidate": "Reduce thread startup dependencies before first scan",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 70
+    },
+    {
+      "rank": 11,
+      "phase": "Finalization and output",
+      "candidate": "Wait on terminal channel instead of polling",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 91
+    },
+    {
+      "rank": 12,
+      "phase": "Finalization and output",
+      "candidate": "Join scan workers once",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 92
+    },
+    {
+      "rank": 13,
+      "phase": "Finalization and output",
+      "candidate": "Avoid duplicate terminal state publication",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 93
+    },
+    {
+      "rank": 14,
+      "phase": "Finalization and output",
+      "candidate": "Release completed pipelines before export",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 94
+    },
+    {
+      "rank": 15,
+      "phase": "Finalization and output",
+      "candidate": "Avoid redundant final progress logging",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 95
+    },
+    {
+      "rank": 16,
+      "phase": "Finalization and output",
+      "candidate": "Reuse JSON event formatting storage",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 96
+    },
+    {
+      "rank": 17,
+      "phase": "Finalization and output",
+      "candidate": "Keep event log handle open through scan",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 97
+    },
+    {
+      "rank": 18,
+      "phase": "Finalization and output",
+      "candidate": "Avoid flushing empty log buffers",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 98
+    },
+    {
+      "rank": 19,
+      "phase": "Finalization and output",
+      "candidate": "Move auxiliary snapshot state instead of cloning",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 99
+    },
+    {
+      "rank": 20,
+      "phase": "Finalization and output",
+      "candidate": "Drop temporary export owners before process exit",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 100
+    },
+    {
+      "rank": 21,
+      "phase": "Worker scheduling",
+      "candidate": "Worker-local directory counters",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 1
+    },
+    {
+      "rank": 22,
+      "phase": "Worker scheduling",
+      "candidate": "Worker-local byte counters",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 2
+    },
+    {
+      "rank": 23,
+      "phase": "Worker scheduling",
+      "candidate": "Publish counters once per directory",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 3
+    },
+    {
+      "rank": 24,
+      "phase": "Worker scheduling",
+      "candidate": "Notify only workers that can consume new tasks",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Current gold benchmark RED26.38% vs16.13%. Implemented conditional queue notifications: notify all for new work or terminal completion, skip leaf completions that add no work. Public leaf-worker termination and mixed-file totals guards pass before change; post-change test17034 pending. No measured gain claimed.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 4
+    },
+    {
+      "rank": 25,
+      "phase": "Worker scheduling",
+      "candidate": "Release queue lock before task conversion",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 5
+    },
+    {
+      "rank": 26,
+      "phase": "Worker scheduling",
+      "candidate": "Move queued task ownership instead of cloning",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 6
+    },
+    {
+      "rank": 27,
+      "phase": "Worker scheduling",
+      "candidate": "Reserve child-task storage from observed fanout",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 7
+    },
+    {
+      "rank": 28,
+      "phase": "Worker scheduling",
+      "candidate": "Reuse empty worker task vectors",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 8
+    },
+    {
+      "rank": 29,
+      "phase": "Worker scheduling",
+      "candidate": "Avoid redundant completion wakeups",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 9
+    },
+    {
+      "rank": 30,
+      "phase": "Worker scheduling",
+      "candidate": "Bound worker creation for known tiny roots",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Controlled rotating n10 1/2/4-worker scale sweep completed; all16384files and fixture totals validate. Current4-worker setting has the lowest producer and process medians; do not blindly reduce parallelism to chase consistency.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 10
+    },
+    {
+      "rank": 31,
+      "phase": "Event delivery",
+      "candidate": "Reuse returned event batch buffers",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 11
+    },
+    {
+      "rank": 32,
+      "phase": "Event delivery",
+      "candidate": "Reserve batch capacity once per worker",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 12
+    },
+    {
+      "rank": 33,
+      "phase": "Event delivery",
+      "candidate": "Avoid allocating an empty final batch",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 13
+    },
+    {
+      "rank": 34,
+      "phase": "Event delivery",
+      "candidate": "Coalesce redundant progress snapshots",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 14
+    },
+    {
+      "rank": 35,
+      "phase": "Event delivery",
+      "candidate": "Send progress only after meaningful counter change",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 15
+    },
+    {
+      "rank": 36,
+      "phase": "Event delivery",
+      "candidate": "Avoid receiver wakeups for empty batches",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 16
+    },
+    {
+      "rank": 37,
+      "phase": "Event delivery",
+      "candidate": "Reduce extra event enum dispatch passes",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 17
+    },
+    {
+      "rank": 38,
+      "phase": "Event delivery",
+      "candidate": "Separate terminal delivery from live previews",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 18
+    },
+    {
+      "rank": 39,
+      "phase": "Event delivery",
+      "candidate": "Move record strings through every batch boundary",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 19
+    },
+    {
+      "rank": 40,
+      "phase": "Event delivery",
+      "candidate": "Bound pending batch memory without dropping events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 20
+    },
+    {
+      "rank": 41,
+      "phase": "Snapshot persistence",
+      "candidate": "Borrow sorted record slices for persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 51
+    },
+    {
+      "rank": 42,
+      "phase": "Snapshot persistence",
+      "candidate": "Reuse directory encoding scratch",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 52
+    },
+    {
+      "rank": 43,
+      "phase": "Snapshot persistence",
+      "candidate": "Reuse file encoding scratch",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 53
+    },
+    {
+      "rank": 44,
+      "phase": "Snapshot persistence",
+      "candidate": "Batch adjacent scalar encodings",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 54
+    },
+    {
+      "rank": 45,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid sorting already sorted session records",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 55
+    },
+    {
+      "rank": 46,
+      "phase": "Snapshot persistence",
+      "candidate": "Drop publication lookups before disk persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 56
+    },
+    {
+      "rank": 47,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid duplicate snapshot writes at completion",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 57
+    },
+    {
+      "rank": 48,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid repeated backup existence queries",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 58
+    },
+    {
+      "rank": 49,
+      "phase": "Snapshot persistence",
+      "candidate": "Release temporary serializer indexes before rename",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 59
+    },
+    {
+      "rank": 50,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid allocating intermediate complete snapshot bytes",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 60
+    },
+    {
+      "rank": 51,
+      "phase": "CSV serialization",
+      "candidate": "Reuse decimal formatting scratch",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 41
+    },
+    {
+      "rank": 52,
+      "phase": "CSV serialization",
+      "candidate": "Write ordinary unescaped fields in one call",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 42
+    },
+    {
+      "rank": 53,
+      "phase": "CSV serialization",
+      "candidate": "Borrow parent paths during file export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 43
+    },
+    {
+      "rank": 54,
+      "phase": "CSV serialization",
+      "candidate": "Avoid allocating a complete joined file path",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 44
+    },
+    {
+      "rank": 55,
+      "phase": "CSV serialization",
+      "candidate": "Batch adjacent constant CSV delimiters",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 45
+    },
+    {
+      "rank": 56,
+      "phase": "CSV serialization",
+      "candidate": "Reserve escaping scratch from field size",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 46
+    },
+    {
+      "rank": 57,
+      "phase": "CSV serialization",
+      "candidate": "Avoid repeated directory lookup per file",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 47
+    },
+    {
+      "rank": 58,
+      "phase": "CSV serialization",
+      "candidate": "Write directory totals without intermediate Strings",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 48
+    },
+    {
+      "rank": 59,
+      "phase": "CSV serialization",
+      "candidate": "Reduce flush calls while retaining successful close",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 49
+    },
+    {
+      "rank": 60,
+      "phase": "CSV serialization",
+      "candidate": "Size output buffering for the scale fixture",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 50
+    },
+    {
+      "rank": 61,
+      "phase": "Path and string handling",
+      "candidate": "Reserve exact child directory path capacity",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 71
+    },
+    {
+      "rank": 62,
+      "phase": "Path and string handling",
+      "candidate": "Consume owned OsString in display conversion",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 72
+    },
+    {
+      "rank": 63,
+      "phase": "Path and string handling",
+      "candidate": "Avoid formatting already UTF8 directory paths",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 73
+    },
+    {
+      "rank": 64,
+      "phase": "Path and string handling",
+      "candidate": "Reuse root prefix during path assembly",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 74
+    },
+    {
+      "rank": 65,
+      "phase": "Path and string handling",
+      "candidate": "Borrow ancestors during cycle checks",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 75
+    },
+    {
+      "rank": 66,
+      "phase": "Path and string handling",
+      "candidate": "Avoid duplicate root normalization",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 76
+    },
+    {
+      "rank": 67,
+      "phase": "Path and string handling",
+      "candidate": "Reuse filesystem error path conversion",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 77
+    },
+    {
+      "rank": 68,
+      "phase": "Path and string handling",
+      "candidate": "Avoid duplicate extension extraction",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 78
+    },
+    {
+      "rank": 69,
+      "phase": "Path and string handling",
+      "candidate": "Avoid storing derived full file paths",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 79
+    },
+    {
+      "rank": 70,
+      "phase": "Path and string handling",
+      "candidate": "Bound temporary path capacity retained by workers",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 80
+    },
+    {
+      "rank": 71,
+      "phase": "Directory metadata",
+      "candidate": "Reuse metadata scratch across directories",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 21
+    },
+    {
+      "rank": 72,
+      "phase": "Directory metadata",
+      "candidate": "Skip dot names before conversion",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 22
+    },
+    {
+      "rank": 73,
+      "phase": "Directory metadata",
+      "candidate": "Avoid repeat metadata-class negotiation",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 23
+    },
+    {
+      "rank": 74,
+      "phase": "Directory metadata",
+      "candidate": "Encode ordinary names once",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 24
+    },
+    {
+      "rank": 75,
+      "phase": "Directory metadata",
+      "candidate": "Avoid copying borrowed UTF16 record fields",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 25
+    },
+    {
+      "rank": 76,
+      "phase": "Directory metadata",
+      "candidate": "Reuse record-boundary validation results",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 26
+    },
+    {
+      "rank": 77,
+      "phase": "Directory metadata",
+      "candidate": "Avoid rereading buffer header fields",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 27
+    },
+    {
+      "rank": 78,
+      "phase": "Directory metadata",
+      "candidate": "Reserve filename capacity from exact encoding length",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 28
+    },
+    {
+      "rank": 79,
+      "phase": "Directory metadata",
+      "candidate": "Reduce zeroing of overwritten scratch bytes",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 29
+    },
+    {
+      "rank": 80,
+      "phase": "Directory metadata",
+      "candidate": "Keep error fallback off successful metadata path",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 30
+    },
+    {
+      "rank": 81,
+      "phase": "Catalog construction",
+      "candidate": "Arithmetic lookup for contiguous directory IDs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "New directory-lookup arithmetic change: public RED2064396 bytes; focused5 tests and broad gates pass, line coverage92.34%. CLI build76792 running; n10 comparison pending.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 31
+    },
+    {
+      "rank": 82,
+      "phase": "Catalog construction",
+      "candidate": "In-place ordering for dense file IDs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 32
+    },
+    {
+      "rank": 83,
+      "phase": "Catalog construction",
+      "candidate": "Bypass ordering for already sorted IDs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 33
+    },
+    {
+      "rank": 84,
+      "phase": "Catalog construction",
+      "candidate": "Transfer record arenas without a second array",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 34
+    },
+    {
+      "rank": 85,
+      "phase": "Catalog construction",
+      "candidate": "Trim unused publication capacity",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 35
+    },
+    {
+      "rank": 86,
+      "phase": "Catalog construction",
+      "candidate": "Reserve exact child-index counts",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 36
+    },
+    {
+      "rank": 87,
+      "phase": "Catalog construction",
+      "candidate": "Reuse parent positions during rollup",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 37
+    },
+    {
+      "rank": 88,
+      "phase": "Catalog construction",
+      "candidate": "Skip sorting child lists with fewer than two items",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 38
+    },
+    {
+      "rank": 89,
+      "phase": "Catalog construction",
+      "candidate": "Avoid repeated child-size key extraction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 39
+    },
+    {
+      "rank": 90,
+      "phase": "Catalog construction",
+      "candidate": "Release transient parent arrays immediately after grouping",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 40
+    },
+    {
+      "rank": 91,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Skip physical identity tracking for zero allocation",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 81
+    },
+    {
+      "rank": 92,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid compressed-size query when metadata proves zero allocation",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 82
+    },
+    {
+      "rank": 93,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid allocation rounding for zero logical size",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 83
+    },
+    {
+      "rank": 94,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid hardlink dedup lock for zero allocation",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 84
+    },
+    {
+      "rank": 95,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid repeated volume identity for ordinary entries",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 85
+    },
+    {
+      "rank": 96,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Use already-open handles for fallback metadata",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 86
+    },
+    {
+      "rank": 97,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid reopening entries with sufficient batched metadata",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 87
+    },
+    {
+      "rank": 98,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Keep sparse-file fallback separate from ordinary files",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 88
+    },
+    {
+      "rank": 99,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Cache volume cluster size per safe identity",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Previously identified as present; recheck this candidate against its own source before claiming a new optimization.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 89
+    },
+    {
+      "rank": 100,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid redundant nonempty per-file progress byte bookkeeping",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "New quick-workload hypothesis; source review needed; zero-byte atomic optimization does not apply to72nonempty files.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified. Bound by measured phase IQR in72-file/13-directory workflow; no bulk-volume estimate applies.",
+      "empty_scale_candidate_rank": 90
+    }
+  ],
+  "latest_measurement": {
+    "source": "variability-small-buffers-confirmation.json",
+    "runs_per_product": 10,
+    "validated_exports": 30,
+    "medal": "bronze",
+    "products": {
+      "WinBlaze": {
+        "median_ms": 94.75,
+        "variability_pct": 20.26121372031663
+      },
+      "WinDirStat": {
+        "median_ms": 633.265,
+        "variability_pct": 12.851255003829351
+      },
+      "WizTree": {
+        "median_ms": 1084.0949999999998,
+        "variability_pct": 11.580165944866454
+      }
+    }
+  },
+  "new_implementation": {
+    "candidate": "Bound sorted-snapshot scratch allocation by catalog size",
+    "red": "Public 72-file persistence round trip passed, scratch allocation failed at 1048576 bytes",
+    "green": "All six sorted-tree resource and correctness tests passed",
+    "saving": "Quick fixture snapshot buffer reduced from 1 MiB to roughly 22 KiB; latency/variability savings not established.",
+    "risk": "Low: buffer sizing only, unchanged serialization and persistence completion",
+    "status": "Full checks passed; public resource reduction verified; independent n10 confirmation did not earn timing-variability gold."
+  },
+  "csv_implementation": {
+    "red": "Public CSV export and re-import correct; large scratch budget failed at 1048576 bytes",
+    "green": "Small CSV resource test and existing 32 MiB disk-write budget both passed",
+    "saving": "Small catalog CSV buffer about 22 KiB rather than 1 MiB; preserves flush, sync_all and staged replacement",
+    "status": "Full checks passed; public resource reduction verified; independent n10 confirmation did not earn timing-variability gold."
+  },
+  "worker_experiment": {
+    "source": "experiment-directory-workers-tiny.json",
+    "runs_per_setting": 10,
+    "order": "Rotated 1/2/4 workers",
+    "conclusion": "No clear speed advantage; keep four-worker default, supported by the scale experiment."
+  },
+  "next_action": "Stable gold not achieved. Investigate process-startup variability with matched diagnostic controls; do not select a favorable batch or change measurement scope. Keep all n10 observations."
+}

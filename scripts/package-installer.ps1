@@ -70,6 +70,7 @@ if (-not (Test-Path -LiteralPath $SourceDir -PathType Container)) {
 $resolvedSourceDir = (Resolve-Path -LiteralPath $SourceDir).Path
 $requiredFiles = @(
     "WinBlaze.UI.exe",
+    "winblaze-cli.exe",
     "winblaze_native.dll",
     "WinBlaze.UI.pri",
     "WebView2Loader.dll",

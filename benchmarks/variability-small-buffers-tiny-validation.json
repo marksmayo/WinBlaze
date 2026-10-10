@@ -1,0 +1,185 @@
+{
+  "verified": true,
+  "outputs": [
+    {
+      "tool": "WinBlaze",
+      "run": 1,
+      "files": 72,
+      "sha256": "08da7e0223be1d71c6f41081f97a8079a1efb9d609294a6359c3bfc86d653ff6"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 2,
+      "files": 72,
+      "sha256": "d723c636e487782bae339e230ec0c9031be97e7313f2e31051dbaf81e8e48523"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 3,
+      "files": 72,
+      "sha256": "2c623b9048d241918ff6d3148af4304466b443ca7954649dac2fb8ecde02c26f"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 4,
+      "files": 72,
+      "sha256": "c1573f1aa47ad1ade7f0f03dfb8df356bcaceb11a6f2186762f63403c4082b6b"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 5,
+      "files": 72,
+      "sha256": "4a932d8813969e54fe2c09c5fedd253c4dd99bab4ec7d08eb9def1f194fb124b"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 6,
+      "files": 72,
+      "sha256": "8229541ed6d4965fe5707adb4dcf6c7247ea6b773d99f3c0584247f63b703825"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 7,
+      "files": 72,
+      "sha256": "4e7248f5abb8cb83148971ec540d5adee0136627be755616751efe6532c8e60c"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 8,
+      "files": 72,
+      "sha256": "ffe821042b35a497885c466786464f11d7680621d05aeda36e39b6f9cc75c0bb"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 9,
+      "files": 72,
+      "sha256": "81058bbefb8333f224b2f795d3d03ecb8d666dd77e6d579f998425e12779d98a"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 10,
+      "files": 72,
+      "sha256": "2d9097b917fdcf1510a63f09372032a3b185594556d13edc656e5eaad1bd4972"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 1,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 2,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 3,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 4,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 5,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 6,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 7,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 8,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 9,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 10,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WizTree",
+      "run": 1,
+      "files": 72,
+      "sha256": "ae66662b993312ca9d5edbab41da763f768ebc24862ea2440818dfa39297b0a1"
+    },
+    {
+      "tool": "WizTree",
+      "run": 2,
+      "files": 72,
+      "sha256": "7f07cc67929107c5aa7fdd5c98fe2e1ba61d7e55307240259201a6bc6e7e30f7"
+    },
+    {
+      "tool": "WizTree",
+      "run": 3,
+      "files": 72,
+      "sha256": "cae435ad7ac80d787920404f5aeb5ab5c3ad06d9ff908df3b637aecf8fb9a2f1"
+    },
+    {
+      "tool": "WizTree",
+      "run": 4,
+      "files": 72,
+      "sha256": "7df4d6366395c6d0edf5dd2d3d9f6b4e70ecd3166d8c546a737b43fc9493e62d"
+    },
+    {
+      "tool": "WizTree",
+      "run": 5,
+      "files": 72,
+      "sha256": "2577113c735b22ea96c3614566392f74852e5d6f7ca33eff5b70ab0547dc19db"
+    },
+    {
+      "tool": "WizTree",
+      "run": 6,
+      "files": 72,
+      "sha256": "6a316d6e3010b0eade4b6335a6cb6c4655e96b336d61d5dc9222b60b521c9ea2"
+    },
+    {
+      "tool": "WizTree",
+      "run": 7,
+      "files": 72,
+      "sha256": "ce1083477f2191decb0a170327c9b73507f3e3a6cd212588b656047f96b3f3aa"
+    },
+    {
+      "tool": "WizTree",
+      "run": 8,
+      "files": 72,
+      "sha256": "3273f93dcfa2273c15d84c8b051a756ad2765f1f1123696bf4aed2704ec1939c"
+    },
+    {
+      "tool": "WizTree",
+      "run": 9,
+      "files": 72,
+      "sha256": "fb393a9b44530b3ce36257241f59e61d51b42fed48fcbb4891144f6ce4372836"
+    },
+    {
+      "tool": "WizTree",
+      "run": 10,
+      "files": 72,
+      "sha256": "7bc2d07c64ff07db93f39bb96858368dd58abad80a780be777bbaceff8f189ef"
+    }
+  ]
+}

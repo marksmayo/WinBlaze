@@ -1,7 +1,7 @@
 param(
     [string]$AppPath = (Join-Path $PSScriptRoot "..\..\src\WinBlaze.UI\bin\x64\Debug\WinBlaze.UI.exe"),
-    [string]$MissingPath = "C:\tmp\WinBlazeMissingRoot",
-    [string]$FileRootPath = "C:\tmp\WinBlazeFileRoot.txt",
+    [string]$MissingPath = "",
+    [string]$FileRootPath = "",
     [int]$WindowTimeoutSeconds = 10,
     [int]$ScanWaitSeconds = 10
 )
@@ -85,9 +85,9 @@ function Get-WinBlazeWindow {
     param([int]$TimeoutSeconds)
 
     $desktop = [System.Windows.Automation.AutomationElement]::RootElement
-    $condition = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::NameProperty,
-        "WinBlaze")
+    $condition = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty,"WinBlaze"),
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty,$app.Id))
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
         $window = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
@@ -99,10 +99,18 @@ function Get-WinBlazeWindow {
     throw "WinBlaze window not found"
 }
 
-if (Test-Path -LiteralPath $MissingPath) {
-    Remove-Item -LiteralPath $MissingPath -Recurse -Force
-}
+$work = Join-Path $PSScriptRoot ("../../artifacts/ui-negative-" + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+New-Item -ItemType Directory -Force -Path $work | Out-Null
+$fixture = Join-Path $work 'fixture'
+New-Item -ItemType Directory -Path $fixture | Out-Null
+if (!$MissingPath) { $MissingPath = Join-Path $work 'missing' }
+if (!$FileRootPath) { $FileRootPath = Join-Path $fixture 'file.txt' }
+Assert-True (!(Test-Path -LiteralPath $MissingPath)) "Missing-path fixture must not exist."
+Assert-True (!(Test-Path -LiteralPath $FileRootPath)) "File fixture must not overwrite an existing file."
 Set-Content -LiteralPath $FileRootPath -Value "not a directory"
+if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($FileRootPath)) -ne [IO.Path]::GetFullPath($fixture)) {
+    Set-Content -LiteralPath (Join-Path $fixture 'baseline.txt') -Value 'baseline'
+}
 
 $resolvedAppPath = (Resolve-Path -LiteralPath $AppPath).Path
 Assert-True (Test-Path -LiteralPath $resolvedAppPath) "App executable not found: $AppPath"
@@ -111,12 +119,11 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 
 $startTime = Get-Date
-$old = Get-Process WinBlaze.UI -ErrorAction SilentlyContinue
-if ($old) {
-    $old | Stop-Process -Force
-}
-
-$app = Start-Process -FilePath $resolvedAppPath -PassThru
+$start = [Diagnostics.ProcessStartInfo]::new()
+$start.FileName = $resolvedAppPath
+$start.UseShellExecute = $false
+$start.EnvironmentVariables['LOCALAPPDATA'] = Join-Path $work 'appdata'
+$app = [Diagnostics.Process]::Start($start)
 try {
     Start-Sleep -Seconds 3
     $window = Get-WinBlazeWindow -TimeoutSeconds $WindowTimeoutSeconds
@@ -127,32 +134,25 @@ try {
         [System.Windows.Automation.ControlType]::Edit)
     $edit = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
     Assert-True ($null -ne $edit) "Root path edit not found"
-    $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($MissingPath)
-
+    $value = $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    $value.SetValue([IO.Path]::GetFullPath($fixture))
     Invoke-Button -Window $window -Name "Start scan" | Out-Null
-    Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
-    try {
-        $correctness = Find-TextLike -Window $window -Pattern "Correctness:*issues=1*last issue=*$MissingPath*" -TimeoutSeconds $ScanWaitSeconds
-        $recentIssues = Find-TextLike -Window $window -Pattern "Recent issues:*$MissingPath*" -TimeoutSeconds $ScanWaitSeconds
-        $issueDrilldown = Find-TextLike -Window $window -Pattern "Issue drill-down:*errors=1*skipped=1*missing=1*last=*$MissingPath*" -TimeoutSeconds $ScanWaitSeconds
-    } catch {
-        $dump = Get-AllTextNames -Window $window
-        throw "$($_.Exception.Message)`nVisible text:`n$($dump -join "`n")"
-    }
-    $summary = Find-TextLike -Window $window -Pattern "*State: idle*Results: loaded*" -TimeoutSeconds 8
-
-    $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($FileRootPath)
+    Invoke-Button -Window $window -Name "Diagnostics" | Out-Null
+    $before = Find-TextLike -Window $window -Pattern "Correctness:*issues=0*files=1*directories=1*" -TimeoutSeconds $ScanWaitSeconds
+    $value.SetValue($MissingPath)
     Invoke-Button -Window $window -Name "Start scan" | Out-Null
-    Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
-    try {
-        $fileRootCorrectness = Find-TextLike -Window $window -Pattern "Correctness:*issues=1*last issue=*$FileRootPath*" -TimeoutSeconds $ScanWaitSeconds
-        $fileRootRecentIssues = Find-TextLike -Window $window -Pattern "Recent issues:*$FileRootPath*" -TimeoutSeconds $ScanWaitSeconds
-        $fileRootIssueDrilldown = Find-TextLike -Window $window -Pattern "Issue drill-down:*errors=1*last=*$FileRootPath*" -TimeoutSeconds $ScanWaitSeconds
-    } catch {
-        $dump = Get-AllTextNames -Window $window
-        throw "$($_.Exception.Message)`nVisible text:`n$($dump -join "`n")"
-    }
-    $fileRootSummary = Find-TextLike -Window $window -Pattern "*State: idle*Results: loaded*" -TimeoutSeconds 8
+    $missingFeedback = Find-TextLike -Window $window -Pattern "Choose an existing folder*" -TimeoutSeconds $ScanWaitSeconds
+    $afterMissing = Find-TextLike -Window $window -Pattern "Correctness:*issues=0*files=1*directories=1*" -TimeoutSeconds $ScanWaitSeconds
+    Assert-True ($before -eq $afterMissing) "Invalid input must preserve existing scan results."
+
+    $value.SetValue($FileRootPath)
+    Invoke-Button -Window $window -Name "Start scan" | Out-Null
+    $fileFeedback = Find-TextLike -Window $window -Pattern "That path is a file*" -TimeoutSeconds $ScanWaitSeconds
+    $afterFile = Find-TextLike -Window $window -Pattern "Correctness:*issues=0*files=1*directories=1*" -TimeoutSeconds $ScanWaitSeconds
+    Assert-True ($before -eq $afterFile) "A file path must preserve existing scan results."
+    $cancel = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty,'Cancel'))
+    Assert-True (!$cancel.Current.IsEnabled) "Invalid input must not start a scan."
 
     $recentCrash = Get-WinEvent -FilterHashtable @{ LogName = "Application"; StartTime = $startTime } -ErrorAction SilentlyContinue |
         Where-Object { $_.ProviderName -eq "Application Error" -and $_.Message -like "*WinBlaze*" } |
@@ -163,15 +163,10 @@ try {
         Result = "OK"
         Pid = $app.Id
         MissingPath = $MissingPath
-        Correctness = $correctness
-        RecentIssues = $recentIssues
-        IssueDrilldown = $issueDrilldown
-        Summary = $summary
+        MissingFeedback = $missingFeedback
         FileRootPath = $FileRootPath
-        FileRootCorrectness = $fileRootCorrectness
-        FileRootRecentIssues = $fileRootRecentIssues
-        FileRootIssueDrilldown = $fileRootIssueDrilldown
-        FileRootSummary = $fileRootSummary
+        FileFeedback = $fileFeedback
+        PreservedResults = $afterFile
     } | Format-List
 }
 finally {

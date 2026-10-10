@@ -1,6 +1,6 @@
 param(
     [string]$AppPath = (Join-Path $PSScriptRoot "..\src\WinBlaze.UI\bin\x64\Debug\WinBlaze.UI.exe"),
-    [ValidateSet("tiny", "small", "medium", "fanout", "fanout-large", "scale")]
+    [ValidateSet("tiny", "small", "medium", "fanout", "fanout-large", "scale", "full")]
     [string]$Size = "tiny",
     [string]$DatasetRoot = "C:\tmp\WinBlazeBench",
     [int]$TimeoutSeconds = 60,
@@ -12,6 +12,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'track-tool-versions.ps1')
 
 function Assert-True {
     param([bool]$Condition, [string]$Message)
@@ -32,6 +33,11 @@ function Find-TextLike {
         [System.Windows.Automation.ControlType]::Text)
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
+        if ($script:sampleApp) {
+            $script:sampleApp.Refresh()
+            $script:peakWs = [Math]::Max($script:peakWs, $script:sampleApp.WorkingSet64)
+            $script:cpuMs = Merge-BenchmarkCpuLowerBound $script:cpuMs $script:sampleApp.TotalProcessorTime.TotalMilliseconds
+        }
         $texts = $Window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $textCondition)
         foreach ($text in $texts) {
             if ($text.Current.Name -like $Pattern) {
@@ -54,6 +60,8 @@ function Invoke-Button {
     $buttonCondition = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::NameProperty,
         $Name)
+    $traceStart = $Name -eq 'Start scan' -and !!$env:WINBLAZE_UI_BENCH_PHASES
+    if ($traceStart) { $phaseTimer = [Diagnostics.Stopwatch]::StartNew() }
     $matches = $Window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $buttonCondition)
     $button = $null
     $invokePattern = $null
@@ -73,7 +81,9 @@ function Invoke-Button {
         return $false
     }
 
+    if ($traceStart) { $script:buttonFindMs = $phaseTimer.Elapsed.TotalMilliseconds; $phaseTimer.Restart() }
     $invokePattern.Invoke()
+    if ($traceStart) { $script:providerInvokeMs = $phaseTimer.Elapsed.TotalMilliseconds }
     Start-Sleep -Milliseconds 300
     return $true
 }
@@ -82,9 +92,9 @@ function Get-WinBlazeWindow {
     param([int]$TimeoutSeconds)
 
     $desktop = [System.Windows.Automation.AutomationElement]::RootElement
-    $condition = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::NameProperty,
-        "WinBlaze")
+    $condition = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, "WinBlaze"),
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id))
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
         $window = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
@@ -113,22 +123,27 @@ if ($GenerateDataset) {
     & (Join-Path $PSScriptRoot "make-datasets.ps1") -Root $DatasetRoot -Size $Size -Clean | Out-Null
 }
 
-$datasetPath = Join-Path $DatasetRoot $Size
+$datasetPath = if ($Size -eq 'full') { 'C:\' } else { Join-Path $DatasetRoot $Size }
 $manifestPath = Join-Path $DatasetRoot "$Size.manifest.json"
-Assert-True (Test-Path -LiteralPath $manifestPath) "Dataset manifest not found: $manifestPath"
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+if ($Size -ne 'full') { Assert-True (Test-Path -LiteralPath $manifestPath) "Dataset manifest not found: $manifestPath"
+$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json } else { $manifest = [pscustomobject]@{files=0;directories=0;bytes=0} }
 $resolvedAppPath = (Resolve-Path -LiteralPath $AppPath).Path
 
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 
-$old = Get-Process WinBlaze.UI -ErrorAction SilentlyContinue
-if ($old) {
-    $old | Stop-Process -Force
-}
 
 $startTime = Get-Date
-$app = Start-Process -FilePath $resolvedAppPath -PassThru
+$start = [Diagnostics.ProcessStartInfo]::new()
+$start.FileName = $resolvedAppPath
+$start.UseShellExecute = $false
+$start.EnvironmentVariables['LOCALAPPDATA'] = Join-Path $DatasetRoot ('appdata-' + [Guid]::NewGuid().ToString('N'))
+$app = [Diagnostics.Process]::Start($start)
+if ($Size -eq 'full') {
+    # Let a subsequent cache-load benchmark in this process reuse this owned
+    # snapshot rather than the user's unrelated global cache.
+    $env:WINBLAZE_BENCH_CACHE_ROOT = $start.EnvironmentVariables['LOCALAPPDATA']
+}
 try {
     Start-Sleep -Seconds 3
     $window = Get-WinBlazeWindow -TimeoutSeconds 10
@@ -145,9 +160,12 @@ try {
     # them before the scan so the correctness text is in the UIA tree.
     Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
 
+    $script:sampleApp = $app
+    $script:peakWs = 0L; $script:cpuMs = 0.0
     $scanStarted = Get-Date
     Invoke-Button -Window $window -Name "Start scan" | Out-Null
-    $expectedPattern = "Correctness:*files=$($manifest.files)*directories=$($manifest.directories)*"
+    if ($Size -eq 'full') { Find-TextLike -Window $window -Pattern '*State: idle*Results: loaded*Scan duration: * ms*' -TimeoutSeconds $TimeoutSeconds | Out-Null }
+    $expectedPattern = if ($Size -eq 'full') { '*Correctness:*' } else { "*Correctness:*files=$($manifest.files)*directories=$($manifest.directories)*" }
     $correctness = Find-TextLike -Window $window -Pattern $expectedPattern -TimeoutSeconds $TimeoutSeconds
     $scanEnded = Get-Date
 
@@ -177,6 +195,21 @@ try {
     $treemapRenderCoalesced = Get-StatusMetric -Text $frameStatus -Pattern "coalesced=(\d+)"
     $scanDurationMs = Get-StatusMetric -Text $frameStatus -Pattern "Scan duration: (\d+) ms"
 
+    if ($env:WINBLAZE_UI_BENCH_PHASES) {
+        [ordered]@{
+            scope='Unchanged UI budget boundaries; optional observer phase diagnosis'
+            invocation_mode='Original synchronous invocation'
+            elapsed_ms=$elapsedMs
+            button_find_ms=$script:buttonFindMs
+            provider_invoke_ms=$script:providerInvokeMs
+            fixed_post_invoke_sleep_ms=300
+            native_scan_duration_ms=$scanDurationMs
+            correctness=$correctness
+            frame_status=$frameStatus
+            binary=(Get-BenchmarkIdentity -Tool 'WinBlaze UI budget diagnostic' -Executable $resolvedAppPath)
+        } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $env:WINBLAZE_UI_BENCH_PHASES
+    }
+
     if ($MaxElapsedMs -gt 0) {
         Assert-True ($elapsedMs -le $MaxElapsedMs) "Elapsed time $elapsedMs ms exceeded threshold $MaxElapsedMs ms"
     }
@@ -191,10 +224,13 @@ try {
     }
 
     [pscustomobject]@{
+        sampled_peak_working_set_bytes_through_observation = $script:peakWs
+        sampled_cpu_ms_through_observation = $script:cpuMs
+        cache_directory = $start.EnvironmentVariables['LOCALAPPDATA']
         dataset = $Size
         root = $datasetPath
-        expected_files = [int]$manifest.files
-        expected_directories = [int]$manifest.directories
+        expected_files = if ($Size -eq "full") { Get-StatusMetric -Text $correctness -Pattern "files=(\d+)" } else { [int]$manifest.files }
+        expected_directories = if ($Size -eq "full") { Get-StatusMetric -Text $correctness -Pattern "directories=(\d+)" } else { [int]$manifest.directories }
         expected_bytes = [int64]$manifest.bytes
         elapsed_ms = $elapsedMs
         working_set_mb = $workingSetMb

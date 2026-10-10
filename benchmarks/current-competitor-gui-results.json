@@ -1,0 +1,25 @@
+[
+  {
+    "tool": "WinDirStat",
+    "version": "2.8.0",
+    "profile": "fanout-large",
+    "elevation": "administrator",
+    "tree_populated": true,
+    "treemap_populated": true,
+    "visible_status": "Ready; logical 2.0 MiB; physical 2.0 MiB; memory 48.59 MiB",
+    "timing_status": "Not timed: user UAC interaction and cross-call observation gaps",
+    "utc": "2026-10-02T11:02:35.780Z"
+  },
+  {
+    "tool": "WizTree",
+    "version": "4.33",
+    "profile": "fanout-large",
+    "elevation": "administrator",
+    "tree_populated": true,
+    "treemap_populated": false,
+    "scan_ms": 90,
+    "visible_status": "Scan complete in 0.09 seconds; 8192 files; 2.0 MB logical; 0 allocated; blank treemap",
+    "timing_status": "Single app-reported scan duration; GUI launch-to-ready not timed",
+    "utc": "2026-10-02T11:03:40.834Z"
+  }
+]

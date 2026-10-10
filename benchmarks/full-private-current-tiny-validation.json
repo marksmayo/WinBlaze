@@ -1,0 +1,186 @@
+{
+  "verified": true,
+  "outputs": [
+    {
+      "tool": "WinBlaze",
+      "run": 1,
+      "files": 72,
+      "sha256": "713e342815af7e61e4e981ab20266b20b32d6d3157bcf75e9203b84c9d1cbd12"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 2,
+      "files": 72,
+      "sha256": "0ee62d7055c77f5daa287be162e41c3cf183bf8e15ab356d0283bd5b94dec781"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 3,
+      "files": 72,
+      "sha256": "67e0f26f21e8b4eac6ac957259a7f8a1c0c5c098043f045358f39f4930a56d36"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 4,
+      "files": 72,
+      "sha256": "4059211f37f992e0d7355552d8e127c709141d3b75d1cb602185850eec606814"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 5,
+      "files": 72,
+      "sha256": "1828a1d1697432989d7c584f18511dc2f384699b0278f5a6a79f4d498861e1eb"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 6,
+      "files": 72,
+      "sha256": "325160dd53009145582edbf5624c41946eab59f1f61a393005426c223e15dd27"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 7,
+      "files": 72,
+      "sha256": "f4e310d451e3d49096b6a02093d01aac96c64cc5b3c6ea844cf4973792f472c6"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 8,
+      "files": 72,
+      "sha256": "4e4d804c087c2ab7697de3ec9d177138f4a914f800b7b952e7745bde7dccedaf"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 9,
+      "files": 72,
+      "sha256": "6c5009c78d88542e128f874011c87621764bd9d978b6cefe0c59ebcf61c623d4"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 10,
+      "files": 72,
+      "sha256": "27db6a0432ce1e0479cefb819977045cbf76219cc5490ab414519468e62848ea"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 1,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 2,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 3,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 4,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 5,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 6,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 7,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 8,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 9,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 10,
+      "files": 72,
+      "sha256": "5fb84321145342f65b6014be4d9c2585d1361921bab09ece3e8c7c0319cea14f"
+    },
+    {
+      "tool": "WizTree",
+      "run": 1,
+      "files": 72,
+      "sha256": "c2a909666d8435acaec17782b5323b898783821e692b925d0783ed081a095b62"
+    },
+    {
+      "tool": "WizTree",
+      "run": 2,
+      "files": 72,
+      "sha256": "c864f822b025442902580ec32f3f105e70c1db61f51dbac1aa4dc9e0ee6aa3f9"
+    },
+    {
+      "tool": "WizTree",
+      "run": 3,
+      "files": 72,
+      "sha256": "a0867ed193d9d5685b0b15c091614a379c6d754fe3a06cef8dd83b6eb2782f84"
+    },
+    {
+      "tool": "WizTree",
+      "run": 4,
+      "files": 72,
+      "sha256": "3c8e262673ebc4f791688f6be7fa42224cc8e43e9a5e3dd30c3816692d151d70"
+    },
+    {
+      "tool": "WizTree",
+      "run": 5,
+      "files": 72,
+      "sha256": "14adb2d8fb5e2d4fe87dba6b058c3e61482f5da3f875f1e5dbe1c76e93eb57cc"
+    },
+    {
+      "tool": "WizTree",
+      "run": 6,
+      "files": 72,
+      "sha256": "fa939bb991e60b1505974fd601152fe72cd7edf9220788529d7671be220ae0f4"
+    },
+    {
+      "tool": "WizTree",
+      "run": 7,
+      "files": 72,
+      "sha256": "6a807d59a9a956ab7f222bd41910645f861a779cd2a1a09e50d1a00790e414c3"
+    },
+    {
+      "tool": "WizTree",
+      "run": 8,
+      "files": 72,
+      "sha256": "da00d308e15813eb7ba808d79a2ca5569513c05962b81689a74254fe2c8b6a30"
+    },
+    {
+      "tool": "WizTree",
+      "run": 9,
+      "files": 72,
+      "sha256": "410e4f8552c60ddd4af8e85c0ee1e723d62a7e86eb646f0f3c41a55a3533e98b"
+    },
+    {
+      "tool": "WizTree",
+      "run": 10,
+      "files": 72,
+      "sha256": "15ea9e7a7678b19c2188f01d6e43a8c4fd5e1b87a89e6d204997c678c85ec4a0"
+    }
+  ],
+  "allocation_semantics": "Matching logical/physical file totals"
+}

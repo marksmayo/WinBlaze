@@ -46,8 +46,6 @@ namespace winrt::WinBlaze::UI::implementation
             m_window = winrt::make<MainWindow>().as<Microsoft::UI::Xaml::Window>();
             m_window.Title(L"WinBlaze");
             TraceStartup(L"App::OnLaunched after MainWindow");
-            m_window.Activate();
-            TraceStartup(L"App::OnLaunched after Activate");
             auto app_window = m_window.AppWindow();
             app_window.Title(L"WinBlaze");
             if (auto presenter = app_window.Presenter().try_as<Microsoft::UI::Windowing::OverlappedPresenter>()) {
@@ -57,6 +55,8 @@ namespace winrt::WinBlaze::UI::implementation
                 presenter.Maximize();
                 TraceStartup(L"App::OnLaunched configured overlapped presenter");
             }
+            m_window.Activate();
+            TraceStartup(L"App::OnLaunched after Activate");
             app_window.Show();
             TraceStartup(L"App::OnLaunched after AppWindow.Show");
             if (auto window_native = m_window.as<IWindowNative>()) {

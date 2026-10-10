@@ -1,0 +1,202 @@
+[
+    {
+        "tool":  "WinBlaze",
+        "run":  1,
+        "ready_ms":  798.89,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:46:56.1028525Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  151207936,
+        "cpu_ms":  890.625
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  2,
+        "ready_ms":  702.59,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:46:56.9550560Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  149745664,
+        "cpu_ms":  828.125
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  3,
+        "ready_ms":  815.8,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:46:57.8930276Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  147529728,
+        "cpu_ms":  953.125
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  4,
+        "ready_ms":  1037.84,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:46:59.0574122Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  146788352,
+        "cpu_ms":  1078.125
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  5,
+        "ready_ms":  987.63,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:47:00.2472162Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  147795968,
+        "cpu_ms":  921.875
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  6,
+        "ready_ms":  711.4,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:47:01.0509144Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  147374080,
+        "cpu_ms":  796.875
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  7,
+        "ready_ms":  834.67,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:47:01.9747050Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  147570688,
+        "cpu_ms":  875
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  8,
+        "ready_ms":  944.77,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:47:03.0294483Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  147693568,
+        "cpu_ms":  875
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  9,
+        "ready_ms":  2967.32,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:47:06.0937196Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  147218432,
+        "cpu_ms":  953.125
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  10,
+        "ready_ms":  1129.46,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "5056E0B8A7A0B1CFFFB6D2698326DF814CC3B0333C1506121244E3049A4CB9AD",
+                       "native_dll_sha256":  "99DC92454115375F2E1FA8A76C0BC278A5DBBF72D2329FBF78C861158EDA1CC8",
+                       "identity_sha256":  "760147FB39C31B18F2EF927BA801BA41F2B2B677EF4055D084F9C939711DD18A",
+                       "observed_utc":  "2026-10-05T07:46:54.9017871Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "utc":  "2026-10-05T07:47:07.3227348Z",
+        "scope":  "Fresh empty appdata; launch to visible maximized window with accessible enabled path and scan controls; 10ms polling; excludes restored catalog",
+        "working_set_bytes":  147152896,
+        "cpu_ms":  1156.25
+    }
+]

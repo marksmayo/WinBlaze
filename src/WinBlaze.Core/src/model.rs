@@ -76,35 +76,95 @@ impl BitAndAssign for FileAttributes {
     }
 }
 
+/// Three lossless optional timestamps sharing one presence byte. Values stay
+/// aligned and retain the full i64 range; no timestamp is reserved as a sentinel.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FileTimestamps {
+    values: [i64; 3],
+    present: u8,
+}
+
+impl FileTimestamps {
+    pub const fn new(created: Option<i64>, modified: Option<i64>, accessed: Option<i64>) -> Self {
+        let mut result = Self {
+            values: [0; 3],
+            present: 0,
+        };
+        if let Some(value) = created {
+            result.values[0] = value;
+            result.present |= 1;
+        }
+        if let Some(value) = modified {
+            result.values[1] = value;
+            result.present |= 2;
+        }
+        if let Some(value) = accessed {
+            result.values[2] = value;
+            result.present |= 4;
+        }
+        result
+    }
+
+    const fn value(self, index: usize) -> Option<i64> {
+        if self.present & (1 << index) == 0 {
+            None
+        } else {
+            Some(self.values[index])
+        }
+    }
+
+    pub const fn created(self) -> Option<i64> {
+        self.value(0)
+    }
+    pub const fn modified(self) -> Option<i64> {
+        self.value(1)
+    }
+    pub const fn accessed(self) -> Option<i64> {
+        self.value(2)
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FileRecord {
     pub id: FileId,
     pub parent_directory_id: DirectoryId,
-    pub name: String,
+    /// Short names are retained inline; long names own immutable heap storage.
+    pub name: crate::FileName,
     /// May be empty: scanners no longer materialize per-file paths (storing
     /// one per record dominated index memory and snapshot size). Derive on
     /// demand from the parent directory's `full_path` via
     /// [`derive_file_path`] / [`join_path`]. Directory records always carry
-    /// their full path.
-    pub full_path: String,
+    /// their full path. File paths are immutable between record replacements;
+    /// boxed storage avoids a capacity word in every indexed file record.
+    pub full_path: Box<str>,
     pub size_bytes: u64,
     pub allocation_bytes: u64,
     pub attributes: FileAttributes,
-    pub created_utc: Option<i64>,
-    pub modified_utc: Option<i64>,
-    pub accessed_utc: Option<i64>,
+    pub timestamps: FileTimestamps,
+}
+
+impl FileRecord {
+    pub const fn created_utc(&self) -> Option<i64> {
+        self.timestamps.created()
+    }
+    pub const fn modified_utc(&self) -> Option<i64> {
+        self.timestamps.modified()
+    }
+    pub const fn accessed_utc(&self) -> Option<i64> {
+        self.timestamps.accessed()
+    }
 }
 
 /// Joins a parent directory path and child name with a single backslash.
 pub fn join_path(parent: &str, name: &str) -> String {
-    if parent.is_empty() {
-        return name.to_string();
+    let separator = !parent.is_empty() && !parent.ends_with('\\');
+    let mut path = String::with_capacity(parent.len() + usize::from(separator) + name.len());
+    path.push_str(parent);
+    if separator {
+        path.push('\\');
     }
-    if parent.ends_with('\\') {
-        format!("{parent}{name}")
-    } else {
-        format!("{parent}\\{name}")
-    }
+    path.push_str(name);
+    path
 }
 
 /// Resolves a file's full path: the stored path when present (records from
@@ -114,11 +174,11 @@ pub fn derive_file_path<S: std::hash::BuildHasher>(
     file: &FileRecord,
 ) -> String {
     if !file.full_path.is_empty() {
-        return file.full_path.clone();
+        return file.full_path.to_string();
     }
     match directories.get(&file.parent_directory_id) {
         Some(parent) => join_path(&parent.full_path, &file.name),
-        None => file.name.clone(),
+        None => file.name.to_string(),
     }
 }
 
@@ -318,14 +378,19 @@ pub fn detect_file_lineage_change(
         file_id: current.id,
         previous_parent_directory_id: previous.parent_directory_id,
         current_parent_directory_id: current.parent_directory_id,
-        previous_full_path: previous.full_path.clone(),
-        current_full_path: current.full_path.clone(),
+        previous_full_path: previous.full_path.to_string(),
+        current_full_path: current.full_path.to_string(),
         renamed,
         moved,
     })
 }
 
 pub fn diff_file_records(previous: &[FileRecord], current: &[FileRecord]) -> FileChangeSet {
+    // Sorted snapshots have unique ids. Preserve the legacy duplicate-id path
+    // for arbitrary callers rather than assuming all supplied slices are valid.
+    if previous == current && previous.windows(2).all(|pair| pair[0].id.0 < pair[1].id.0) {
+        return FileChangeSet::default();
+    }
     let previous_by_id: HashMap<FileId, &FileRecord> =
         previous.iter().map(|record| (record.id, record)).collect();
     let current_by_id: HashMap<FileId, &FileRecord> =
@@ -339,7 +404,7 @@ pub fn diff_file_records(previous: &[FileRecord], current: &[FileRecord]) -> Fil
                 file_id: current_record.id,
                 kind: FileChangeKind::Added,
                 previous_full_path: None,
-                current_full_path: Some(current_record.full_path.clone()),
+                current_full_path: Some(current_record.full_path.to_string()),
             }),
             Some(previous_record)
                 if previous_record.name == current_record.name
@@ -348,9 +413,9 @@ pub fn diff_file_records(previous: &[FileRecord], current: &[FileRecord]) -> Fil
                     && previous_record.size_bytes == current_record.size_bytes
                     && previous_record.allocation_bytes == current_record.allocation_bytes
                     && previous_record.attributes == current_record.attributes
-                    && previous_record.created_utc == current_record.created_utc
-                    && previous_record.modified_utc == current_record.modified_utc
-                    && previous_record.accessed_utc == current_record.accessed_utc => {}
+                    && previous_record.created_utc() == current_record.created_utc()
+                    && previous_record.modified_utc() == current_record.modified_utc()
+                    && previous_record.accessed_utc() == current_record.accessed_utc() => {}
             Some(previous_record) => {
                 let kind = match detect_file_lineage_change(previous_record, current_record) {
                     Some(lineage) if lineage.renamed && lineage.moved => FileChangeKind::Moved,
@@ -362,8 +427,8 @@ pub fn diff_file_records(previous: &[FileRecord], current: &[FileRecord]) -> Fil
                 changes.push(FileChangeRecord {
                     file_id: current_record.id,
                     kind,
-                    previous_full_path: Some(previous_record.full_path.clone()),
-                    current_full_path: Some(current_record.full_path.clone()),
+                    previous_full_path: Some(previous_record.full_path.to_string()),
+                    current_full_path: Some(current_record.full_path.to_string()),
                 });
             }
         }
@@ -374,7 +439,7 @@ pub fn diff_file_records(previous: &[FileRecord], current: &[FileRecord]) -> Fil
             changes.push(FileChangeRecord {
                 file_id: previous_record.id,
                 kind: FileChangeKind::Removed,
-                previous_full_path: Some(previous_record.full_path.clone()),
+                previous_full_path: Some(previous_record.full_path.to_string()),
                 current_full_path: None,
             });
         }
@@ -416,26 +481,22 @@ mod tests {
             FileRecord {
                 id: FileId(1),
                 parent_directory_id: DirectoryId(1),
-                name: String::from("root.txt"),
-                full_path: String::from("C:\\root\\root.txt"),
+                name: String::from("root.txt").into(),
+                full_path: String::from("C:\\root\\root.txt").into(),
                 size_bytes: 10,
                 allocation_bytes: 16,
                 attributes: FileAttributes::ARCHIVE,
-                created_utc: None,
-                modified_utc: None,
-                accessed_utc: None,
+                timestamps: crate::FileTimestamps::new(None, None, None),
             },
             FileRecord {
                 id: FileId(2),
                 parent_directory_id: DirectoryId(2),
-                name: String::from("child.txt"),
-                full_path: String::from("C:\\root\\child\\child.txt"),
+                name: String::from("child.txt").into(),
+                full_path: String::from("C:\\root\\child\\child.txt").into(),
                 size_bytes: 20,
                 allocation_bytes: 32,
                 attributes: FileAttributes::ARCHIVE,
-                created_utc: None,
-                modified_utc: None,
-                accessed_utc: None,
+                timestamps: crate::FileTimestamps::new(None, None, None),
             },
         ];
 
@@ -479,20 +540,18 @@ mod tests {
         let file = FileRecord {
             id: FileId(1),
             parent_directory_id: DirectoryId(9),
-            name: String::from("file.txt"),
-            full_path: String::new(),
+            name: String::from("file.txt").into(),
+            full_path: String::new().into(),
             size_bytes: 1,
             allocation_bytes: 1,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: None,
-            accessed_utc: None,
+            timestamps: crate::FileTimestamps::new(None, None, None),
         };
         assert_eq!(derive_file_path(&directories, &file), r"C:\Users\file.txt");
 
         // Stored paths win (older snapshots still carry them).
         let mut stored = file.clone();
-        stored.full_path = String::from(r"D:\elsewhere\file.txt");
+        stored.full_path = String::from(r"D:\elsewhere\file.txt").into();
         assert_eq!(
             derive_file_path(&directories, &stored),
             r"D:\elsewhere\file.txt"
@@ -513,26 +572,22 @@ mod tests {
         let previous = FileRecord {
             id: FileId(7),
             parent_directory_id: DirectoryId(1),
-            name: String::from("old.txt"),
-            full_path: String::from("C:\\root\\old.txt"),
+            name: String::from("old.txt").into(),
+            full_path: String::from("C:\\root\\old.txt").into(),
             size_bytes: 1,
             allocation_bytes: 1,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: None,
-            accessed_utc: None,
+            timestamps: crate::FileTimestamps::new(None, None, None),
         };
         let current = FileRecord {
             id: FileId(7),
             parent_directory_id: DirectoryId(2),
-            name: String::from("new.txt"),
-            full_path: String::from("C:\\root\\child\\new.txt"),
+            name: String::from("new.txt").into(),
+            full_path: String::from("C:\\root\\child\\new.txt").into(),
             size_bytes: 1,
             allocation_bytes: 1,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: None,
-            accessed_utc: None,
+            timestamps: crate::FileTimestamps::new(None, None, None),
         };
 
         let lineage = detect_file_lineage_change(&previous, &current).expect("lineage change");
@@ -546,39 +601,33 @@ mod tests {
         let previous = vec![FileRecord {
             id: FileId(1),
             parent_directory_id: DirectoryId(1),
-            name: String::from("old.txt"),
-            full_path: String::from("C:\\root\\old.txt"),
+            name: String::from("old.txt").into(),
+            full_path: String::from("C:\\root\\old.txt").into(),
             size_bytes: 10,
             allocation_bytes: 16,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: Some(10),
-            accessed_utc: None,
+            timestamps: crate::FileTimestamps::new(None, Some(10), None),
         }];
         let current = vec![
             FileRecord {
                 id: FileId(1),
                 parent_directory_id: DirectoryId(1),
-                name: String::from("old.txt"),
-                full_path: String::from("C:\\root\\old.txt"),
+                name: String::from("old.txt").into(),
+                full_path: String::from("C:\\root\\old.txt").into(),
                 size_bytes: 12,
                 allocation_bytes: 16,
                 attributes: FileAttributes::ARCHIVE,
-                created_utc: None,
-                modified_utc: Some(12),
-                accessed_utc: None,
+                timestamps: crate::FileTimestamps::new(None, Some(12), None),
             },
             FileRecord {
                 id: FileId(2),
                 parent_directory_id: DirectoryId(1),
-                name: String::from("new.txt"),
-                full_path: String::from("C:\\root\\new.txt"),
+                name: String::from("new.txt").into(),
+                full_path: String::from("C:\\root\\new.txt").into(),
                 size_bytes: 1,
                 allocation_bytes: 1,
                 attributes: FileAttributes::ARCHIVE,
-                created_utc: None,
-                modified_utc: None,
-                accessed_utc: None,
+                timestamps: crate::FileTimestamps::new(None, None, None),
             },
         ];
 

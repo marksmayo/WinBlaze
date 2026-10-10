@@ -1,0 +1,936 @@
+{
+  "reviewed_utc": "2026-10-03",
+  "scope": "100-point candidate audit. Ordering after the nine qualified changes is a profiling backlog, not an evidence-backed ranking.",
+  "baseline_gaps": [
+    "First-idle startup proxy: 113.355 ms vs WinDirStat 102.925 ms",
+    "Full C sampled peak working set: 914.629 MiB vs WinDirStat 769.162 MiB",
+    "Full C sampled CPU: 150.3125 CPU-s vs WinDirStat 117.539065 CPU-s",
+    "First-idle startup CPU: WinBlaze 0.141 CPU-s vs WinDirStat 0.062 CPU-s",
+    "First-idle working set: WinBlaze 37.916 MiB vs WinDirStat 19.473 MiB",
+    "First-idle peak working set: WinBlaze 37.916 MiB vs WinDirStat 19.473 MiB",
+    "Full C sampled peak private bytes: WinBlaze 1150.654 MiB vs WinDirStat 725.668 MiB"
+  ],
+  "method": "Savings above describe controlled integration-test allocation budgets or complexity, not measured whole-drive improvements. Unknown candidates are not classified as zero/low risk. Estimates must not be added together.",
+  "rows": [
+    {
+      "id": 1,
+      "candidate": "Reorder tree records in place",
+      "area": "Index",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; public correctness and allocation regressions pass",
+      "estimated_savings": "Eliminate one full FileRecord/DirectoryRecord vector; local 20k fixture reduces cumulative allocations by at least 2,000,716 bytes.",
+      "evidence": "src/WinBlaze.Index/tests/performance.rs::building_sorted_tree_does_not_duplicate_the_record_array"
+    },
+    {
+      "id": 2,
+      "candidate": "Clone only returned search hits",
+      "area": "Index",
+      "source": "src/WinBlaze.Index/src/query.rs",
+      "status": "implemented",
+      "risk": "low; public correctness and allocation regressions pass",
+      "estimated_savings": "Local 20k/limit10 fixture saves at least 2,301,388 allocated bytes; end-to-end CPU savings unmeasured.",
+      "evidence": "src/WinBlaze.Index/tests/performance.rs::limited_search_materializes_only_returned_records"
+    },
+    {
+      "id": 3,
+      "candidate": "Stream CSV escaping and paths",
+      "area": "Index",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "implemented",
+      "risk": "low; public correctness and allocation regressions pass",
+      "estimated_savings": "Eliminate at least 1,013,700 allocated bytes per local 20k export; reduces per-row allocation to zero.",
+      "evidence": "src/WinBlaze.Index/tests/performance.rs::csv_export_streams_paths_without_per_record_allocations"
+    },
+    {
+      "id": 4,
+      "candidate": "Return immediately for search limit zero",
+      "area": "Index",
+      "source": "src/WinBlaze.Index/src/query.rs",
+      "status": "implemented",
+      "risk": "low; public correctness and allocation regressions pass",
+      "estimated_savings": "Eliminate 1,228,898 allocated bytes in the local 20k fixture; skip the entire scan/sort.",
+      "evidence": "src/WinBlaze.Index/tests/performance.rs::zero_result_limit_skips_catalog_work"
+    },
+    {
+      "id": 5,
+      "candidate": "Shrink retained largest-file order",
+      "area": "Index",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "implemented",
+      "risk": "low; public correctness and allocation regressions pass",
+      "estimated_savings": "Retained cache falls from 400,000 to under 70,000 bytes for 100k files; once-per-cache shrink may cost time.",
+      "evidence": "src/WinBlaze.Index/tests/performance.rs::largest_file_cache_retains_only_its_bounded_result_order"
+    },
+    {
+      "id": 6,
+      "candidate": "Select and sort only requested textual search prefix",
+      "area": "Index",
+      "source": "src/WinBlaze.Index/src/query.rs",
+      "status": "implemented",
+      "risk": "low; public correctness and allocation regressions pass",
+      "estimated_savings": "Local 20k fixture saves at least 65,314 allocated bytes; O(N + K log K) selection replaces full sorting for limited text queries.",
+      "evidence": "src/WinBlaze.Index/tests/performance.rs::limited_text_sort_avoids_keys_for_every_match_and_preserves_order"
+    },
+    {
+      "id": 7,
+      "candidate": "Skip search when no record types are selected",
+      "area": "Index",
+      "source": "src/WinBlaze.Index/src/query.rs",
+      "status": "implemented",
+      "risk": "low; public correctness and allocation regressions pass",
+      "estimated_savings": "Eliminate 103 allocated bytes plus catalog traversal in the local fixture.",
+      "evidence": "src/WinBlaze.Index/tests/performance.rs::search_without_selected_record_types_does_no_work"
+    },
+    {
+      "id": 8,
+      "candidate": "Write short startup log lines in one operation",
+      "area": "Startup",
+      "status": "implemented",
+      "risk": "low; real Windows I/O and UTF-8/CRLF regression passes",
+      "estimated_savings": "10 short lines require 10 rather than 20 WriteFile calls (50% fewer); whole-app startup saving unmeasured.",
+      "evidence": "tests/native/logging-io.cpp: RED 20 operations; GREEN 10 operations and exact contents",
+      "source": "src/WinBlaze.UI/src/StartupTrace.h"
+    },
+    {
+      "id": 9,
+      "candidate": "Stabilize directory IDs before path-matched incremental diffs",
+      "area": "Incremental and harness",
+      "status": "implemented",
+      "risk": "low; public repository regressions cover changed IDs, modifications, new directories, dangling parents",
+      "estimated_savings": "Avoid a false move record and lineage for each unchanged file whose parent ID changes; the observed tiny rescan generated 48 false moves. Timing saving unmeasured.",
+      "evidence": "src/WinBlaze.Index/tests/incremental.rs: RED two changes instead of one; GREEN one real modification, then zero changes",
+      "source": "src/WinBlaze.Index/src/store.rs"
+    },
+    {
+      "id": 10,
+      "candidate": "Defer updater network check",
+      "area": "Startup",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 11,
+      "candidate": "Defer drive enumeration",
+      "area": "Startup",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 12,
+      "candidate": "Defer icon creation",
+      "area": "Startup",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 13,
+      "candidate": "Cache font resources",
+      "area": "Startup",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 14,
+      "candidate": "Defer diagnostics view construction",
+      "area": "Startup",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 15,
+      "candidate": "Defer treemap GPU initialization",
+      "area": "Startup",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 16,
+      "candidate": "Avoid hidden-window treemap layout",
+      "area": "Startup",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 17,
+      "candidate": "Defer full cache decoding until requested",
+      "area": "Startup",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 18,
+      "candidate": "Reuse warm shader bytecode",
+      "area": "Startup",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 19,
+      "candidate": "Tune directory worker count",
+      "area": "Scanner",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 20,
+      "candidate": "Tune work-stealing queue capacity",
+      "area": "Scanner",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 21,
+      "candidate": "Batch directory scheduling",
+      "area": "Scanner",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 22,
+      "candidate": "Reduce per-file event frequency",
+      "area": "Scanner",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 23,
+      "candidate": "Reuse directory enumeration buffers",
+      "area": "Scanner",
+      "status": "existing-optimization",
+      "risk": "No production change required",
+      "estimated_savings": "No additional runtime saving credited.",
+      "evidence": "FindIterator already reuses one WIN32_FIND_DATAW buffer per directory; no new saving credited.",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs"
+    },
+    {
+      "id": 24,
+      "candidate": "Reduce allocation metadata calls",
+      "area": "Scanner",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 25,
+      "candidate": "Avoid path normalization per file",
+      "area": "Scanner",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 26,
+      "candidate": "Reduce extension parsing per file",
+      "area": "Scanner",
+      "status": "existing-optimization",
+      "risk": "No production change required",
+      "estimated_savings": "No additional runtime saving credited.",
+      "evidence": "Lowercase extensions already use borrowed HashMap lookups; uppercase paths still need profiling.",
+      "source": "src/WinBlaze.Native/src/bridge.rs"
+    },
+    {
+      "id": 27,
+      "candidate": "Reserve transaction maps from counts",
+      "area": "Scanner",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 28,
+      "candidate": "Reduce root/session record copies",
+      "area": "Scanner",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 29,
+      "candidate": "Tune MFT read batch size",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 30,
+      "candidate": "Reuse MFT fixup scratch storage",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 31,
+      "candidate": "Reduce record attribute temporary copies",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 32,
+      "candidate": "Avoid duplicate filename decoding",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 33,
+      "candidate": "Reduce non-resident run-list allocations",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 34,
+      "candidate": "Tune MFT parser worker count",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 35,
+      "candidate": "Reduce worker merge contention",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 36,
+      "candidate": "Reserve MFT result capacity from header count",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 37,
+      "candidate": "Reduce orphan resolution passes",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 38,
+      "candidate": "Reduce fallback directory walks",
+      "area": "NTFS",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 39,
+      "candidate": "Avoid transaction clone during persistence",
+      "area": "Catalog",
+      "status": "existing-optimization",
+      "risk": "No additional production change required",
+      "estimated_savings": "No additional runtime saving credited; already present or covered by an implemented change.",
+      "evidence": "Scan persistence already uses persist_transaction or persist_sorted_records without apply_transaction cloning.",
+      "source": "src/WinBlaze.Native/src/bridge.rs"
+    },
+    {
+      "id": 40,
+      "candidate": "Reduce simultaneous catalog generations",
+      "area": "Catalog",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 41,
+      "candidate": "Materialize file paths only for returned queries",
+      "area": "Catalog",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 42,
+      "candidate": "Reduce duplicated directory aggregates",
+      "area": "Catalog",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 43,
+      "candidate": "Compact filename storage",
+      "area": "Catalog",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 44,
+      "candidate": "Reduce directory lookup map capacity",
+      "area": "Catalog",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 45,
+      "candidate": "Release ingest scratch before rendering",
+      "area": "Catalog",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 46,
+      "candidate": "Share immutable catalog across consumers",
+      "area": "Catalog",
+      "status": "existing-optimization",
+      "risk": "No production change required",
+      "estimated_savings": "No additional runtime saving credited.",
+      "evidence": "The cached IndexModel is already shared through Arc; replacing sharing offers no demonstrated benefit.",
+      "source": "src/WinBlaze.Native/src/bridge.rs"
+    },
+    {
+      "id": 47,
+      "candidate": "Tune index lookup density",
+      "area": "Catalog",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 48,
+      "candidate": "Reduce rollup scratch capacity",
+      "area": "Catalog",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 49,
+      "candidate": "Avoid sorting snapshot rows twice",
+      "area": "Persistence",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 50,
+      "candidate": "Reuse serialization scratch across sections",
+      "area": "Persistence",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 51,
+      "candidate": "Tune snapshot writer buffer size",
+      "area": "Persistence",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 52,
+      "candidate": "Avoid duplicate persisted full paths",
+      "area": "Persistence",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 53,
+      "candidate": "Tune buffered snapshot read size",
+      "area": "Persistence",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 54,
+      "candidate": "Decode file names from borrowed input",
+      "area": "Persistence",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 55,
+      "candidate": "Reduce cache decode map reallocations",
+      "area": "Persistence",
+      "status": "existing-optimization",
+      "risk": "No additional production change required",
+      "estimated_savings": "No additional runtime saving credited; already present or covered by an implemented change.",
+      "evidence": "File and directory maps are already preallocated to decoded record counts.",
+      "source": "src/WinBlaze.Index/src/store.rs"
+    },
+    {
+      "id": 56,
+      "candidate": "Reduce cache-to-tree record copies",
+      "area": "Persistence",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 57,
+      "candidate": "Stream snapshot checksums",
+      "area": "Persistence",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 58,
+      "candidate": "Reduce snapshot flush frequency",
+      "area": "Persistence",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 59,
+      "candidate": "Partial-select numeric top-K results",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 60,
+      "candidate": "Reuse query scratch buffers",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 61,
+      "candidate": "Cache normalized extensions",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 62,
+      "candidate": "Index common suffix filters",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 63,
+      "candidate": "Bound directory aggregate copies",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 64,
+      "candidate": "Cache query results by generation",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 65,
+      "candidate": "Short-circuit empty patterns",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 66,
+      "candidate": "Avoid sorting already ordered results",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 67,
+      "candidate": "Share result paths across rows",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 68,
+      "candidate": "Reduce directory-only search materialization",
+      "area": "Queries",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 69,
+      "candidate": "Tune CSV writer buffer size",
+      "area": "CSV and features",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 70,
+      "candidate": "Reuse numeric formatting scratch",
+      "area": "CSV and features",
+      "status": "existing-optimization",
+      "risk": "No additional production change required",
+      "estimated_savings": "No additional runtime saving credited; already present or covered by an implemented change.",
+      "evidence": "The streaming CSV change already writes numeric fields directly via formatting into the writer, without per-field String allocation.",
+      "source": "src/WinBlaze.Index/src/export.rs"
+    },
+    {
+      "id": 71,
+      "candidate": "Batch CSV rows into chunks",
+      "area": "CSV and features",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 72,
+      "candidate": "Avoid scanning when cached export is requested",
+      "area": "CSV and features",
+      "status": "existing-optimization",
+      "risk": "No additional production change required",
+      "estimated_savings": "No additional runtime saving credited; already present or covered by an implemented change.",
+      "evidence": "The cached CSV adapter restores the existing catalog and calls wb_export_csv; it does not start a scan.",
+      "source": "src/WinBlaze.Native/examples/feature_catalog.rs"
+    },
+    {
+      "id": 73,
+      "candidate": "Reduce extension summary merge allocations",
+      "area": "CSV and features",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 74,
+      "candidate": "Cache extension summaries per catalog",
+      "area": "CSV and features",
+      "status": "existing-optimization",
+      "risk": "No production change required",
+      "estimated_savings": "No additional runtime saving credited.",
+      "evidence": "Extension totals are already cached in the immutable IndexModel; further caching needs generation correctness evidence.",
+      "source": "src/WinBlaze.Native/src/bridge.rs"
+    },
+    {
+      "id": 75,
+      "candidate": "Parallelize duplicate hashing",
+      "area": "CSV and features",
+      "status": "feature-addition-required",
+      "risk": "not a low-risk optimization of existing behavior",
+      "estimated_savings": "Not applicable to an existing WinBlaze feature; no performance saving credited.",
+      "evidence": "The feature parity table identifies content duplicate detection and user-facing raw MFT dump export as missing; implementing them would add functionality."
+    },
+    {
+      "id": 76,
+      "candidate": "Avoid rehashing unchanged duplicate candidates",
+      "area": "CSV and features",
+      "status": "feature-addition-required",
+      "risk": "not a low-risk optimization of existing behavior",
+      "estimated_savings": "Not applicable to an existing WinBlaze feature; no performance saving credited.",
+      "evidence": "The feature parity table identifies content duplicate detection and user-facing raw MFT dump export as missing; implementing them would add functionality."
+    },
+    {
+      "id": 77,
+      "candidate": "Stream raw MFT dumps",
+      "area": "CSV and features",
+      "status": "feature-addition-required",
+      "risk": "not a low-risk optimization of existing behavior",
+      "estimated_savings": "Not applicable to an existing WinBlaze feature; no performance saving credited.",
+      "evidence": "The feature parity table identifies content duplicate detection and user-facing raw MFT dump export as missing; implementing them would add functionality."
+    },
+    {
+      "id": 78,
+      "candidate": "Reduce feature fixture process startup cost",
+      "area": "CSV and features",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 79,
+      "candidate": "Reduce list item realization",
+      "area": "UI rendering",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 80,
+      "candidate": "Reuse immutable tree row models",
+      "area": "UI rendering",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 81,
+      "candidate": "Avoid rebuilding unchanged tree branches",
+      "area": "UI rendering",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 82,
+      "candidate": "Coalesce progress updates",
+      "area": "UI rendering",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 83,
+      "candidate": "Reduce UI thread event parsing",
+      "area": "UI rendering",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 84,
+      "candidate": "Avoid formatting hidden diagnostics",
+      "area": "UI rendering",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 85,
+      "candidate": "Reuse text brushes and style resources",
+      "area": "UI rendering",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 86,
+      "candidate": "Avoid repeated largest-file sorts",
+      "area": "UI rendering",
+      "status": "existing-optimization",
+      "risk": "No additional production change required",
+      "estimated_savings": "No additional runtime saving credited; already present or covered by an implemented change.",
+      "evidence": "OnceLock already caches the bounded largest-file order. Its retained capacity was optimized separately in change 5.",
+      "source": "src/WinBlaze.Index/src/tree.rs"
+    },
+    {
+      "id": 87,
+      "candidate": "Reduce treemap label measurements",
+      "area": "UI rendering",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 88,
+      "candidate": "Coalesce redundant treemap renders",
+      "area": "UI rendering",
+      "status": "existing-optimization",
+      "risk": "No production change required",
+      "estimated_savings": "No additional runtime saving credited.",
+      "evidence": "Existing pending-render coalescing and 750 ms throttling already limit repeated work; more throttling risks visible latency.",
+      "source": "src/WinBlaze.UI/src/MainWindow.cpp"
+    },
+    {
+      "id": 89,
+      "candidate": "Skip unchanged directory rollups",
+      "area": "Incremental and harness",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 90,
+      "candidate": "Reuse unchanged directory paths",
+      "area": "Incremental and harness",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 91,
+      "candidate": "Bound historical change-set retention",
+      "area": "Incremental and harness",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 92,
+      "candidate": "Avoid full cache rewrite for tiny changes",
+      "area": "Incremental and harness",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 93,
+      "candidate": "Separate engine time from CSV export",
+      "area": "Incremental and harness",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 94,
+      "candidate": "Increase sampling fidelity for short processes",
+      "area": "Incremental and harness",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 95,
+      "candidate": "Separate cold from warmed measurements",
+      "area": "Incremental and harness",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 96,
+      "candidate": "Measure visible usable window startup",
+      "area": "Incremental and harness",
+      "status": "not-qualified",
+      "risk": "unknown until profiled and behavior constrained",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Candidate for targeted profiling, not a demonstrated defect or safe change."
+    },
+    {
+      "id": 97,
+      "candidate": "Attribute backend DLL changes in GUI baselines",
+      "area": "Incremental and harness",
+      "status": "measurement-fix",
+      "risk": "low; isolated identity regression passes",
+      "estimated_savings": "No additional runtime saving credited.",
+      "evidence": "Implemented and RED/GREEN verified: executable plus native DLL identity prevents mixing backend versions. Measurement correctness; no runtime saving.",
+      "source": "benchmarks/track-tool-versions.ps1"
+    },
+    {
+      "id": 98,
+      "candidate": "Tune allocator size classes",
+      "area": "Build/native",
+      "status": "not-qualified",
+      "risk": "unknown; requires workload-specific evidence",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Requires controlled baseline and compatibility tests."
+    },
+    {
+      "id": 99,
+      "candidate": "Tune compiler link-time optimization",
+      "area": "Build/native",
+      "status": "not-qualified",
+      "risk": "unknown; requires workload-specific evidence",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Requires controlled baseline and compatibility tests."
+    },
+    {
+      "id": 100,
+      "candidate": "Remove redundant native result serialization",
+      "area": "Build/native",
+      "status": "not-qualified",
+      "risk": "unknown; requires workload-specific evidence",
+      "estimated_savings": "No defensible numeric estimate yet; no saving credited.",
+      "evidence": "Requires controlled baseline and compatibility tests."
+    }
+  ]
+}

@@ -5,7 +5,7 @@ use std::{
     io::Write,
     path::PathBuf,
     ptr::null_mut,
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -27,6 +27,12 @@ use crate::api::{
     WbScanSessionHandle, WbScanSummary, WbTreeChildrenResult, WbTreeNode, WbTreeNodeCallback,
     WbUpdateCheck,
 };
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ScanDelivery {
+    Live,
+    Terminal,
+}
 
 const MAX_JSON_LOG_BYTES: u64 = 2 * 1024 * 1024;
 const SNAPSHOT_ENTRY_LIMIT: usize = 8192;
@@ -63,6 +69,507 @@ type DeferredPersist = (
 
 static INDEX_MODEL: Mutex<Option<Arc<IndexModel>>> = Mutex::new(None);
 
+/// Exports the complete published catalog. Returns 0 on success, 1 for an
+/// invalid path, 2 for an empty catalog, 3 for an I/O error, or 4 for a panic.
+/// The caller keeps the UTF-8 path buffer alive for this synchronous call.
+#[no_mangle]
+pub extern "C" fn wb_export_csv(path: WbCStringView) -> u32 {
+    export_catalog(path, winblaze_index::export::write_csv)
+}
+
+/// Tab-delimited complete catalog; same atomic status contract as CSV.
+#[no_mangle]
+pub extern "C" fn wb_export_tsv(path: WbCStringView) -> u32 {
+    export_catalog(path, winblaze_index::export::write_tsv)
+}
+
+/// Same status contract as CSV; JSON schema version 1 includes the full catalog.
+#[no_mangle]
+pub extern "C" fn wb_export_json(path: WbCStringView) -> u32 {
+    export_catalog(path, winblaze_index::export::write_json)
+}
+
+/// Detailed JSON queries current filesystem owner/identity without content reads.
+/// Saved supplemental metadata takes precedence; missing details are queried live.
+/// Unavailable metadata is absent rather than invented.
+#[no_mangle]
+pub extern "C" fn wb_export_json_metadata(path: WbCStringView) -> u32 {
+    export_catalog(path, |tree, output| {
+        winblaze_index::export::write_json_with_metadata(tree, output, |file| {
+            Ok(export_file_metadata(tree, file))
+        })
+    })
+}
+
+/// Detailed CSV uses the same metadata provider and atomic publication as JSON.
+#[no_mangle]
+pub extern "C" fn wb_export_csv_metadata(path: WbCStringView) -> u32 {
+    export_catalog(path, |tree, output| {
+        winblaze_index::export::write_csv_with_metadata(tree, output, |file| {
+            Ok(export_file_metadata(tree, file))
+        })
+    })
+}
+
+fn export_file_metadata(
+    tree: &TreeIndex,
+    file: &FileRecord,
+) -> Option<winblaze_index::tree::FileExportMetadata> {
+    if let Some(metadata) = tree.file_export_metadata(file.id.0) {
+        return Some(metadata.clone());
+    }
+    let path = PathBuf::from(tree.file_display_path(file));
+    let owner = winblaze_scanner::permissions::permission_rows(&path)
+        .ok()
+        .and_then(|rows| rows.into_iter().find(|row| row.kind == "Owner"))
+        .map(|row| row.account);
+    let identity = winblaze_scanner::file_details::physical_identity(&path).ok();
+    let links = winblaze_scanner::file_details::query_file_details(&path)
+        .ok()
+        .map(|details| details.links);
+    Some(winblaze_index::tree::FileExportMetadata {
+        owner,
+        volume_identity: identity.map(|value| value.0.to_string()),
+        file_identity: identity.map(|value| value.1.to_string()),
+        link_count: links,
+    })
+}
+
+/// Read-only permission exploration: 0 success, 1 invalid path, 3 read failure, 4 panic.
+#[no_mangle]
+pub extern "C" fn wb_permission_rows(
+    path: WbCStringView,
+    callback: crate::api::WbPermissionCallback,
+    user_data: *mut core::ffi::c_void,
+) -> u32 {
+    std::panic::catch_unwind(|| {
+        let Some(path) = valid_path_text(path) else {
+            return 1;
+        };
+        let Ok(rows) = winblaze_scanner::permissions::permission_rows(std::path::Path::new(&path))
+        else {
+            return 3;
+        };
+        if let Some(cb) = callback {
+            for row in rows {
+                let mut strings = Vec::new();
+                let record = crate::api::WbPermissionRow {
+                    kind: c_view(row.kind, &mut strings),
+                    account: c_view(row.account, &mut strings),
+                    sid: c_view(row.sid, &mut strings),
+                    rights: c_view(row.rights, &mut strings),
+                    mask: row.mask,
+                    inherited: u8::from(row.inherited),
+                };
+                cb(&record, user_data);
+            }
+        }
+        0
+    })
+    .unwrap_or(4)
+}
+
+/// Complete byte-verified duplicate groups. Algorithm 0 = bytes only,
+/// 1 = SHA256, 2 = MD5, 3 = SHA1, 4 = SHA512. Rows are borrowed during callbacks.
+#[no_mangle]
+pub extern "C" fn wb_duplicate_results(
+    algorithm: u32,
+    callback: crate::api::WbDuplicateCallback,
+    user_data: *mut core::ffi::c_void,
+) -> crate::api::WbDuplicateResult {
+    use crate::api::{WbDuplicateResult, WbDuplicateRow};
+    use winblaze_scanner::content::{find_duplicates_with_algorithm, HashAlgorithm};
+    let failure = |status| WbDuplicateResult {
+        status,
+        ..Default::default()
+    };
+    let algorithm = match algorithm {
+        0 => HashAlgorithm::None,
+        1 => HashAlgorithm::Sha256,
+        2 => HashAlgorithm::Md5,
+        3 => HashAlgorithm::Sha1,
+        4 => HashAlgorithm::Sha512,
+        _ => return failure(1),
+    };
+    std::panic::catch_unwind(|| {
+        let model = get_or_load_index_model();
+        let paths = model
+            .tree
+            .files()
+            .iter()
+            .map(|file| PathBuf::from(model.tree.file_display_path(file)));
+        let Ok(report) = find_duplicates_with_algorithm(paths, algorithm) else {
+            return failure(3);
+        };
+        if let Some(cb) = callback {
+            for (group, paths) in report.groups.iter().enumerate() {
+                for path in paths {
+                    let mut strings = Vec::new();
+                    let row = WbDuplicateRow {
+                        group: group as u64 + 1,
+                        logical_bytes: fs::metadata(path)
+                            .map(|metadata| metadata.len())
+                            .unwrap_or_default(),
+                        path: c_view(path.display().to_string(), &mut strings),
+                        digest: c_view(
+                            report.hashes.get(path).cloned().unwrap_or_default(),
+                            &mut strings,
+                        ),
+                        status: c_view("verified".into(), &mut strings),
+                        is_error: 0,
+                    };
+                    cb(&row, user_data);
+                }
+            }
+            for (path, error) in &report.errors {
+                let mut strings = Vec::new();
+                let row = WbDuplicateRow {
+                    path: c_view(path.display().to_string(), &mut strings),
+                    status: c_view(error.clone(), &mut strings),
+                    ..Default::default()
+                };
+                let row = WbDuplicateRow { is_error: 1, ..row };
+                cb(&row, user_data);
+            }
+        }
+        WbDuplicateResult {
+            groups: report.groups.len() as u64,
+            errors: report.errors.len() as u64,
+            reclaimable_bytes: report.reclaimable_bytes,
+            status: 0,
+        }
+    })
+    .unwrap_or_else(|_| failure(4))
+}
+
+/// Complete verified content duplicates (1) or owner/group/DACL report (2).
+#[no_mangle]
+pub extern "C" fn wb_export_analysis(path: WbCStringView, kind: u32) -> u32 {
+    if !matches!(kind, 1 | 2) {
+        return 1;
+    }
+    export_catalog(path, |tree, output| {
+        crate::reports::write_analysis(tree, kind, output)
+    })
+}
+
+/// Raw MFT export: 0 success, 1 invalid input, 3 I/O, 4 panic, 5 elevation required.
+#[no_mangle]
+pub extern "C" fn wb_dump_mft(root: WbCStringView, path: WbCStringView) -> u32 {
+    std::panic::catch_unwind(|| {
+        let Some(root) = valid_path_text(root) else {
+            return 1;
+        };
+        let Some(path) = valid_path_text(path) else {
+            return 1;
+        };
+        let mut reader = match winblaze_scanner::ntfs::open_mft_dump(std::path::Path::new(&root)) {
+            Ok(reader) => reader,
+            Err(error) => {
+                return match error.kind() {
+                    std::io::ErrorKind::InvalidInput => 1,
+                    std::io::ErrorKind::PermissionDenied => 5,
+                    _ => 3,
+                }
+            }
+        };
+        match crate::output::atomic_write(std::path::Path::new(&path), |out| {
+            std::io::copy(&mut reader, out).map(|_| ())
+        }) {
+            Ok(()) => 0,
+            Err(_) => 3,
+        }
+    })
+    .unwrap_or(4)
+}
+
+fn valid_path_text(view: WbCStringView) -> Option<String> {
+    if view.ptr.is_null() || view.len == 0 {
+        return None;
+    }
+    // SAFETY: the C ABI requires a readable view for the duration of this call.
+    let bytes = unsafe { std::slice::from_raw_parts(view.ptr.cast::<u8>(), view.len) };
+    let text = std::str::from_utf8(bytes).ok()?;
+    (!text.contains('\0')).then(|| text.to_owned())
+}
+
+/// Files-only, case-insensitive single-extension CSV export; invalid filter = 1.
+#[no_mangle]
+pub extern "C" fn wb_export_csv_extension(path: WbCStringView, extension: WbCStringView) -> u32 {
+    if extension.ptr.is_null() || extension.len == 0 {
+        return 1;
+    }
+    // SAFETY: caller supplies a readable UTF-8 buffer for this synchronous call.
+    let bytes = unsafe { std::slice::from_raw_parts(extension.ptr.cast::<u8>(), extension.len) };
+    let Ok(extension) = std::str::from_utf8(bytes) else {
+        return 1;
+    };
+    let Ok(extension) = winblaze_index::export::normalize_export_extension(extension) else {
+        return 1;
+    };
+    export_catalog(path, |tree, out| {
+        winblaze_index::export::write_csv_extension(tree, extension, out)
+    })
+}
+
+/// Filtered CSV validates all bounds before opening the destination.
+#[no_mangle]
+pub extern "C" fn wb_export_csv_filtered(
+    path: WbCStringView,
+    filter: crate::api::WbCsvFilter,
+) -> u32 {
+    let patterns = if filter.patterns.len == 0 {
+        ""
+    } else {
+        if filter.patterns.ptr.is_null() {
+            return 1;
+        }
+        // SAFETY: caller supplies a readable UTF-8 pattern buffer for this synchronous call.
+        let bytes = unsafe {
+            std::slice::from_raw_parts(filter.patterns.ptr.cast::<u8>(), filter.patterns.len)
+        };
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            return 1;
+        };
+        text
+    };
+    if filter.flags & !15 != 0 {
+        return 1;
+    }
+    let selected = winblaze_index::export::ExportFilter {
+        patterns: if patterns.trim().is_empty() {
+            Vec::new()
+        } else {
+            patterns.split(';').map(|p| p.trim().to_owned()).collect()
+        },
+        min_bytes: (filter.flags & 1 != 0).then_some(filter.min_bytes),
+        max_bytes: (filter.flags & 2 != 0).then_some(filter.max_bytes),
+        modified_after_utc: (filter.flags & 4 != 0).then_some(filter.modified_after_utc),
+        modified_before_utc: (filter.flags & 8 != 0).then_some(filter.modified_before_utc),
+    };
+    if selected.validate().is_err() {
+        return 1;
+    }
+    export_catalog(path, |tree, out| {
+        winblaze_index::export::write_csv_filtered(tree, &selected, out)
+    })
+}
+
+/// Reopens WinBlaze/WinDirStat/WizTree CSV without touching the scanned volume.
+/// 0 success, 1 invalid path, 2 unsupported/malformed CSV, 3 read error, 4 internal error.
+/// A failure leaves the previous catalog intact. WizTree uses this computer's timezone.
+#[no_mangle]
+pub extern "C" fn wb_import_csv(path: WbCStringView) -> u32 {
+    wb_import_csv_options(path, 0)
+}
+
+/// Reopens CSV with an explicit WizTree time convention (0 local, 1 UTC).
+/// Other values are rejected without changing the current catalog.
+#[no_mangle]
+pub extern "C" fn wb_import_csv_options(path: WbCStringView, timezone: u32) -> u32 {
+    wb_import_scan(path, 1, timezone)
+}
+
+/// Reopens a scan atomically: format 0 by extension, 1 CSV, 2 TSV, 3 JSON, 4 raw MFT.
+/// WizTree timestamp convention is 0 local or 1 UTC; invalid options return 1.
+#[no_mangle]
+pub extern "C" fn wb_import_scan(path: WbCStringView, format: u32, timezone: u32) -> u32 {
+    if timezone > 1 || format > 4 {
+        return 1;
+    }
+    std::panic::catch_unwind(|| {
+        if path.ptr.is_null() || path.len == 0 {
+            return 1;
+        }
+        // SAFETY: caller provides a readable UTF-8 path for the synchronous call.
+        let bytes = unsafe { std::slice::from_raw_parts(path.ptr.cast::<u8>(), path.len) };
+        let Ok(path) = std::str::from_utf8(bytes) else {
+            return 1;
+        };
+        if path.contains('\0') {
+            return 1;
+        }
+        let Ok(file) = std::fs::File::open(path) else {
+            return 3;
+        };
+        let format = if format == 0 {
+            match std::path::Path::new(path)
+                .extension()
+                .and_then(|ext| ext.to_str())
+            {
+                Some(ext) if ext.eq_ignore_ascii_case("mft") => 4,
+                Some(ext) if ext.eq_ignore_ascii_case("json") => 3,
+                Some(ext) if ext.eq_ignore_ascii_case("tsv") => 2,
+                Some(ext) if ext.eq_ignore_ascii_case("csv") => 1,
+                _ => return 1,
+            }
+        } else {
+            format
+        };
+        let timezone = if timezone == 1 {
+            winblaze_index::import::CsvTimeZone::Utc
+        } else {
+            winblaze_index::import::CsvTimeZone::Local
+        };
+        let file = std::io::BufReader::new(file);
+        let result = match format {
+            2 => winblaze_index::import::read_tsv_with_timezone(
+                file,
+                local_wall_clock_to_utc,
+                timezone,
+            ),
+            4 => winblaze_scanner::ntfs::read_mft_dump(std::path::Path::new(r"MFT:\"), file)
+                .map(|scan| {
+                    let mut transaction = BufferedIndexTransaction::default();
+                    transaction.upsert_volume(&scan.volume);
+                    for directory in scan.directories {
+                        transaction.upsert_directory(&directory);
+                    }
+                    for file in scan.files {
+                        transaction.insert_file(file);
+                    }
+                    TreeIndex::build(transaction)
+                })
+                .map_err(|error| match error {
+                    winblaze_scanner::ntfs::NtfsEnumerationError::Io(error) => error,
+                    winblaze_scanner::ntfs::NtfsEnumerationError::InvalidRecord(message) => {
+                        std::io::Error::new(std::io::ErrorKind::InvalidData, message)
+                    }
+                }),
+            3 => winblaze_index::import::read_json(file),
+            _ => winblaze_index::import::read_csv_with_timezone(
+                file,
+                local_wall_clock_to_utc,
+                timezone,
+            ),
+        };
+        let tree = match result {
+            Ok(tree) => tree,
+            Err(error) => {
+                return if error.kind() == std::io::ErrorKind::InvalidData {
+                    2
+                } else {
+                    3
+                }
+            }
+        };
+        let extension_top = sorted_all_extension_totals(aggregate_extension_totals(tree.files()));
+        set_index_model(IndexModel {
+            tree,
+            extension_top,
+            cache_read_bytes: 0,
+            cache_read_millis: 0,
+            cache_decode_millis: 0,
+            cache_loaded_from_backup: false,
+        });
+        0
+    })
+    .unwrap_or(4)
+}
+
+#[cfg(windows)]
+fn local_wall_clock_to_utc(seconds: i64) -> std::io::Result<i64> {
+    #[repr(C)]
+    #[derive(Default)]
+    struct SystemTimeFields {
+        year: u16,
+        month: u16,
+        weekday: u16,
+        day: u16,
+        hour: u16,
+        minute: u16,
+        second: u16,
+        millisecond: u16,
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn FileTimeToSystemTime(file: *const u64, system: *mut SystemTimeFields) -> i32;
+        fn SystemTimeToFileTime(system: *const SystemTimeFields, file: *mut u64) -> i32;
+        fn TzSpecificLocalTimeToSystemTime(
+            zone: *const std::ffi::c_void,
+            local: *const SystemTimeFields,
+            utc: *mut SystemTimeFields,
+        ) -> i32;
+    }
+    let file = (i128::from(seconds) + 11_644_473_600) * 10_000_000;
+    let file = u64::try_from(file)
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "Date out of range"))?;
+    let mut local = SystemTimeFields::default();
+    let mut utc = SystemTimeFields::default();
+    let mut output = 0_u64;
+    // SAFETY: correctly laid-out live input/output buffers; null timezone selects Windows local rules.
+    let ok = unsafe {
+        FileTimeToSystemTime(&file, &mut local) != 0
+            && TzSpecificLocalTimeToSystemTime(std::ptr::null(), &local, &mut utc) != 0
+            && SystemTimeToFileTime(&utc, &mut output) != 0
+    };
+    if !ok {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid local date",
+        ));
+    }
+    Ok((output / 10_000_000) as i64 - 11_644_473_600)
+}
+#[cfg(not(windows))]
+fn local_wall_clock_to_utc(_: i64) -> std::io::Result<i64> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        "WizTree local dates require Windows timezone rules",
+    ))
+}
+
+fn export_catalog(
+    path: WbCStringView,
+    writer: impl FnOnce(&TreeIndex, &mut std::io::BufWriter<std::fs::File>) -> std::io::Result<()>
+        + std::panic::UnwindSafe,
+) -> u32 {
+    std::panic::catch_unwind(|| {
+        if path.ptr.is_null() || path.len == 0 {
+            return 1;
+        }
+        // SAFETY: the C ABI requires a readable buffer of `len` bytes.
+        let bytes = unsafe { std::slice::from_raw_parts(path.ptr.cast::<u8>(), path.len) };
+        let Ok(path) = std::str::from_utf8(bytes) else {
+            return 1;
+        };
+        if path.contains('\0') {
+            return 1;
+        }
+        let model = get_or_load_index_model();
+        if model.tree.root().is_none() {
+            return 2;
+        }
+        let destination =
+            std::path::absolute(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+        if std::path::Path::new(path).exists()
+            && model
+                .tree
+                .contains_file_display_path(&destination.to_string_lossy())
+        {
+            return 1;
+        }
+        let capacity = model
+            .tree
+            .files()
+            .len()
+            .saturating_add(model.tree.directories().len())
+            .saturating_mul(256)
+            .clamp(8 * 1024, 1 << 20);
+        let result = crate::output::atomic_write_with_capacity(
+            std::path::Path::new(path),
+            capacity,
+            |output| writer(&model.tree, output),
+        );
+        match result {
+            Ok(()) => 0,
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidInput => 1,
+            Err(_) => 3,
+        }
+    })
+    .unwrap_or(4)
+}
+
 /// Serializes the deferred post-Completed snapshot write against the next
 /// session's repository open (an immediate incremental rescan reads the
 /// snapshot back from disk).
@@ -80,7 +587,7 @@ fn build_index_model(
     cache_stats: Option<(u64, u64, u64, bool)>,
 ) -> IndexModel {
     let tree = TreeIndex::build(transaction);
-    let extension_top = sorted_top_extension_totals(aggregate_extension_totals(tree.files()));
+    let extension_top = sorted_all_extension_totals(aggregate_extension_totals(tree.files()));
 
     let (read_bytes, read_millis, decode_millis, from_backup) =
         cache_stats.unwrap_or((0, 0, 0, false));
@@ -334,7 +841,7 @@ impl UiEventForwarder {
                         let mut file = file.clone();
                         if let Some(parent) = self.directory_paths.get(&file.parent_directory_id.0)
                         {
-                            file.full_path = winblaze_core::join_path(parent, &file.name);
+                            file.full_path = winblaze_core::join_path(parent, &file.name).into();
                         }
                         convert_event(ScanEvent::FileFound(file))
                     }
@@ -500,9 +1007,15 @@ impl NativeSession {
         user_data: *mut core::ffi::c_void,
         root_path: String,
         persistence_mode: ScanPersistenceMode,
+        rules: winblaze_scanner::ScanRules,
+        delivery: ScanDelivery,
     ) -> Self {
-        let (controller, rx) = ScanController::channel();
+        // Keep producer backlog bounded while indexing/logging consumes it.
+        // Sixteen default batches hold at most 8192 queued events; worker
+        // buffers and individual unusually large records are additional.
+        let (controller, rx) = ScanController::recycling_bounded_channel(16);
         let root_path_for_config = root_path.clone();
+        let capacity_scope = crate::capacity_hint::scope_key(&root_path, &rules);
         let session = Self {
             controller,
             worker: Mutex::new(None),
@@ -515,6 +1028,7 @@ impl NativeSession {
         let request = ScanRequest {
             root_path: root_path.clone().into(),
             config: ScanRuntimeConfig {
+                rules,
                 root_path: root_path_for_config.into(),
                 max_parallelism,
                 ..ScanRuntimeConfig::default()
@@ -526,7 +1040,18 @@ impl NativeSession {
         let user_data = user_data as usize;
         let index_root = index_storage_root();
         let worker = thread::spawn(move || {
-            forward_events(rx, callback, user_data, index_root, persistence_mode)
+            let _ = forward_events(
+                rx,
+                callback,
+                user_data,
+                IndexScanScope {
+                    index_root,
+                    capacity_scope,
+                },
+                persistence_mode,
+                delivery,
+                None,
+            );
         });
         *session.worker.lock().expect("lock poisoned") = Some(worker);
 
@@ -560,13 +1085,24 @@ impl NativeSession {
     }
 }
 
+struct IndexScanScope {
+    index_root: PathBuf,
+    capacity_scope: String,
+}
+
 fn forward_events(
-    rx: mpsc::Receiver<Vec<ScanEvent>>,
+    rx: winblaze_scanner::ScanEventReceiver,
     callback: WbEventCallback,
     user_data: usize,
-    index_root: PathBuf,
+    scope: IndexScanScope,
     persistence_mode: ScanPersistenceMode,
-) {
+    delivery: ScanDelivery,
+    deadline: Option<(Instant, &winblaze_scanner::ScanHandle)>,
+) -> bool {
+    let IndexScanScope {
+        index_root,
+        capacity_scope,
+    } = scope;
     let mut repository = {
         let _gate = persist_gate_lock();
         match persistence_mode {
@@ -579,6 +1115,9 @@ fn forward_events(
         }
     };
     let mut transaction = BufferedIndexTransaction::default();
+    let hint_path = index_root.join("capacity-hint.bin");
+    let mut directory_walk = false;
+    let mut scan_completed = false;
     let mut log = EventLog::new(structured_log_path(&index_root));
     let mut flushed = false;
     // True while the transaction holds volume/directory/file records that a
@@ -599,7 +1138,8 @@ fn forward_events(
     // cost is that a *second* concurrent ReplaceSnapshot scan would wait on
     // this one's finalization — which the single-session UI never starts.
     let mut persist_guard: Option<std::sync::MutexGuard<'static, ()>> = None;
-    let mut ui_forwarder = UiEventForwarder::new(callback, user_data);
+    let mut ui_forwarder =
+        (delivery == ScanDelivery::Live).then(|| UiEventForwarder::new(callback, user_data));
     // Reserve the transaction maps once, from the first Progress event's total
     // record count, so the millions of inserts that follow don't rehash the
     // maps ~20 times as they grow. total_items is the volume's total MFT record
@@ -607,8 +1147,23 @@ fn forward_events(
     // and only over-reserves a bounded amount when a volume skews.
     let mut reserved = false;
 
-    for event in rx.into_iter().flatten() {
+    let drained = rx.for_each_event_until(deadline.map(|(until, _)| until), |event| {
         log.append_scan_event(&event);
+
+        if matches!(persistence_mode, ScanPersistenceMode::ReplaceSnapshot) && !directory_walk {
+            if let ScanEvent::SessionStarted(volume) = &event {
+                if matches!(volume.file_system, winblaze_core::FileSystemKind::Unknown) {
+                    directory_walk = true;
+                    // Previous counts are an allocation estimate only. Every
+                    // directory and file is still scanned and indexed anew.
+                    if let Some(hint) = crate::capacity_hint::load_hint(&hint_path, &capacity_scope)
+                    {
+                        transaction.reserve(hint.files, hint.directories);
+                    }
+                }
+            }
+        }
+        scan_completed |= matches!(event, ScanEvent::Completed);
 
         if !reserved {
             if let ScanEvent::Progress(progress) = &event {
@@ -661,7 +1216,17 @@ fn forward_events(
             }
         }
 
-        ui_forwarder.forward(&event);
+        if let Some(forwarder) = &mut ui_forwarder {
+            forwarder.forward(&event);
+        } else if matches!(
+            event,
+            ScanEvent::Completed | ScanEvent::Cancelled | ScanEvent::Failed(_)
+        ) {
+            if let Some(cb) = callback {
+                let native_event = convert_event(event.clone());
+                cb(&native_event.event, user_data as *mut core::ffi::c_void);
+            }
+        }
 
         let flush_requested = should_flush_index(&event, persistence_mode);
         // Only label the trigger when a flush is actually requested (rare);
@@ -684,6 +1249,12 @@ fn forward_events(
             }
             log.append_flush(flush_trigger, result.is_ok());
         }
+    });
+
+    if !drained {
+        if let Some((_, handle)) = deadline {
+            handle.cancel();
+        }
     }
 
     if let Some((model, sessions, lineages, changes)) = deferred_persist {
@@ -696,8 +1267,18 @@ fn forward_events(
             &changes,
         );
         log.append_flush("deferred", result.is_ok());
+        if result.is_ok() && directory_walk && scan_completed {
+            // Optional advisory metadata must never make a successful scan or
+            // export fail. Only complete persisted walk catalogs update it.
+            let _ = crate::capacity_hint::save_hint(
+                &hint_path,
+                &capacity_scope,
+                model.tree.files().len(),
+                model.tree.directories().len(),
+            );
+        }
         drop(persist_guard);
-        return;
+        return scan_completed && drained;
     }
     drop(persist_guard);
 
@@ -719,6 +1300,86 @@ fn forward_events(
             }
         };
         set_index_model(model);
+    }
+    scan_completed && drained
+}
+
+/// Timing and completion of the complete synchronous scan/persistence path.
+pub struct TerminalScanOutcome {
+    pub completed: bool,
+    pub session_setup: Duration,
+    pub terminal_received: Duration,
+}
+
+struct TerminalObserver {
+    started: Instant,
+    terminal_received: Option<Duration>,
+    callback: WbEventCallback,
+    user_data: *mut core::ffi::c_void,
+}
+
+extern "C" fn observe_terminal(event: *const WbEvent, context: *mut core::ffi::c_void) {
+    // SAFETY: run_terminal_scan owns this observer on its calling thread until
+    // forward_events finishes. The event is borrowed for this callback only.
+    let observer = unsafe { &mut *context.cast::<TerminalObserver>() };
+    observer.terminal_received = Some(observer.started.elapsed());
+    if let Some(callback) = observer.callback {
+        callback(event, observer.user_data);
+    }
+}
+
+/// Runs the unattended consumer/indexer on the caller, retaining the GUI's
+/// asynchronous session interface. The callback/context remain borrowed until
+/// return; callback events are terminal-only and execute on this thread.
+pub fn run_terminal_scan(
+    root: &str,
+    timeout: Duration,
+    callback: WbEventCallback,
+    user_data: *mut core::ffi::c_void,
+) -> TerminalScanOutcome {
+    let started = Instant::now();
+    invalidate_index_model();
+    let rules = winblaze_scanner::ScanRules::default();
+    let capacity_scope = crate::capacity_hint::scope_key(root, &rules);
+    let (controller, rx) = ScanController::recycling_bounded_channel(16);
+    let config = ScanRuntimeConfig {
+        root_path: root.into(),
+        rules,
+        ..Default::default()
+    };
+    let handle = controller.start_scan(ScanRequest {
+        root_path: root.into(),
+        config,
+    });
+    // The producer owns its sender. Drop the original before consuming so
+    // successful producer termination can disconnect the bounded receiver.
+    drop(controller);
+    let session_setup = started.elapsed();
+    let mut observer = TerminalObserver {
+        started,
+        terminal_received: None,
+        callback,
+        user_data,
+    };
+    let completed = forward_events(
+        rx,
+        Some(observe_terminal),
+        (&mut observer as *mut TerminalObserver) as usize,
+        IndexScanScope {
+            index_root: index_storage_root(),
+            capacity_scope,
+        },
+        ScanPersistenceMode::ReplaceSnapshot,
+        ScanDelivery::Terminal,
+        Some((started + timeout, &handle)),
+    );
+    handle.join();
+    TerminalScanOutcome {
+        completed,
+        session_setup,
+        terminal_received: observer
+            .terminal_received
+            .unwrap_or_else(|| started.elapsed()),
     }
 }
 
@@ -867,6 +1528,11 @@ struct OwnedExtensionStats {
 /// Sorts extension totals by bytes descending and keeps only the top N, so
 /// the FFI payload (and the UI table) stay bounded regardless of how many
 /// distinct extensions a scan encounters.
+fn sorted_all_extension_totals(mut totals: Vec<(String, u64, u64)>) -> Vec<(String, u64, u64)> {
+    totals.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    totals
+}
+
 fn sorted_top_extension_totals(mut totals: Vec<(String, u64, u64)>) -> Vec<(String, u64, u64)> {
     if totals.len() > EXTENSION_STATS_TOP_LIMIT {
         totals.select_nth_unstable_by(EXTENSION_STATS_TOP_LIMIT, |left, right| {
@@ -1508,8 +2174,8 @@ fn catalog_entry_from_file(file: &FileRecord, full_path: &str) -> OwnedCatalogEn
         size_bytes: file.size_bytes,
         allocation_bytes: file.allocation_bytes,
         total_entries: 1,
-        modified_utc: file.modified_utc.unwrap_or(0),
-        has_modified_utc: u8::from(file.modified_utc.is_some()),
+        modified_utc: file.modified_utc().unwrap_or(0),
+        has_modified_utc: u8::from(file.modified_utc().is_some()),
     };
     OwnedCatalogEntry {
         entry,
@@ -1547,7 +2213,98 @@ pub extern "C" fn wb_scan_session_start(
         callback,
         user_data,
         ScanPersistenceMode::ReplaceSnapshot,
+        winblaze_scanner::ScanRules::default(),
     )
+}
+
+/// Starts an unattended scan. The terminal-only delivery contract is tested
+/// separately from the existing live GUI callback interface.
+#[no_mangle]
+pub extern "C" fn wb_scan_session_start_terminal(
+    root_path: WbCStringView,
+    callback: WbEventCallback,
+    user_data: *mut core::ffi::c_void,
+) -> WbScanSessionHandle {
+    start_scan_session_with_delivery(
+        root_path,
+        callback,
+        user_data,
+        ScanPersistenceMode::ReplaceSnapshot,
+        winblaze_scanner::ScanRules::default(),
+        ScanDelivery::Terminal,
+    )
+}
+
+fn parse_scan_rules(
+    excluded_paths: WbCStringView,
+    include_files: WbCStringView,
+) -> Option<winblaze_scanner::ScanRules> {
+    let decode = |view: WbCStringView| -> Option<Vec<String>> {
+        if view.len == 0 {
+            return Some(Vec::new());
+        }
+        if view.ptr.is_null() || view.len > 65536 {
+            return None;
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(view.ptr.cast::<u8>(), view.len) };
+        let text = std::str::from_utf8(bytes).ok()?;
+        if text.contains('\0') {
+            return None;
+        }
+        Some(
+            text.split(['\r', '\n'])
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned)
+                .collect(),
+        )
+    };
+    let exclude_paths = decode(excluded_paths)?;
+    let include_files = decode(include_files)?;
+    if exclude_paths
+        .iter()
+        .any(|path| path.split(['/', '\\']).any(|part| part == "..") || path.contains(':'))
+    {
+        return None;
+    }
+    Some(winblaze_scanner::ScanRules {
+        exclude_paths,
+        include_files,
+    })
+}
+/// Validates rules without starting a scan or changing the current catalog.
+#[no_mangle]
+pub extern "C" fn wb_validate_scan_rules(excluded: WbCStringView, included: WbCStringView) -> u32 {
+    std::panic::catch_unwind(|| u32::from(parse_scan_rules(excluded, included).is_none()))
+        .unwrap_or(4)
+}
+
+/// Starts an isolated filtered scan. Rules are newline-separated UTF-8.
+/// Filtering uses directory walking so exclusions prevent subtree traversal.
+#[no_mangle]
+pub extern "C" fn wb_scan_session_start_rules(
+    root_path: WbCStringView,
+    excluded_paths: WbCStringView,
+    include_files: WbCStringView,
+    callback: WbEventCallback,
+    user_data: *mut core::ffi::c_void,
+) -> WbScanSessionHandle {
+    let empty = || WbScanSessionHandle {
+        _private: null_mut(),
+    };
+    let result = std::panic::catch_unwind(|| {
+        let Some(rules) = parse_scan_rules(excluded_paths, include_files) else {
+            return empty();
+        };
+        start_scan_session(
+            root_path,
+            callback,
+            user_data,
+            ScanPersistenceMode::ReplaceSnapshot,
+            rules,
+        )
+    });
+    result.unwrap_or_else(|_| empty())
 }
 
 #[no_mangle]
@@ -1561,6 +2318,7 @@ pub extern "C" fn wb_scan_session_start_incremental(
         callback,
         user_data,
         ScanPersistenceMode::IncrementalRescan,
+        winblaze_scanner::ScanRules::default(),
     )
 }
 
@@ -1569,6 +2327,25 @@ fn start_scan_session(
     callback: WbEventCallback,
     user_data: *mut core::ffi::c_void,
     persistence_mode: ScanPersistenceMode,
+    rules: winblaze_scanner::ScanRules,
+) -> WbScanSessionHandle {
+    start_scan_session_with_delivery(
+        root_path,
+        callback,
+        user_data,
+        persistence_mode,
+        rules,
+        ScanDelivery::Live,
+    )
+}
+
+fn start_scan_session_with_delivery(
+    root_path: WbCStringView,
+    callback: WbEventCallback,
+    user_data: *mut core::ffi::c_void,
+    persistence_mode: ScanPersistenceMode,
+    rules: winblaze_scanner::ScanRules,
+    delivery: ScanDelivery,
 ) -> WbScanSessionHandle {
     if root_path.ptr.is_null() {
         return WbScanSessionHandle {
@@ -1590,6 +2367,8 @@ fn start_scan_session(
         user_data,
         path,
         persistence_mode,
+        rules,
+        delivery,
     ));
     WbScanSessionHandle {
         _private: Box::into_raw(session).cast(),
@@ -1762,8 +2541,8 @@ pub extern "C" fn wb_tree_children(
                     physical_bytes: file.allocation_bytes,
                     file_count: 0,
                     item_count: 0,
-                    modified_utc: file.modified_utc.unwrap_or_default(),
-                    has_modified_utc: u8::from(file.modified_utc.is_some()),
+                    modified_utc: file.modified_utc().unwrap_or_default(),
+                    has_modified_utc: u8::from(file.modified_utc().is_some()),
                 },
             };
             cb(&node as *const WbTreeNode, user_data);
@@ -1781,27 +2560,155 @@ pub extern "C" fn wb_tree_largest_files(
     callback: WbTreeNodeCallback,
     user_data: *mut core::ffi::c_void,
 ) {
+    wb_tree_largest_files_page(0, limit, callback, user_data);
+}
+
+/// Searches the complete published tree; output paths are borrowed during callbacks.
+#[no_mangle]
+pub extern "C" fn wb_tree_search(
+    filter: crate::api::WbSearchFilter,
+    callback: WbTreeNodeCallback,
+    user_data: *mut core::ffi::c_void,
+) -> crate::api::WbSearchResult {
+    use crate::api::WbSearchResult;
+    use winblaze_index::tree_search::{search, SearchOptions, SearchSort, TextMode};
+    let failure = |status| WbSearchResult {
+        status,
+        ..Default::default()
+    };
+    std::panic::catch_unwind(|| {
+        if filter.flags & !511 != 0 || filter.mode > 3 || filter.sort > 4 || filter.limit > 4096 {
+            return failure(1);
+        }
+        let text = |view: WbCStringView| -> Option<String> {
+            if view.len == 0 {
+                return Some(String::new());
+            }
+            if view.ptr.is_null() || view.len > 65536 {
+                return None;
+            }
+            // SAFETY: the synchronous caller owns a readable UTF-8 buffer.
+            let bytes = unsafe { std::slice::from_raw_parts(view.ptr.cast::<u8>(), view.len) };
+            std::str::from_utf8(bytes)
+                .ok()
+                .filter(|text| !text.contains('\0'))
+                .map(str::to_owned)
+        };
+        let (Some(pattern), Some(extensions)) = (text(filter.pattern), text(filter.extensions))
+        else {
+            return failure(1);
+        };
+        let options = SearchOptions {
+            pattern,
+            extensions: extensions.split(';').map(str::to_owned).collect(),
+            min_logical: (filter.flags & 1 != 0).then_some(filter.min_logical),
+            max_logical: (filter.flags & 2 != 0).then_some(filter.max_logical),
+            min_allocated: (filter.flags & 4 != 0).then_some(filter.min_allocated),
+            max_allocated: (filter.flags & 8 != 0).then_some(filter.max_allocated),
+            modified_after: (filter.flags & 16 != 0).then_some(filter.modified_after),
+            modified_before: (filter.flags & 32 != 0).then_some(filter.modified_before),
+            include_files: filter.flags & 64 != 0,
+            include_directories: filter.flags & 128 != 0,
+            descending: filter.flags & 256 != 0,
+            mode: match filter.mode {
+                1 => TextMode::Exact,
+                2 => TextMode::Prefix,
+                3 => TextMode::Regex,
+                _ => TextMode::Contains,
+            },
+            sort: match filter.sort {
+                1 => SearchSort::Logical,
+                2 => SearchSort::Allocated,
+                3 => SearchSort::Kind,
+                4 => SearchSort::Modified,
+                _ => SearchSort::Name,
+            },
+            offset: filter.offset.try_into().unwrap_or(usize::MAX),
+            limit: filter.limit as usize,
+        };
+        let model = get_or_load_index_model();
+        let Ok(page) = search(&model.tree, &options) else {
+            return failure(1);
+        };
+        let mut emitted = 0;
+        if let Some(cb) = callback {
+            for hit in page.hits {
+                let mut strings = Vec::new();
+                let (id, is_directory, logical_bytes, file_count, item_count, modified) =
+                    match hit.entry {
+                        TreeEntry::Directory { record, rollup } => (
+                            record.id.0,
+                            1,
+                            rollup.logical_bytes,
+                            rollup.file_count,
+                            rollup.item_count,
+                            rollup.modified_utc_max,
+                        ),
+                        TreeEntry::File(file) => {
+                            (file.id.0, 0, file.size_bytes, 0, 0, file.modified_utc())
+                        }
+                    };
+                let node = WbTreeNode {
+                    id,
+                    is_directory,
+                    name: c_view(hit.path, &mut strings),
+                    logical_bytes,
+                    physical_bytes: hit.entry.physical_bytes(),
+                    file_count,
+                    item_count,
+                    modified_utc: modified.unwrap_or_default(),
+                    has_modified_utc: u8::from(modified.is_some()),
+                };
+                cb(&node, user_data);
+                emitted += 1;
+            }
+        }
+        WbSearchResult {
+            emitted,
+            total: page.total as u64,
+            status: 0,
+        }
+    })
+    .unwrap_or_else(|_| failure(4))
+}
+
+/// Emits one stable largest-file page; total is independent of the page size.
+#[no_mangle]
+pub extern "C" fn wb_tree_largest_files_page(
+    offset: u64,
+    limit: u64,
+    callback: WbTreeNodeCallback,
+    user_data: *mut core::ffi::c_void,
+) -> WbTreeChildrenResult {
     let Some(cb) = callback else {
-        return;
+        return WbTreeChildrenResult::default();
     };
     let model = get_or_load_index_model();
-    model.tree.for_each_largest_file(limit as usize, |file| {
-        let mut strings = Vec::new();
-        let node = WbTreeNode {
-            id: file.id.0,
-            is_directory: 0,
-            // Full display path rather than the bare name: cleanup rows
-            // need to show and open the actual location.
-            name: c_view(model.tree.file_display_path(file), &mut strings),
-            logical_bytes: file.size_bytes,
-            physical_bytes: file.allocation_bytes,
-            file_count: 0,
-            item_count: 0,
-            modified_utc: file.modified_utc.unwrap_or_default(),
-            has_modified_utc: u8::from(file.modified_utc.is_some()),
-        };
-        cb(&node as *const WbTreeNode, user_data);
-    });
+    let mut emitted = 0;
+    model
+        .tree
+        .for_each_largest_file_page(offset as usize, limit as usize, |file| {
+            let mut strings = Vec::new();
+            let node = WbTreeNode {
+                id: file.id.0,
+                is_directory: 0,
+                // Full display path rather than the bare name: cleanup rows
+                // need to show and open the actual location.
+                name: c_view(model.tree.file_display_path(file), &mut strings),
+                logical_bytes: file.size_bytes,
+                physical_bytes: file.allocation_bytes,
+                file_count: 0,
+                item_count: 0,
+                modified_utc: file.modified_utc().unwrap_or_default(),
+                has_modified_utc: u8::from(file.modified_utc().is_some()),
+            };
+            cb(&node as *const WbTreeNode, user_data);
+            emitted += 1;
+        });
+    WbTreeChildrenResult {
+        emitted,
+        total: model.tree.files().len() as u64,
+    }
 }
 
 #[no_mangle]
@@ -1822,6 +2729,228 @@ pub extern "C" fn wb_scan_session_destroy(handle: WbScanSessionHandle) {
 
     let session = unsafe { Box::from_raw(handle._private.cast::<NativeSession>()) };
     session.join();
+}
+
+/// Estimates hypothetical tier prices; this never moves or modifies files.
+#[no_mangle]
+pub extern "C" fn wb_storage_cost(
+    policy: crate::api::WbStoragePolicy,
+) -> crate::api::WbStorageEstimate {
+    let result = std::panic::catch_unwind(|| {
+        let model = get_or_load_index_model();
+        let estimate = winblaze_index::storage_cost::estimate(
+            &model.tree,
+            &winblaze_index::storage_cost::StoragePolicy {
+                now_utc: policy.now_utc,
+                warm_after_days: policy.warm_after_days,
+                cold_after_days: policy.cold_after_days,
+                monthly_prices: policy.monthly_prices,
+            },
+        )
+        .map_err(|_| 1u32)?;
+        Ok::<_, u32>(crate::api::WbStorageEstimate {
+            allocated_bytes: estimate.allocated_bytes,
+            files: estimate.files,
+            unknown_dates: estimate.unknown_dates,
+            monthly_cost: estimate.monthly_cost,
+            all_hot_cost: estimate.all_hot_cost,
+            status: 0,
+        })
+    });
+    match result {
+        Ok(Ok(value)) => value,
+        Ok(Err(status)) => crate::api::WbStorageEstimate {
+            status,
+            ..Default::default()
+        },
+        Err(_) => crate::api::WbStorageEstimate {
+            status: 4,
+            ..Default::default()
+        },
+    }
+}
+
+/// Explicit byte-verified hard-link consolidation; metadata follows the master.
+/// Status 3 can retain an original recovery backup; callers must report failures.
+#[no_mangle]
+pub extern "C" fn wb_consolidate_duplicates(
+    master: WbCStringView,
+    duplicate: WbCStringView,
+) -> u32 {
+    std::panic::catch_unwind(|| {
+        let (Some(master), Some(duplicate)) = (valid_path_text(master), valid_path_text(duplicate))
+        else {
+            return 1;
+        };
+        match winblaze_scanner::hardlinks::consolidate(
+            std::path::Path::new(&master),
+            std::path::Path::new(&duplicate),
+        ) {
+            Ok(()) => 0,
+            Err(_) => 3,
+        }
+    })
+    .unwrap_or(4)
+}
+
+#[no_mangle]
+pub extern "C" fn wb_storage_maintenance(path: WbCStringView, operation: u32) -> u32 {
+    if operation > 2 {
+        return 1;
+    }
+    std::panic::catch_unwind(|| {
+        let Some(path) = valid_path_text(path) else {
+            return 1;
+        };
+        let result = match operation {
+            0 => winblaze_scanner::storage_maintenance::set_compression(
+                std::path::Path::new(&path),
+                true,
+            ),
+            1 => winblaze_scanner::storage_maintenance::set_compression(
+                std::path::Path::new(&path),
+                false,
+            ),
+            _ => winblaze_scanner::storage_maintenance::sparsify_zeros(std::path::Path::new(&path)),
+        };
+        match result {
+            Ok(()) => 0,
+            Err(_) => 3,
+        }
+    })
+    .unwrap_or(4)
+}
+
+/// Scans 1..16 disjoint filesystem roots, publishing only a complete combined
+/// catalog. Input uses CR/LF-separated UTF-8 paths. Failures preserve the old model.
+#[no_mangle]
+pub extern "C" fn wb_scan_roots(paths: WbCStringView) -> crate::api::WbMultiScanResult {
+    let result = std::panic::catch_unwind(|| -> Result<crate::api::WbMultiScanResult, u32> {
+        let text = valid_path_text(paths).ok_or(1u32)?;
+        let mut roots = Vec::<PathBuf>::new();
+        let mut normalized = Vec::<String>::new();
+        for path in text
+            .split(['\r', '\n'])
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+        {
+            if roots.len() >= 16 {
+                return Err(1);
+            }
+            let path = std::fs::canonicalize(path).map_err(|_| 1u32)?;
+            if !path.is_dir() {
+                return Err(1);
+            }
+            let key = path.to_string_lossy().trim_end_matches('\\').to_lowercase();
+            if normalized.iter().any(|prior| {
+                prior == &key
+                    || prior.starts_with(&(key.clone() + "\\"))
+                    || key.starts_with(&(prior.clone() + "\\"))
+            }) {
+                return Err(1);
+            }
+            normalized.push(key);
+            let display = path.to_string_lossy();
+            let display = if let Some(unc) = display.strip_prefix(r"\\?\UNC\") {
+                format!(r"\\{unc}")
+            } else {
+                display.strip_prefix(r"\\?\").unwrap_or(&display).to_owned()
+            };
+            roots.push(PathBuf::from(display));
+        }
+        if roots.is_empty() {
+            return Err(1);
+        }
+        let mut scans = Vec::with_capacity(roots.len());
+        let mut warnings = 0u64;
+        for root in &roots {
+            let (controller, rx) = ScanController::bounded_channel(16);
+            let handle = controller.start_scan(ScanRequest {
+                root_path: root.clone(),
+                config: ScanRuntimeConfig {
+                    root_path: root.clone(),
+                    ..Default::default()
+                },
+            });
+            let mut tx = BufferedIndexTransaction::default();
+            let mut success = true;
+            'events: loop {
+                let Ok(events) = rx.recv() else {
+                    success = false;
+                    break;
+                };
+                for event in events {
+                    match event {
+                        ScanEvent::SessionStarted(volume) | ScanEvent::VolumeDiscovered(volume) => {
+                            tx.insert_volume(volume)
+                        }
+                        ScanEvent::DirectoryFound(directory) => tx.insert_directory(directory),
+                        ScanEvent::FileFound(file) => tx.insert_file(file),
+                        ScanEvent::Issue(_) => warnings += 1,
+                        ScanEvent::Completed => break 'events,
+                        ScanEvent::Failed(_) | ScanEvent::Cancelled => {
+                            success = false;
+                            break 'events;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            handle.join();
+            if !success {
+                return Err(3);
+            }
+            scans.push(TreeIndex::build(tx));
+        }
+        let mut physical = std::collections::HashSet::new();
+        let tree = winblaze_index::multiple_roots::combine_with(scans, |scan, file| {
+            let mut file = file.clone();
+            if file.allocation_bytes > 0 {
+                let path = scan.file_display_path(&file);
+                match winblaze_scanner::file_details::query_file_details(std::path::Path::new(
+                    &path,
+                )) {
+                    Ok(details) if details.links > 1 && !physical.insert(details.identity) => {
+                        file.allocation_bytes = 0
+                    }
+                    Err(_) => warnings += 1,
+                    _ => {}
+                }
+            }
+            file
+        })
+        .map_err(|_| 1u32)?;
+        let (_, totals) = tree.root().ok_or(3u32)?;
+        let result = crate::api::WbMultiScanResult {
+            roots: roots.len() as u64,
+            files: totals.file_count,
+            logical_bytes: totals.logical_bytes,
+            allocated_bytes: totals.physical_bytes,
+            warnings,
+            status: 0,
+        };
+        let extension_top = sorted_all_extension_totals(aggregate_extension_totals(tree.files()));
+        set_index_model(IndexModel {
+            tree,
+            extension_top,
+            cache_read_bytes: 0,
+            cache_read_millis: 0,
+            cache_decode_millis: 0,
+            cache_loaded_from_backup: false,
+        });
+        Ok(result)
+    });
+    match result {
+        Ok(Ok(value)) => value,
+        Ok(Err(status)) => crate::api::WbMultiScanResult {
+            status,
+            ..Default::default()
+        },
+        Err(_) => crate::api::WbMultiScanResult {
+            status: 4,
+            ..Default::default()
+        },
+    }
 }
 
 #[cfg(test)]

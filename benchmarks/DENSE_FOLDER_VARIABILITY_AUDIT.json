@@ -1,0 +1,1045 @@
+{
+  "metric": "Nonempty dense folder · timing variability",
+  "profile": "fanout-large",
+  "files": 8192,
+  "directories": 3,
+  "logical_bytes": 2097152,
+  "runs": 10,
+  "formula": "R-7 (p75 - p25) / median ×100",
+  "scope": "unchanged startup + complete scan/index/persistence + CSV export",
+  "ranking": "100 carried-forward hypotheses re-ranked provisionally; first qualified resource reduction implemented. Not 100 newly verified or implemented improvements.",
+  "baseline": {
+    "source": "dense-variability-baseline.json",
+    "WinBlaze": 10.386345125535602,
+    "WinDirStat": 21.010066633230633,
+    "WizTree": 23.11174459695505,
+    "medal": "gold"
+  },
+  "rows": [
+    {
+      "rank": 1,
+      "phase": "Event delivery",
+      "candidate": "Reserve event-batch storage only when a worker emits its first event",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Implemented with public allocation RED69632 bytes per unused pipeline to GREEN0; complete first-batch order and bounded growth pass; existing terminal-only budget caught an edge and passes after reserving one event.",
+      "risk": "Low: allocation timing only; no scan, persistence, output, worker-count or measurement changes",
+      "estimated_variability_savings": "Verified resource saving: 69632 bytes per unused default pipeline. Timing/IQR saving unproven; baseline already gold.",
+      "origin_rank": 12
+    },
+    {
+      "rank": 2,
+      "phase": "Event delivery",
+      "candidate": "Reuse returned event batch buffers",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 11
+    },
+    {
+      "rank": 3,
+      "phase": "Event delivery",
+      "candidate": "Avoid allocating an empty final batch",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 13
+    },
+    {
+      "rank": 4,
+      "phase": "Event delivery",
+      "candidate": "Coalesce redundant progress snapshots",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 14
+    },
+    {
+      "rank": 5,
+      "phase": "Event delivery",
+      "candidate": "Send progress only after meaningful counter change",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 15
+    },
+    {
+      "rank": 6,
+      "phase": "Event delivery",
+      "candidate": "Avoid receiver wakeups for empty batches",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 16
+    },
+    {
+      "rank": 7,
+      "phase": "Event delivery",
+      "candidate": "Reduce extra event enum dispatch passes",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 17
+    },
+    {
+      "rank": 8,
+      "phase": "Event delivery",
+      "candidate": "Separate terminal delivery from live previews",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 18
+    },
+    {
+      "rank": 9,
+      "phase": "Event delivery",
+      "candidate": "Move record strings through every batch boundary",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 19
+    },
+    {
+      "rank": 10,
+      "phase": "Event delivery",
+      "candidate": "Bound pending batch memory without dropping events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 20
+    },
+    {
+      "rank": 11,
+      "phase": "Directory metadata",
+      "candidate": "Reuse metadata scratch across directories",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 21
+    },
+    {
+      "rank": 12,
+      "phase": "Directory metadata",
+      "candidate": "Skip dot names before conversion",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 22
+    },
+    {
+      "rank": 13,
+      "phase": "Directory metadata",
+      "candidate": "Avoid repeat metadata-class negotiation",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 23
+    },
+    {
+      "rank": 14,
+      "phase": "Directory metadata",
+      "candidate": "Encode ordinary names once",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 24
+    },
+    {
+      "rank": 15,
+      "phase": "Directory metadata",
+      "candidate": "Avoid copying borrowed UTF16 record fields",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 25
+    },
+    {
+      "rank": 16,
+      "phase": "Directory metadata",
+      "candidate": "Reuse record-boundary validation results",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 26
+    },
+    {
+      "rank": 17,
+      "phase": "Directory metadata",
+      "candidate": "Avoid rereading buffer header fields",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 27
+    },
+    {
+      "rank": 18,
+      "phase": "Directory metadata",
+      "candidate": "Reserve filename capacity from exact encoding length",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 28
+    },
+    {
+      "rank": 19,
+      "phase": "Directory metadata",
+      "candidate": "Reduce zeroing of overwritten scratch bytes",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 29
+    },
+    {
+      "rank": 20,
+      "phase": "Directory metadata",
+      "candidate": "Keep error fallback off successful metadata path",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 30
+    },
+    {
+      "rank": 21,
+      "phase": "Catalog construction",
+      "candidate": "Arithmetic lookup for contiguous directory IDs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 31
+    },
+    {
+      "rank": 22,
+      "phase": "Catalog construction",
+      "candidate": "In-place ordering for dense file IDs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 32
+    },
+    {
+      "rank": 23,
+      "phase": "Catalog construction",
+      "candidate": "Bypass ordering for already sorted IDs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 33
+    },
+    {
+      "rank": 24,
+      "phase": "Catalog construction",
+      "candidate": "Transfer record arenas without a second array",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 34
+    },
+    {
+      "rank": 25,
+      "phase": "Catalog construction",
+      "candidate": "Trim unused publication capacity",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 35
+    },
+    {
+      "rank": 26,
+      "phase": "Catalog construction",
+      "candidate": "Reserve exact child-index counts",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 36
+    },
+    {
+      "rank": 27,
+      "phase": "Catalog construction",
+      "candidate": "Reuse parent positions during rollup",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 37
+    },
+    {
+      "rank": 28,
+      "phase": "Catalog construction",
+      "candidate": "Skip sorting child lists with fewer than two items",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 38
+    },
+    {
+      "rank": 29,
+      "phase": "Catalog construction",
+      "candidate": "Avoid repeated child-size key extraction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 39
+    },
+    {
+      "rank": 30,
+      "phase": "Catalog construction",
+      "candidate": "Release transient parent arrays immediately after grouping",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 40
+    },
+    {
+      "rank": 31,
+      "phase": "CSV serialization",
+      "candidate": "Reuse decimal formatting scratch",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 41
+    },
+    {
+      "rank": 32,
+      "phase": "CSV serialization",
+      "candidate": "Write ordinary unescaped fields in one call",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 42
+    },
+    {
+      "rank": 33,
+      "phase": "CSV serialization",
+      "candidate": "Borrow parent paths during file export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 43
+    },
+    {
+      "rank": 34,
+      "phase": "CSV serialization",
+      "candidate": "Avoid allocating a complete joined file path",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 44
+    },
+    {
+      "rank": 35,
+      "phase": "CSV serialization",
+      "candidate": "Batch adjacent constant CSV delimiters",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 45
+    },
+    {
+      "rank": 36,
+      "phase": "CSV serialization",
+      "candidate": "Reserve escaping scratch from field size",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 46
+    },
+    {
+      "rank": 37,
+      "phase": "CSV serialization",
+      "candidate": "Avoid repeated directory lookup per file",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 47
+    },
+    {
+      "rank": 38,
+      "phase": "CSV serialization",
+      "candidate": "Write directory totals without intermediate Strings",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 48
+    },
+    {
+      "rank": 39,
+      "phase": "CSV serialization",
+      "candidate": "Reduce flush calls while retaining successful close",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 49
+    },
+    {
+      "rank": 40,
+      "phase": "CSV serialization",
+      "candidate": "Size output buffering for the scale fixture",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 50
+    },
+    {
+      "rank": 41,
+      "phase": "Snapshot persistence",
+      "candidate": "Borrow sorted record slices for persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 51
+    },
+    {
+      "rank": 42,
+      "phase": "Snapshot persistence",
+      "candidate": "Reuse directory encoding scratch",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 52
+    },
+    {
+      "rank": 43,
+      "phase": "Snapshot persistence",
+      "candidate": "Reuse file encoding scratch",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 53
+    },
+    {
+      "rank": 44,
+      "phase": "Snapshot persistence",
+      "candidate": "Batch adjacent scalar encodings",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 54
+    },
+    {
+      "rank": 45,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid sorting already sorted session records",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 55
+    },
+    {
+      "rank": 46,
+      "phase": "Snapshot persistence",
+      "candidate": "Drop publication lookups before disk persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 56
+    },
+    {
+      "rank": 47,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid duplicate snapshot writes at completion",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 57
+    },
+    {
+      "rank": 48,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid repeated backup existence queries",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 58
+    },
+    {
+      "rank": 49,
+      "phase": "Snapshot persistence",
+      "candidate": "Release temporary serializer indexes before rename",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 59
+    },
+    {
+      "rank": 50,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid allocating intermediate complete snapshot bytes",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 60
+    },
+    {
+      "rank": 51,
+      "phase": "Worker scheduling",
+      "candidate": "Worker-local directory counters",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 1
+    },
+    {
+      "rank": 52,
+      "phase": "Worker scheduling",
+      "candidate": "Worker-local byte counters",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 2
+    },
+    {
+      "rank": 53,
+      "phase": "Worker scheduling",
+      "candidate": "Publish counters once per directory",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 3
+    },
+    {
+      "rank": 54,
+      "phase": "Worker scheduling",
+      "candidate": "Notify only workers that can consume new tasks",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 4
+    },
+    {
+      "rank": 55,
+      "phase": "Worker scheduling",
+      "candidate": "Release queue lock before task conversion",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 5
+    },
+    {
+      "rank": 56,
+      "phase": "Worker scheduling",
+      "candidate": "Move queued task ownership instead of cloning",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 6
+    },
+    {
+      "rank": 57,
+      "phase": "Worker scheduling",
+      "candidate": "Reserve child-task storage from observed fanout",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 7
+    },
+    {
+      "rank": 58,
+      "phase": "Worker scheduling",
+      "candidate": "Reuse empty worker task vectors",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 8
+    },
+    {
+      "rank": 59,
+      "phase": "Worker scheduling",
+      "candidate": "Avoid redundant completion wakeups",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 9
+    },
+    {
+      "rank": 60,
+      "phase": "Worker scheduling",
+      "candidate": "Bound worker creation for known tiny roots",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 10
+    },
+    {
+      "rank": 61,
+      "phase": "Process startup",
+      "candidate": "Borrow command arguments instead of cloning",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 61
+    },
+    {
+      "rank": 62,
+      "phase": "Process startup",
+      "candidate": "Avoid formatting usage text on valid arguments",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 62
+    },
+    {
+      "rank": 63,
+      "phase": "Process startup",
+      "candidate": "Reduce native CLI import initialization",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 63
+    },
+    {
+      "rank": 64,
+      "phase": "Process startup",
+      "candidate": "Remove unused CLI linker dependencies",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 64
+    },
+    {
+      "rank": 65,
+      "phase": "Process startup",
+      "candidate": "Keep startup logging lazy until first event",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 65
+    },
+    {
+      "rank": 66,
+      "phase": "Process startup",
+      "candidate": "Avoid redundant cache-root normalization",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 66
+    },
+    {
+      "rank": 67,
+      "phase": "Process startup",
+      "candidate": "Resolve executable-independent config once",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 67
+    },
+    {
+      "rank": 68,
+      "phase": "Process startup",
+      "candidate": "Avoid loading previous snapshots for replacement scans",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 68
+    },
+    {
+      "rank": 69,
+      "phase": "Process startup",
+      "candidate": "Avoid CLI initialization of GUI preview state",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 69
+    },
+    {
+      "rank": 70,
+      "phase": "Process startup",
+      "candidate": "Reduce thread startup dependencies before first scan",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 70
+    },
+    {
+      "rank": 71,
+      "phase": "Path and string handling",
+      "candidate": "Reserve exact child directory path capacity",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 71
+    },
+    {
+      "rank": 72,
+      "phase": "Path and string handling",
+      "candidate": "Consume owned OsString in display conversion",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 72
+    },
+    {
+      "rank": 73,
+      "phase": "Path and string handling",
+      "candidate": "Avoid formatting already UTF8 directory paths",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 73
+    },
+    {
+      "rank": 74,
+      "phase": "Path and string handling",
+      "candidate": "Reuse root prefix during path assembly",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 74
+    },
+    {
+      "rank": 75,
+      "phase": "Path and string handling",
+      "candidate": "Borrow ancestors during cycle checks",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 75
+    },
+    {
+      "rank": 76,
+      "phase": "Path and string handling",
+      "candidate": "Avoid duplicate root normalization",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 76
+    },
+    {
+      "rank": 77,
+      "phase": "Path and string handling",
+      "candidate": "Reuse filesystem error path conversion",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 77
+    },
+    {
+      "rank": 78,
+      "phase": "Path and string handling",
+      "candidate": "Avoid duplicate extension extraction",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 78
+    },
+    {
+      "rank": 79,
+      "phase": "Path and string handling",
+      "candidate": "Avoid storing derived full file paths",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 79
+    },
+    {
+      "rank": 80,
+      "phase": "Path and string handling",
+      "candidate": "Bound temporary path capacity retained by workers",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 80
+    },
+    {
+      "rank": 81,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Skip physical identity tracking for zero allocation",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 81
+    },
+    {
+      "rank": 82,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid compressed-size query when metadata proves zero allocation",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 82
+    },
+    {
+      "rank": 83,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid allocation rounding for zero logical size",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 83
+    },
+    {
+      "rank": 84,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid hardlink dedup lock for zero allocation",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 84
+    },
+    {
+      "rank": 85,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid repeated volume identity for ordinary entries",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 85
+    },
+    {
+      "rank": 86,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Use already-open handles for fallback metadata",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 86
+    },
+    {
+      "rank": 87,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid reopening entries with sufficient batched metadata",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 87
+    },
+    {
+      "rank": 88,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Keep sparse-file fallback separate from ordinary files",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 88
+    },
+    {
+      "rank": 89,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Cache volume cluster size per safe identity",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 89
+    },
+    {
+      "rank": 90,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid unnecessary zero-byte counter atomic updates",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 90
+    },
+    {
+      "rank": 91,
+      "phase": "Finalization and output",
+      "candidate": "Wait on terminal channel instead of polling",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 91
+    },
+    {
+      "rank": 92,
+      "phase": "Finalization and output",
+      "candidate": "Join scan workers once",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 92
+    },
+    {
+      "rank": 93,
+      "phase": "Finalization and output",
+      "candidate": "Avoid duplicate terminal state publication",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 93
+    },
+    {
+      "rank": 94,
+      "phase": "Finalization and output",
+      "candidate": "Release completed pipelines before export",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 94
+    },
+    {
+      "rank": 95,
+      "phase": "Finalization and output",
+      "candidate": "Avoid redundant final progress logging",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 95
+    },
+    {
+      "rank": 96,
+      "phase": "Finalization and output",
+      "candidate": "Reuse JSON event formatting storage",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 96
+    },
+    {
+      "rank": 97,
+      "phase": "Finalization and output",
+      "candidate": "Keep event log handle open through scan",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 97
+    },
+    {
+      "rank": 98,
+      "phase": "Finalization and output",
+      "candidate": "Avoid flushing empty log buffers",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 98
+    },
+    {
+      "rank": 99,
+      "phase": "Finalization and output",
+      "candidate": "Move auxiliary snapshot state instead of cloning",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 99
+    },
+    {
+      "rank": 100,
+      "phase": "Finalization and output",
+      "candidate": "Drop temporary export owners before process exit",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Hypothesis carried forward for dense workload; source and phase contribution need verification. Already implemented work must not be counted as a new win.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; measure phase IQR in this 8192-file workflow before estimating time savings.",
+      "origin_rank": 100
+    }
+  ],
+  "latest_measurement": {
+    "source": "dense-lazy-pipeline-confirmation.json",
+    "products": {
+      "WinBlaze": {
+        "n": 10,
+        "median_ms": 132.155,
+        "variability_percent": 11.934849230070744,
+        "sha256": "0BA06AB2F02805EA105975C3429C40DD67DF438EAEA58BDF5035C01688C63B7E"
+      },
+      "WinDirStat": {
+        "n": 10,
+        "median_ms": 790.785,
+        "variability_percent": 13.462572001239266,
+        "sha256": "6D17BEE74A51B0EE1F46B01862871BC45338728DFEEC7D3BAC926C89A20E88A7"
+      },
+      "WizTree": {
+        "n": 10,
+        "median_ms": 1407.18,
+        "variability_percent": 32.96770846657854,
+        "sha256": "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533"
+      }
+    },
+    "medal": "gold",
+    "confirmation": "Two independent current-build n=10 batches earned gold; baseline also earned gold, so causality is not established. All 90 confirmation CSV exports validated."
+  }
+}

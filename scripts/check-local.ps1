@@ -24,7 +24,11 @@ function Invoke-Step {
     )
 
     Write-Host "== $Name =="
+    $global:LASTEXITCODE = 0
     & $Command
+    if ($global:LASTEXITCODE -ne 0) {
+        throw "Local check step '$Name' failed with exit code $global:LASTEXITCODE."
+    }
 }
 
 $repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
@@ -59,6 +63,16 @@ Invoke-Step "WinUI build" {
     & $MsBuildPath $projectPath /p:Configuration=$Configuration /p:Platform=$Platform /m /nologo /v:minimal
 }
 
+Invoke-Step "Native file actions and monitoring" {
+    foreach ($name in @('file-actions','directory-watcher','color-resources','permission-view','byte-format')) {
+        & $MsBuildPath (Join-Path $repoRoot "tests/native/$name.vcxproj") /p:Configuration=Release /p:Platform=x64 /m /nologo /v:minimal
+        if ($LASTEXITCODE -ne 0) {throw "Native parity build failed: $name"}
+        $fixture=Join-Path $repoRoot ('artifacts/parity-check-'+[Guid]::NewGuid().ToString('N'))
+        & (Join-Path $repoRoot "artifacts/$name/$name.exe") $fixture
+        if ($LASTEXITCODE -ne 0) {throw "Native parity test failed: $name"}
+    }
+}
+
 if (-not $SkipUiSmoke) {
     $script:uiPrereqs = $null
     Invoke-Step "UI automation prerequisites" {
@@ -72,11 +86,26 @@ if (-not $SkipUiSmoke) {
         $SkipUiSmoke = $true
         $SkipNegativeUiSmoke = $true
     }
+    Invoke-Step "Directory and window UX" {
+        foreach ($case in @('empty', 'invalid', 'quoted', 'browse', 'expand', 'drive', 'window', 'version', 'guidance', 'cancel')) {
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "tests\ui\path-ux.ps1") -AppPath $appPath -Case $case
+            if ($LASTEXITCODE -ne 0) { throw "Directory UX check failed: $case" }
+        }
+    }
 }
 
 if (-not $SkipUiSmoke) {
     Invoke-Step "UI smoke" {
         powershell.exe -ExecutionPolicy Bypass -File (Join-Path $repoRoot "tests\ui\smoke.ps1") -AppPath $appPath
+    }
+}
+
+if (-not $SkipUiSmoke) {
+    Invoke-Step "Parity UI regressions" {
+        foreach ($name in @('parity','import-scan','export-features')) {
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "tests/ui/$name.ps1") -AppPath $appPath
+            if ($LASTEXITCODE -ne 0) {throw "Parity UI check failed: $name"}
+        }
     }
 }
 

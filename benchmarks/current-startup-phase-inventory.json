@@ -1,0 +1,4362 @@
+[
+  {
+    "run": 1,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 55644,
+    "launch_qpc": 720566695624,
+    "idle_qpc": 720568653911,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:04.1251663Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720567826160,
+        "since_launch_ms": 113.0536,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720568017858,
+        "since_launch_ms": 132.2234,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720568037166,
+        "since_launch_ms": 134.1542,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720568226965,
+        "since_launch_ms": 153.1341,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720568232585,
+        "since_launch_ms": 153.6961,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720568234862,
+        "since_launch_ms": 153.9238,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720568238192,
+        "since_launch_ms": 154.2568,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720568527835,
+        "since_launch_ms": 183.2211,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720568529817,
+        "since_launch_ms": 183.4193,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720568887457,
+        "since_launch_ms": 219.1833,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720568892326,
+        "since_launch_ms": 219.6702,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720568894960,
+        "since_launch_ms": 219.9336,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720568915414,
+        "since_launch_ms": 221.979,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720569082600,
+        "since_launch_ms": 238.6976,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720569086370,
+        "since_launch_ms": 239.0746,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720569089341,
+        "since_launch_ms": 239.3717,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720569101481,
+        "since_launch_ms": 240.5857,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720569115634,
+        "since_launch_ms": 242.001,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720569124125,
+        "since_launch_ms": 242.8501,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720569131662,
+        "since_launch_ms": 243.6038,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720569151929,
+        "since_launch_ms": 245.6305,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720569158095,
+        "since_launch_ms": 246.2471,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720569162454,
+        "since_launch_ms": 246.683,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720569402112,
+        "since_launch_ms": 270.6488,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720569413739,
+        "since_launch_ms": 271.8115,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720569421208,
+        "since_launch_ms": 272.5584,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720569438000,
+        "since_launch_ms": 274.2376,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720569440181,
+        "since_launch_ms": 274.4557,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720569472789,
+        "since_launch_ms": 277.7165,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720569476395,
+        "since_launch_ms": 278.0771,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720569478678,
+        "since_launch_ms": 278.3054,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720569483047,
+        "since_launch_ms": 278.7423,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720569486631,
+        "since_launch_ms": 279.1007,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720569489815,
+        "since_launch_ms": 279.4191,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720569495109,
+        "since_launch_ms": 279.9485,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720569497608,
+        "since_launch_ms": 280.1984,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720569499275,
+        "since_launch_ms": 280.3651,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720569501395,
+        "since_launch_ms": 280.5771,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720569506057,
+        "since_launch_ms": 281.0433,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720569508448,
+        "since_launch_ms": 281.2824,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720569510394,
+        "since_launch_ms": 281.477,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720569511892,
+        "since_launch_ms": 281.6268,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720569513239,
+        "since_launch_ms": 281.7615,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720569514726,
+        "since_launch_ms": 281.9102,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720569520529,
+        "since_launch_ms": 282.4905,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720569524109,
+        "since_launch_ms": 282.8485,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720569525644,
+        "since_launch_ms": 283.002,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720569527318,
+        "since_launch_ms": 283.1694,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720569528963,
+        "since_launch_ms": 283.3339,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720569530352,
+        "since_launch_ms": 283.4728,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720569532298,
+        "since_launch_ms": 283.6674,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720569535705,
+        "since_launch_ms": 284.0081,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720569538469,
+        "since_launch_ms": 284.2845,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720569540228,
+        "since_launch_ms": 284.4604,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720569542222,
+        "since_launch_ms": 284.6598,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720569544390,
+        "since_launch_ms": 284.8766,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720569545826,
+        "since_launch_ms": 285.0202,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720569549434,
+        "since_launch_ms": 285.381,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720569552805,
+        "since_launch_ms": 285.7181,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720569555526,
+        "since_launch_ms": 285.9902,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720569557486,
+        "since_launch_ms": 286.1862,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720569558909,
+        "since_launch_ms": 286.3285,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720569560210,
+        "since_launch_ms": 286.4586,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720569561809,
+        "since_launch_ms": 286.6185,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720569564391,
+        "since_launch_ms": 286.8767,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720569691379,
+        "since_launch_ms": 299.5755,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720569696097,
+        "since_launch_ms": 300.0473,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720569698346,
+        "since_launch_ms": 300.2722,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720569734100,
+        "since_launch_ms": 303.8476,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  },
+  {
+    "run": 2,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 66416,
+    "launch_qpc": 720570569452,
+    "idle_qpc": 720571305861,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:04.3727060Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720570732127,
+        "since_launch_ms": 16.2675,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720570782364,
+        "since_launch_ms": 21.2912,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720570820139,
+        "since_launch_ms": 25.0687,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720571040520,
+        "since_launch_ms": 47.1068,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720571046408,
+        "since_launch_ms": 47.6956,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720571048469,
+        "since_launch_ms": 47.9017,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720571050747,
+        "since_launch_ms": 48.1295,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720571150177,
+        "since_launch_ms": 58.0725,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720571152882,
+        "since_launch_ms": 58.343,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720571554353,
+        "since_launch_ms": 98.4901,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720571557928,
+        "since_launch_ms": 98.8476,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720571560088,
+        "since_launch_ms": 99.0636,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720571578415,
+        "since_launch_ms": 100.8963,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720571748881,
+        "since_launch_ms": 117.9429,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720571754125,
+        "since_launch_ms": 118.4673,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720571757029,
+        "since_launch_ms": 118.7577,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720571766532,
+        "since_launch_ms": 119.708,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720571787407,
+        "since_launch_ms": 121.7955,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720571795057,
+        "since_launch_ms": 122.5605,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720571803313,
+        "since_launch_ms": 123.3861,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720571820595,
+        "since_launch_ms": 125.1143,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720571824051,
+        "since_launch_ms": 125.4599,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720571827299,
+        "since_launch_ms": 125.7847,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720572019334,
+        "since_launch_ms": 144.9882,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720572028206,
+        "since_launch_ms": 145.8754,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720572032961,
+        "since_launch_ms": 146.3509,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720572045602,
+        "since_launch_ms": 147.615,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720572047328,
+        "since_launch_ms": 147.7876,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720572070079,
+        "since_launch_ms": 150.0627,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720572071554,
+        "since_launch_ms": 150.2102,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720572072557,
+        "since_launch_ms": 150.3105,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720572073981,
+        "since_launch_ms": 150.4529,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720572075529,
+        "since_launch_ms": 150.6077,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720572076744,
+        "since_launch_ms": 150.7292,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720572078084,
+        "since_launch_ms": 150.8632,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720572079217,
+        "since_launch_ms": 150.9765,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720572080405,
+        "since_launch_ms": 151.0953,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720572081555,
+        "since_launch_ms": 151.2103,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720572083285,
+        "since_launch_ms": 151.3833,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720572084620,
+        "since_launch_ms": 151.5168,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720572085517,
+        "since_launch_ms": 151.6065,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720572086587,
+        "since_launch_ms": 151.7135,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720572087560,
+        "since_launch_ms": 151.8108,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720572088362,
+        "since_launch_ms": 151.891,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720572091614,
+        "since_launch_ms": 152.2162,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720572093297,
+        "since_launch_ms": 152.3845,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720572094545,
+        "since_launch_ms": 152.5093,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720572095530,
+        "since_launch_ms": 152.6078,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720572096360,
+        "since_launch_ms": 152.6908,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720572097199,
+        "since_launch_ms": 152.7747,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720572098261,
+        "since_launch_ms": 152.8809,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720572099197,
+        "since_launch_ms": 152.9745,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720572100157,
+        "since_launch_ms": 153.0705,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720572100985,
+        "since_launch_ms": 153.1533,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720572102968,
+        "since_launch_ms": 153.3516,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720572105265,
+        "since_launch_ms": 153.5813,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720572107130,
+        "since_launch_ms": 153.7678,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720572108896,
+        "since_launch_ms": 153.9444,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720572111851,
+        "since_launch_ms": 154.2399,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720572116565,
+        "since_launch_ms": 154.7113,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720572118576,
+        "since_launch_ms": 154.9124,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720572120041,
+        "since_launch_ms": 155.0589,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720572121324,
+        "since_launch_ms": 155.1872,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720572122677,
+        "since_launch_ms": 155.3225,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720572125423,
+        "since_launch_ms": 155.5971,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720572308601,
+        "since_launch_ms": 173.9149,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720572315228,
+        "since_launch_ms": 174.5776,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720572318328,
+        "since_launch_ms": 174.8876,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720572349792,
+        "since_launch_ms": 178.034,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  },
+  {
+    "run": 3,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 50040,
+    "launch_qpc": 720572915241,
+    "idle_qpc": 720573734072,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:04.6224399Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720573061452,
+        "since_launch_ms": 14.6211,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720573098298,
+        "since_launch_ms": 18.3057,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720573124505,
+        "since_launch_ms": 20.9264,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720573435554,
+        "since_launch_ms": 52.0313,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720573445169,
+        "since_launch_ms": 52.9928,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720573448114,
+        "since_launch_ms": 53.2873,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720573450412,
+        "since_launch_ms": 53.5171,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720573574054,
+        "since_launch_ms": 65.8813,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720573576849,
+        "since_launch_ms": 66.1608,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720573986813,
+        "since_launch_ms": 107.1572,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720573991463,
+        "since_launch_ms": 107.6222,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720573995180,
+        "since_launch_ms": 107.9939,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720574014115,
+        "since_launch_ms": 109.8874,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720574187348,
+        "since_launch_ms": 127.2107,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720574190744,
+        "since_launch_ms": 127.5503,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720574192903,
+        "since_launch_ms": 127.7662,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720574200075,
+        "since_launch_ms": 128.4834,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720574211383,
+        "since_launch_ms": 129.6142,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720574217213,
+        "since_launch_ms": 130.1972,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720574225851,
+        "since_launch_ms": 131.061,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720574241145,
+        "since_launch_ms": 132.5904,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720574244385,
+        "since_launch_ms": 132.9144,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720574247394,
+        "since_launch_ms": 133.2153,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720574421913,
+        "since_launch_ms": 150.6672,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720574430068,
+        "since_launch_ms": 151.4827,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720574438201,
+        "since_launch_ms": 152.296,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720574457363,
+        "since_launch_ms": 154.2122,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720574460223,
+        "since_launch_ms": 154.4982,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720574486758,
+        "since_launch_ms": 157.1517,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720574488441,
+        "since_launch_ms": 157.32,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720574489590,
+        "since_launch_ms": 157.4349,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720574490787,
+        "since_launch_ms": 157.5546,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720574492644,
+        "since_launch_ms": 157.7403,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720574493804,
+        "since_launch_ms": 157.8563,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720574495407,
+        "since_launch_ms": 158.0166,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720574498264,
+        "since_launch_ms": 158.3023,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720574499185,
+        "since_launch_ms": 158.3944,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720574500345,
+        "since_launch_ms": 158.5104,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720574503455,
+        "since_launch_ms": 158.8214,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720574505020,
+        "since_launch_ms": 158.9779,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720574506175,
+        "since_launch_ms": 159.0934,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720574507282,
+        "since_launch_ms": 159.2041,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720574508696,
+        "since_launch_ms": 159.3455,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720574509869,
+        "since_launch_ms": 159.4628,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720574515264,
+        "since_launch_ms": 160.0023,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720574517991,
+        "since_launch_ms": 160.275,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720574519379,
+        "since_launch_ms": 160.4138,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720574520909,
+        "since_launch_ms": 160.5668,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720574522130,
+        "since_launch_ms": 160.6889,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720574523653,
+        "since_launch_ms": 160.8412,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720574525366,
+        "since_launch_ms": 161.0125,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720574526922,
+        "since_launch_ms": 161.1681,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720574528275,
+        "since_launch_ms": 161.3034,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720574529928,
+        "since_launch_ms": 161.4687,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720574531383,
+        "since_launch_ms": 161.6142,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720574532649,
+        "since_launch_ms": 161.7408,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720574534023,
+        "since_launch_ms": 161.8782,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720574535205,
+        "since_launch_ms": 161.9964,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720574536789,
+        "since_launch_ms": 162.1548,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720574538112,
+        "since_launch_ms": 162.2871,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720574539600,
+        "since_launch_ms": 162.4359,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720574541188,
+        "since_launch_ms": 162.5947,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720574542691,
+        "since_launch_ms": 162.745,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720574545559,
+        "since_launch_ms": 163.0318,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720574549831,
+        "since_launch_ms": 163.459,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720574723110,
+        "since_launch_ms": 180.7869,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720574728700,
+        "since_launch_ms": 181.3459,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720574731149,
+        "since_launch_ms": 181.5908,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720574821491,
+        "since_launch_ms": 190.625,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  },
+  {
+    "run": 4,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 60104,
+    "launch_qpc": 720575398197,
+    "idle_qpc": 720576220138,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:04.9333667Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720575559498,
+        "since_launch_ms": 16.1301,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720575600131,
+        "since_launch_ms": 20.1934,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720575632920,
+        "since_launch_ms": 23.4723,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720575933379,
+        "since_launch_ms": 53.5182,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720575947259,
+        "since_launch_ms": 54.9062,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720575950708,
+        "since_launch_ms": 55.2511,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720575953216,
+        "since_launch_ms": 55.5019,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720576060846,
+        "since_launch_ms": 66.2649,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720576063839,
+        "since_launch_ms": 66.5642,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720576491099,
+        "since_launch_ms": 109.2902,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720576495171,
+        "since_launch_ms": 109.6974,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720576497835,
+        "since_launch_ms": 109.9638,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720576516877,
+        "since_launch_ms": 111.868,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720577005922,
+        "since_launch_ms": 160.7725,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720577014108,
+        "since_launch_ms": 161.5911,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720577019485,
+        "since_launch_ms": 162.1288,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720577045560,
+        "since_launch_ms": 164.7363,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720577074784,
+        "since_launch_ms": 167.6587,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720577088931,
+        "since_launch_ms": 169.0734,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720577101181,
+        "since_launch_ms": 170.2984,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720577138724,
+        "since_launch_ms": 174.0527,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720577146199,
+        "since_launch_ms": 174.8002,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720577152945,
+        "since_launch_ms": 175.4748,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720577391735,
+        "since_launch_ms": 199.3538,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720577404813,
+        "since_launch_ms": 200.6616,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720577412681,
+        "since_launch_ms": 201.4484,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720577431940,
+        "since_launch_ms": 203.3743,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720577434612,
+        "since_launch_ms": 203.6415,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720577475619,
+        "since_launch_ms": 207.7422,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720577479730,
+        "since_launch_ms": 208.1533,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720577482263,
+        "since_launch_ms": 208.4066,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720577483976,
+        "since_launch_ms": 208.5779,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720577485583,
+        "since_launch_ms": 208.7386,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720577487580,
+        "since_launch_ms": 208.9383,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720577489755,
+        "since_launch_ms": 209.1558,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720577491921,
+        "since_launch_ms": 209.3724,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720577493467,
+        "since_launch_ms": 209.527,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720577495457,
+        "since_launch_ms": 209.726,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720577498675,
+        "since_launch_ms": 210.0478,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720577502388,
+        "since_launch_ms": 210.4191,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720577504304,
+        "since_launch_ms": 210.6107,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720577506945,
+        "since_launch_ms": 210.8748,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720577508685,
+        "since_launch_ms": 211.0488,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720577510228,
+        "since_launch_ms": 211.2031,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720577516498,
+        "since_launch_ms": 211.8301,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720577519468,
+        "since_launch_ms": 212.1271,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720577521150,
+        "since_launch_ms": 212.2953,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720577523420,
+        "since_launch_ms": 212.5223,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720577524859,
+        "since_launch_ms": 212.6662,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720577526219,
+        "since_launch_ms": 212.8022,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720577528250,
+        "since_launch_ms": 213.0053,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720577529954,
+        "since_launch_ms": 213.1757,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720577531771,
+        "since_launch_ms": 213.3574,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720577533328,
+        "since_launch_ms": 213.5131,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720577536115,
+        "since_launch_ms": 213.7918,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720577538485,
+        "since_launch_ms": 214.0288,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720577540473,
+        "since_launch_ms": 214.2276,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720577542139,
+        "since_launch_ms": 214.3942,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720577545260,
+        "since_launch_ms": 214.7063,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720577547715,
+        "since_launch_ms": 214.9518,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720577549799,
+        "since_launch_ms": 215.1602,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720577552731,
+        "since_launch_ms": 215.4534,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720577554471,
+        "since_launch_ms": 215.6274,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720577556123,
+        "since_launch_ms": 215.7926,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720577559562,
+        "since_launch_ms": 216.1365,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720577899122,
+        "since_launch_ms": 250.0925,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720577918996,
+        "since_launch_ms": 252.0799,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720577925589,
+        "since_launch_ms": 252.7392,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720578028297,
+        "since_launch_ms": 263.01,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  },
+  {
+    "run": 5,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 53760,
+    "launch_qpc": 720578549811,
+    "idle_qpc": 720579438248,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:05.1893576Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720578759702,
+        "since_launch_ms": 20.9891,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720578806097,
+        "since_launch_ms": 25.6286,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720578849816,
+        "since_launch_ms": 30.0005,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720579145479,
+        "since_launch_ms": 59.5668,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720579154310,
+        "since_launch_ms": 60.4499,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720579156775,
+        "since_launch_ms": 60.6964,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720579158692,
+        "since_launch_ms": 60.8881,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720579280943,
+        "since_launch_ms": 73.1132,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720579284202,
+        "since_launch_ms": 73.4391,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720579683000,
+        "since_launch_ms": 113.3189,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720579688161,
+        "since_launch_ms": 113.835,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720579691163,
+        "since_launch_ms": 114.1352,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720579715992,
+        "since_launch_ms": 116.6181,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720579951133,
+        "since_launch_ms": 140.1322,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720579955810,
+        "since_launch_ms": 140.5999,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720579958922,
+        "since_launch_ms": 140.9111,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720579969953,
+        "since_launch_ms": 142.0142,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720579985116,
+        "since_launch_ms": 143.5305,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720579995348,
+        "since_launch_ms": 144.5537,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720580004769,
+        "since_launch_ms": 145.4958,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720580027370,
+        "since_launch_ms": 147.7559,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720580032369,
+        "since_launch_ms": 148.2558,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720580036145,
+        "since_launch_ms": 148.6334,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720580272690,
+        "since_launch_ms": 172.2879,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720580287636,
+        "since_launch_ms": 173.7825,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720580294939,
+        "since_launch_ms": 174.5128,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720580310583,
+        "since_launch_ms": 176.0772,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720580312953,
+        "since_launch_ms": 176.3142,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720580341546,
+        "since_launch_ms": 179.1735,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720580343790,
+        "since_launch_ms": 179.3979,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720580346068,
+        "since_launch_ms": 179.6257,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720580347687,
+        "since_launch_ms": 179.7876,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720580350362,
+        "since_launch_ms": 180.0551,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720580352591,
+        "since_launch_ms": 180.278,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720580356117,
+        "since_launch_ms": 180.6306,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720580358478,
+        "since_launch_ms": 180.8667,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720580359927,
+        "since_launch_ms": 181.0116,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720580361671,
+        "since_launch_ms": 181.186,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720580364754,
+        "since_launch_ms": 181.4943,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720580366974,
+        "since_launch_ms": 181.7163,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720580369491,
+        "since_launch_ms": 181.968,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720580371016,
+        "since_launch_ms": 182.1205,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720580372486,
+        "since_launch_ms": 182.2675,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720580374482,
+        "since_launch_ms": 182.4671,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720580380133,
+        "since_launch_ms": 183.0322,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720580382457,
+        "since_launch_ms": 183.2646,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720580384094,
+        "since_launch_ms": 183.4283,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720580385586,
+        "since_launch_ms": 183.5775,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720580386980,
+        "since_launch_ms": 183.7169,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720580388864,
+        "since_launch_ms": 183.9053,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720580390392,
+        "since_launch_ms": 184.0581,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720580391831,
+        "since_launch_ms": 184.202,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720580393438,
+        "since_launch_ms": 184.3627,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720580394754,
+        "since_launch_ms": 184.4943,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720580396077,
+        "since_launch_ms": 184.6266,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720580397420,
+        "since_launch_ms": 184.7609,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720580400311,
+        "since_launch_ms": 185.05,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720580402232,
+        "since_launch_ms": 185.2421,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720580404422,
+        "since_launch_ms": 185.4611,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720580407784,
+        "since_launch_ms": 185.7973,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720580411420,
+        "since_launch_ms": 186.1609,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720580413296,
+        "since_launch_ms": 186.3485,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720580414939,
+        "since_launch_ms": 186.5128,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720580417665,
+        "since_launch_ms": 186.7854,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720580420441,
+        "since_launch_ms": 187.063,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720580558177,
+        "since_launch_ms": 200.8366,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720580564891,
+        "since_launch_ms": 201.508,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720580568347,
+        "since_launch_ms": 201.8536,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720580615964,
+        "since_launch_ms": 206.6153,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  },
+  {
+    "run": 6,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 20688,
+    "launch_qpc": 720581171840,
+    "idle_qpc": 720581941059,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:05.4369995Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720581329815,
+        "since_launch_ms": 15.7975,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720581378345,
+        "since_launch_ms": 20.6505,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720581421058,
+        "since_launch_ms": 24.9218,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720581681086,
+        "since_launch_ms": 50.9246,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720581689653,
+        "since_launch_ms": 51.7813,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720581692515,
+        "since_launch_ms": 52.0675,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720581695496,
+        "since_launch_ms": 52.3656,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720581798460,
+        "since_launch_ms": 62.662,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720581802337,
+        "since_launch_ms": 63.0497,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720582194133,
+        "since_launch_ms": 102.2293,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720582198848,
+        "since_launch_ms": 102.7008,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720582202629,
+        "since_launch_ms": 103.0789,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720582222598,
+        "since_launch_ms": 105.0758,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720582429180,
+        "since_launch_ms": 125.734,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720582433188,
+        "since_launch_ms": 126.1348,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720582438944,
+        "since_launch_ms": 126.7104,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720582452258,
+        "since_launch_ms": 128.0418,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720582466743,
+        "since_launch_ms": 129.4903,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720582473639,
+        "since_launch_ms": 130.1799,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720582481226,
+        "since_launch_ms": 130.9386,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720582504584,
+        "since_launch_ms": 133.2744,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720582509081,
+        "since_launch_ms": 133.7241,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720582512311,
+        "since_launch_ms": 134.0471,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720582741368,
+        "since_launch_ms": 156.9528,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720582751413,
+        "since_launch_ms": 157.9573,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720582757332,
+        "since_launch_ms": 158.5492,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720582775917,
+        "since_launch_ms": 160.4077,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720582778732,
+        "since_launch_ms": 160.6892,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720582808142,
+        "since_launch_ms": 163.6302,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720582810394,
+        "since_launch_ms": 163.8554,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720582811871,
+        "since_launch_ms": 164.0031,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720582813083,
+        "since_launch_ms": 164.1243,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720582814249,
+        "since_launch_ms": 164.2409,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720582816498,
+        "since_launch_ms": 164.4658,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720582819033,
+        "since_launch_ms": 164.7193,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720582820956,
+        "since_launch_ms": 164.9116,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720582822395,
+        "since_launch_ms": 165.0555,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720582823848,
+        "since_launch_ms": 165.2008,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720582825978,
+        "since_launch_ms": 165.4138,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720582827576,
+        "since_launch_ms": 165.5736,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720582828727,
+        "since_launch_ms": 165.6887,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720582829853,
+        "since_launch_ms": 165.8013,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720582830889,
+        "since_launch_ms": 165.9049,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720582831920,
+        "since_launch_ms": 166.008,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720582836813,
+        "since_launch_ms": 166.4973,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720582839056,
+        "since_launch_ms": 166.7216,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720582840515,
+        "since_launch_ms": 166.8675,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720582842358,
+        "since_launch_ms": 167.0518,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720582843670,
+        "since_launch_ms": 167.183,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720582844879,
+        "since_launch_ms": 167.3039,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720582846341,
+        "since_launch_ms": 167.4501,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720582847557,
+        "since_launch_ms": 167.5717,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720582848931,
+        "since_launch_ms": 167.7091,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720582850405,
+        "since_launch_ms": 167.8565,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720582851724,
+        "since_launch_ms": 167.9884,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720582853035,
+        "since_launch_ms": 168.1195,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720582854410,
+        "since_launch_ms": 168.257,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720582855546,
+        "since_launch_ms": 168.3706,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720582857029,
+        "since_launch_ms": 168.5189,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720582858163,
+        "since_launch_ms": 168.6323,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720582860011,
+        "since_launch_ms": 168.8171,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720582863828,
+        "since_launch_ms": 169.1988,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720582865187,
+        "since_launch_ms": 169.3347,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720582866552,
+        "since_launch_ms": 169.4712,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720582868618,
+        "since_launch_ms": 169.6778,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720583033615,
+        "since_launch_ms": 186.1775,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720583041730,
+        "since_launch_ms": 186.989,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720583045121,
+        "since_launch_ms": 187.3281,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720583079208,
+        "since_launch_ms": 190.7368,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  },
+  {
+    "run": 7,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 23192,
+    "launch_qpc": 720583774853,
+    "idle_qpc": 720584535247,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:05.7004345Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720583917373,
+        "since_launch_ms": 14.252,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720583970225,
+        "since_launch_ms": 19.5372,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720584010831,
+        "since_launch_ms": 23.5978,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720584269210,
+        "since_launch_ms": 49.4357,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720584276713,
+        "since_launch_ms": 50.186,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720584278872,
+        "since_launch_ms": 50.4019,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720584282815,
+        "since_launch_ms": 50.7962,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720584387483,
+        "since_launch_ms": 61.263,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720584389932,
+        "since_launch_ms": 61.5079,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720584761667,
+        "since_launch_ms": 98.6814,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720584765785,
+        "since_launch_ms": 99.0932,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720584772650,
+        "since_launch_ms": 99.7797,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720584798280,
+        "since_launch_ms": 102.3427,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720584986009,
+        "since_launch_ms": 121.1156,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720584992352,
+        "since_launch_ms": 121.7499,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720584996638,
+        "since_launch_ms": 122.1785,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720585008214,
+        "since_launch_ms": 123.3361,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720585021310,
+        "since_launch_ms": 124.6457,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720585027278,
+        "since_launch_ms": 125.2425,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720585034000,
+        "since_launch_ms": 125.9147,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720585050612,
+        "since_launch_ms": 127.5759,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720585054329,
+        "since_launch_ms": 127.9476,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720585058757,
+        "since_launch_ms": 128.3904,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720585257576,
+        "since_launch_ms": 148.2723,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720585271187,
+        "since_launch_ms": 149.6334,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720585279340,
+        "since_launch_ms": 150.4487,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720585294492,
+        "since_launch_ms": 151.9639,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720585296605,
+        "since_launch_ms": 152.1752,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720585328656,
+        "since_launch_ms": 155.3803,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720585330653,
+        "since_launch_ms": 155.58,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720585332318,
+        "since_launch_ms": 155.7465,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720585333801,
+        "since_launch_ms": 155.8948,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720585335720,
+        "since_launch_ms": 156.0867,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720585337958,
+        "since_launch_ms": 156.3105,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720585341327,
+        "since_launch_ms": 156.6474,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720585343827,
+        "since_launch_ms": 156.8974,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720585347527,
+        "since_launch_ms": 157.2674,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720585350236,
+        "since_launch_ms": 157.5383,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720585353968,
+        "since_launch_ms": 157.9115,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720585359069,
+        "since_launch_ms": 158.4216,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720585361851,
+        "since_launch_ms": 158.6998,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720585363547,
+        "since_launch_ms": 158.8694,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720585365069,
+        "since_launch_ms": 159.0216,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720585366772,
+        "since_launch_ms": 159.1919,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720585374377,
+        "since_launch_ms": 159.9524,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720585377548,
+        "since_launch_ms": 160.2695,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720585379444,
+        "since_launch_ms": 160.4591,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720585383757,
+        "since_launch_ms": 160.8904,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720585385663,
+        "since_launch_ms": 161.081,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720585389732,
+        "since_launch_ms": 161.4879,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720585392123,
+        "since_launch_ms": 161.727,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720585393945,
+        "since_launch_ms": 161.9092,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720585395791,
+        "since_launch_ms": 162.0938,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720585397996,
+        "since_launch_ms": 162.3143,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720585399914,
+        "since_launch_ms": 162.5061,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720585402444,
+        "since_launch_ms": 162.7591,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720585406369,
+        "since_launch_ms": 163.1516,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720585409032,
+        "since_launch_ms": 163.4179,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720585410806,
+        "since_launch_ms": 163.5953,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720585412562,
+        "since_launch_ms": 163.7709,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720585414246,
+        "since_launch_ms": 163.9393,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720585415722,
+        "since_launch_ms": 164.0869,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720585418054,
+        "since_launch_ms": 164.3201,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720585421279,
+        "since_launch_ms": 164.6426,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720585424221,
+        "since_launch_ms": 164.9368,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720585578101,
+        "since_launch_ms": 180.3248,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720585585331,
+        "since_launch_ms": 181.0478,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720585589225,
+        "since_launch_ms": 181.4372,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720585626720,
+        "since_launch_ms": 185.1867,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  },
+  {
+    "run": 8,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 48396,
+    "launch_qpc": 720586329378,
+    "idle_qpc": 720587163163,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:05.9560839Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720586498199,
+        "since_launch_ms": 16.8821,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720586544885,
+        "since_launch_ms": 21.5507,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720586584049,
+        "since_launch_ms": 25.4671,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720586885532,
+        "since_launch_ms": 55.6154,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720586892188,
+        "since_launch_ms": 56.281,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720586897012,
+        "since_launch_ms": 56.7634,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720586899554,
+        "since_launch_ms": 57.0176,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720587019257,
+        "since_launch_ms": 68.9879,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720587021394,
+        "since_launch_ms": 69.2016,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720587465782,
+        "since_launch_ms": 113.6404,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720587469283,
+        "since_launch_ms": 113.9905,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720587471053,
+        "since_launch_ms": 114.1675,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720587489309,
+        "since_launch_ms": 115.9931,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720587675644,
+        "since_launch_ms": 134.6266,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720587680773,
+        "since_launch_ms": 135.1395,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720587684206,
+        "since_launch_ms": 135.4828,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720587693843,
+        "since_launch_ms": 136.4465,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720587706447,
+        "since_launch_ms": 137.7069,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720587712485,
+        "since_launch_ms": 138.3107,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720587719317,
+        "since_launch_ms": 138.9939,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720587738154,
+        "since_launch_ms": 140.8776,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720587742249,
+        "since_launch_ms": 141.2871,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720587745127,
+        "since_launch_ms": 141.5749,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720587949969,
+        "since_launch_ms": 162.0591,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720587960748,
+        "since_launch_ms": 163.137,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720587966121,
+        "since_launch_ms": 163.6743,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720587980316,
+        "since_launch_ms": 165.0938,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720587983368,
+        "since_launch_ms": 165.399,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720588011823,
+        "since_launch_ms": 168.2445,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720588013661,
+        "since_launch_ms": 168.4283,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720588017644,
+        "since_launch_ms": 168.8266,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720588019208,
+        "since_launch_ms": 168.983,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720588020653,
+        "since_launch_ms": 169.1275,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720588021951,
+        "since_launch_ms": 169.2573,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720588023659,
+        "since_launch_ms": 169.4281,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720588025272,
+        "since_launch_ms": 169.5894,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720588026222,
+        "since_launch_ms": 169.6844,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720588028374,
+        "since_launch_ms": 169.8996,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720588031174,
+        "since_launch_ms": 170.1796,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720588032988,
+        "since_launch_ms": 170.361,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720588034312,
+        "since_launch_ms": 170.4934,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720588035573,
+        "since_launch_ms": 170.6195,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720588036720,
+        "since_launch_ms": 170.7342,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720588037913,
+        "since_launch_ms": 170.8535,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720588042622,
+        "since_launch_ms": 171.3244,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720588045753,
+        "since_launch_ms": 171.6375,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720588047816,
+        "since_launch_ms": 171.8438,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720588049857,
+        "since_launch_ms": 172.0479,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720588051265,
+        "since_launch_ms": 172.1887,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720588052517,
+        "since_launch_ms": 172.3139,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720588054017,
+        "since_launch_ms": 172.4639,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720588056732,
+        "since_launch_ms": 172.7354,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720588058035,
+        "since_launch_ms": 172.8657,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720588059304,
+        "since_launch_ms": 172.9926,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720588060460,
+        "since_launch_ms": 173.1082,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720588062301,
+        "since_launch_ms": 173.2923,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720588063526,
+        "since_launch_ms": 173.4148,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720588064540,
+        "since_launch_ms": 173.5162,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720588065881,
+        "since_launch_ms": 173.6503,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720588066993,
+        "since_launch_ms": 173.7615,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720588068194,
+        "since_launch_ms": 173.8816,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720588069658,
+        "since_launch_ms": 174.028,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720588070936,
+        "since_launch_ms": 174.1558,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720588072371,
+        "since_launch_ms": 174.2993,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720588074658,
+        "since_launch_ms": 174.528,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720588219318,
+        "since_launch_ms": 188.994,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720588224228,
+        "since_launch_ms": 189.485,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720588227259,
+        "since_launch_ms": 189.7881,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720588264640,
+        "since_launch_ms": 193.5262,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  },
+  {
+    "run": 9,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 12744,
+    "launch_qpc": 720588890285,
+    "idle_qpc": 720589714984,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:06.2232649Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720589038948,
+        "since_launch_ms": 14.8663,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720589081807,
+        "since_launch_ms": 19.1522,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720589105826,
+        "since_launch_ms": 21.5541,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720589401141,
+        "since_launch_ms": 51.0856,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720589411642,
+        "since_launch_ms": 52.1357,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720589417100,
+        "since_launch_ms": 52.6815,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720589421376,
+        "since_launch_ms": 53.1091,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720589542719,
+        "since_launch_ms": 65.2434,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720589546727,
+        "since_launch_ms": 65.6442,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720589972321,
+        "since_launch_ms": 108.2036,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720589976812,
+        "since_launch_ms": 108.6527,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720589978959,
+        "since_launch_ms": 108.8674,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720590000973,
+        "since_launch_ms": 111.0688,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720590222327,
+        "since_launch_ms": 133.2042,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720590226609,
+        "since_launch_ms": 133.6324,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720590229850,
+        "since_launch_ms": 133.9565,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720590243799,
+        "since_launch_ms": 135.3514,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720590258899,
+        "since_launch_ms": 136.8614,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720590266828,
+        "since_launch_ms": 137.6543,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720590275694,
+        "since_launch_ms": 138.5409,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720590301108,
+        "since_launch_ms": 141.0823,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720590305341,
+        "since_launch_ms": 141.5056,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720590309255,
+        "since_launch_ms": 141.897,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720590522292,
+        "since_launch_ms": 163.2007,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720590533768,
+        "since_launch_ms": 164.3483,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720590539921,
+        "since_launch_ms": 164.9636,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720590554340,
+        "since_launch_ms": 166.4055,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720590557493,
+        "since_launch_ms": 166.7208,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720590585119,
+        "since_launch_ms": 169.4834,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720590587215,
+        "since_launch_ms": 169.693,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720590588758,
+        "since_launch_ms": 169.8473,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720590593804,
+        "since_launch_ms": 170.3519,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720590596663,
+        "since_launch_ms": 170.6378,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720590598861,
+        "since_launch_ms": 170.8576,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720590602608,
+        "since_launch_ms": 171.2323,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720590607730,
+        "since_launch_ms": 171.7445,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720590611280,
+        "since_launch_ms": 172.0995,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720590614634,
+        "since_launch_ms": 172.4349,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720590619269,
+        "since_launch_ms": 172.8984,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720590623648,
+        "since_launch_ms": 173.3363,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720590626851,
+        "since_launch_ms": 173.6566,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720590631131,
+        "since_launch_ms": 174.0846,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720590633138,
+        "since_launch_ms": 174.2853,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720590634741,
+        "since_launch_ms": 174.4456,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720590640018,
+        "since_launch_ms": 174.9733,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720590643099,
+        "since_launch_ms": 175.2814,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720590645262,
+        "since_launch_ms": 175.4977,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720590646863,
+        "since_launch_ms": 175.6578,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720590648736,
+        "since_launch_ms": 175.8451,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720590650320,
+        "since_launch_ms": 176.0035,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720590653056,
+        "since_launch_ms": 176.2771,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720590655703,
+        "since_launch_ms": 176.5418,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720590657624,
+        "since_launch_ms": 176.7339,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720590659110,
+        "since_launch_ms": 176.8825,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720590660927,
+        "since_launch_ms": 177.0642,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720590662908,
+        "since_launch_ms": 177.2623,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720590665609,
+        "since_launch_ms": 177.5324,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720590668396,
+        "since_launch_ms": 177.8111,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720590670510,
+        "since_launch_ms": 178.0225,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720590673835,
+        "since_launch_ms": 178.355,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720590677869,
+        "since_launch_ms": 178.7584,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720590680385,
+        "since_launch_ms": 179.01,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720590682244,
+        "since_launch_ms": 179.1959,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720590683856,
+        "since_launch_ms": 179.3571,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720590686649,
+        "since_launch_ms": 179.6364,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720590823002,
+        "since_launch_ms": 193.2717,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720590831088,
+        "since_launch_ms": 194.0803,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720590833777,
+        "since_launch_ms": 194.3492,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720590879696,
+        "since_launch_ms": 198.9411,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  },
+  {
+    "run": 10,
+    "binary": {
+      "tool": "WinBlaze startup phases",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "675F52F72AE9364655139DC36DC472A5D14DBB4AB8957BB1888546F619259A8F",
+      "native_dll_sha256": "754CC4E4752450DEA9CDC5431C5163851A4448E4FED5D01684C2A957236CB873",
+      "identity_sha256": "5F3E89F99832FA3433079109BC79E579C8C2A39C630E664E0DE0DDF93B73A4B4",
+      "observed_utc": "2026-10-06T07:24:03.5272549Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "process_id": 24948,
+    "launch_qpc": 720591785165,
+    "idle_qpc": 720592557592,
+    "frequency": 10000000,
+    "observed_utc": "2026-10-06T07:24:06.5037831Z",
+    "phases": [
+      {
+        "message": "wWinMain begin",
+        "qpc": 720591965309,
+        "since_launch_ms": 18.0144,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after bootstrap",
+        "qpc": 720592023566,
+        "since_launch_ms": 23.8401,
+        "before_first_idle": true
+      },
+      {
+        "message": "wWinMain after init_apartment",
+        "qpc": 720592047734,
+        "since_launch_ms": 26.2569,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback begin",
+        "qpc": 720592293924,
+        "since_launch_ms": 50.8759,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App begin",
+        "qpc": 720592301378,
+        "since_launch_ms": 51.6213,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::App after InitializeComponent",
+        "qpc": 720592303450,
+        "since_launch_ms": 51.8285,
+        "before_first_idle": true
+      },
+      {
+        "message": "Application::Start callback after App",
+        "qpc": 720592305637,
+        "since_launch_ms": 52.0472,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched begin",
+        "qpc": 720592407378,
+        "since_launch_ms": 62.2213,
+        "before_first_idle": true
+      },
+      {
+        "message": "App::OnLaunched before MainWindow",
+        "qpc": 720592411913,
+        "since_launch_ms": 62.6748,
+        "before_first_idle": true
+      },
+      {
+        "message": "MainWindow::MainWindow begin",
+        "qpc": 720592800973,
+        "since_launch_ms": 101.5808,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell begin",
+        "qpc": 720592805455,
+        "since_launch_ms": 102.029,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after brush helper",
+        "qpc": 720592807814,
+        "since_launch_ms": 102.2649,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after root grid",
+        "qpc": 720592827558,
+        "since_launch_ms": 104.2393,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after compact scan controls",
+        "qpc": 720593054482,
+        "since_launch_ms": 126.9317,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after state banners",
+        "qpc": 720593058764,
+        "since_launch_ms": 127.3599,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell after summary card",
+        "qpc": 720593061874,
+        "since_launch_ms": 127.6709,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search query row end",
+        "qpc": 720593071779,
+        "since_launch_ms": 128.6614,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search options row end",
+        "qpc": 720593093757,
+        "since_launch_ms": 130.8592,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search date row end",
+        "qpc": 720593102566,
+        "since_launch_ms": 131.7401,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell search card end",
+        "qpc": 720593116311,
+        "since_launch_ms": 133.1146,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell tree card end",
+        "qpc": 720593145519,
+        "since_launch_ms": 136.0354,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell extension card end",
+        "qpc": 720593150035,
+        "since_launch_ms": 136.487,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell detail card end",
+        "qpc": 720593154925,
+        "since_launch_ms": 136.976,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell treemap card end",
+        "qpc": 720593375100,
+        "since_launch_ms": 158.9935,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell runtime card end",
+        "qpc": 720593385647,
+        "since_launch_ms": 160.0482,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType name before framework activation",
+        "qpc": 720593392925,
+        "since_launch_ms": 160.776,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720593409046,
+        "since_launch_ms": 162.3881,
+        "before_first_idle": false
+      },
+      {
+        "message": "XamlMetaDataProvider::GetXamlType TypeName before framework activation",
+        "qpc": 720593411389,
+        "since_launch_ms": 162.6224,
+        "before_first_idle": false
+      },
+      {
+        "message": "BuildShell stable shell end",
+        "qpc": 720593437018,
+        "since_launch_ms": 165.1853,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after BuildShell",
+        "qpc": 720593439245,
+        "since_launch_ms": 165.408,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow deferring NativeBridge initialize until first scan or cache load",
+        "qpc": 720593441117,
+        "since_launch_ms": 165.5952,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using dispatcher-driven UI flush scheduling",
+        "qpc": 720593442569,
+        "since_launch_ms": 165.7404,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow using stable shell navigation chips",
+        "qpc": 720593445458,
+        "since_launch_ms": 166.0293,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after root path",
+        "qpc": 720593450042,
+        "since_launch_ms": 166.4877,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch begin",
+        "qpc": 720593452749,
+        "since_launch_ms": 166.7584,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after filter",
+        "qpc": 720593454598,
+        "since_launch_ms": 166.9433,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after selection",
+        "qpc": 720593456052,
+        "since_launch_ms": 167.0887,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search preview",
+        "qpc": 720593457838,
+        "since_launch_ms": 167.2673,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after search results",
+        "qpc": 720593460574,
+        "since_launch_ms": 167.5409,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after event text",
+        "qpc": 720593462351,
+        "since_launch_ms": 167.7186,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch after tree preview",
+        "qpc": 720593464703,
+        "since_launch_ms": 167.9538,
+        "before_first_idle": false
+      },
+      {
+        "message": "RefreshInstantSearch end",
+        "qpc": 720593467404,
+        "since_launch_ms": 168.2239,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after refresh instant search",
+        "qpc": 720593471279,
+        "since_launch_ms": 168.6114,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after tree select",
+        "qpc": 720593473720,
+        "since_launch_ms": 168.8555,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after select visualization target",
+        "qpc": 720593479283,
+        "since_launch_ms": 169.4118,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after performance counters",
+        "qpc": 720593482755,
+        "since_launch_ms": 169.759,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720593484622,
+        "since_launch_ms": 169.9457,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720593486899,
+        "since_launch_ms": 170.1734,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after set section",
+        "qpc": 720593489217,
+        "since_launch_ms": 170.4052,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720593491260,
+        "since_launch_ms": 170.6095,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720593494044,
+        "since_launch_ms": 170.8879,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720593496123,
+        "since_launch_ms": 171.0958,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720593498165,
+        "since_launch_ms": 171.3,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after first apply shell state",
+        "qpc": 720593500057,
+        "since_launch_ms": 171.4892,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after summary text",
+        "qpc": 720593501537,
+        "since_launch_ms": 171.6372,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after runtime snapshot",
+        "qpc": 720593503880,
+        "since_launch_ms": 171.8715,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after snapshot updates",
+        "qpc": 720593505459,
+        "since_launch_ms": 172.0294,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState begin",
+        "qpc": 720593507016,
+        "since_launch_ms": 172.1851,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection begin",
+        "qpc": 720593509049,
+        "since_launch_ms": 172.3884,
+        "before_first_idle": false
+      },
+      {
+        "message": "SetSection end",
+        "qpc": 720593510777,
+        "since_launch_ms": 172.5612,
+        "before_first_idle": false
+      },
+      {
+        "message": "ApplyShellState end",
+        "qpc": 720593512355,
+        "since_launch_ms": 172.719,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow after shell ready apply",
+        "qpc": 720593514963,
+        "since_launch_ms": 172.9798,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow auto scan skipped; waiting for user-selected root",
+        "qpc": 720593516592,
+        "since_launch_ms": 173.1427,
+        "before_first_idle": false
+      },
+      {
+        "message": "MainWindow constructor complete",
+        "qpc": 720593518272,
+        "since_launch_ms": 173.3107,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after MainWindow",
+        "qpc": 720593520951,
+        "since_launch_ms": 173.5786,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched configured overlapped presenter",
+        "qpc": 720593660933,
+        "since_launch_ms": 187.5768,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after Activate",
+        "qpc": 720593668432,
+        "since_launch_ms": 188.3267,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched after AppWindow.Show",
+        "qpc": 720593673743,
+        "since_launch_ms": 188.8578,
+        "before_first_idle": false
+      },
+      {
+        "message": "App::OnLaunched forced HWND maximized",
+        "qpc": 720593730150,
+        "since_launch_ms": 194.4985,
+        "before_first_idle": false
+      }
+    ],
+    "scope": "Diagnostic tracing enabled; synchronous log writes perturb startup. Phase ordering locates candidates; these timings do not enter medals."
+  }
+]

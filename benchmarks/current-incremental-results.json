@@ -1,0 +1,572 @@
+[
+  {
+    "run": 1,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 383,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 2,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 376,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 3,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 374,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 4,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 2,
+    "observed_completion_ms": 367,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 5,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 434,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 6,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 384,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 7,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 384,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 8,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 390,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 9,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 4,
+    "observed_completion_ms": 382,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 10,
+    "mutation": "add",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 4,
+    "observed_completion_ms": 373,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=1, removed=0, modified=0, renamed=0, moved=0, last issue=none, files=73, directories=13, sized catalog entries=87, totals summary=74.8 KB, catalog sample=74.8 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 1,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 386,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 2,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 420,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 3,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 381,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 4,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 2,
+    "observed_completion_ms": 373,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 5,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 376,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 6,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 405,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 7,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 2,
+    "observed_completion_ms": 361,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 8,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 2,
+    "observed_completion_ms": 362,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 9,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 4,
+    "observed_completion_ms": 392,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 10,
+    "mutation": "remove",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 380,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=1, modified=0, renamed=0, moved=0, last issue=none, files=71, directories=13, sized catalog entries=85, totals summary=71.0 KB, catalog sample=71.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 1,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 369,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 2,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 2,
+    "observed_completion_ms": 382,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 3,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 377,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 4,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 388,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 5,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 366,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 6,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 373,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 7,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 382,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 8,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 375,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 9,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 3,
+    "observed_completion_ms": 366,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  },
+  {
+    "run": 10,
+    "mutation": "modify",
+    "binary": {
+      "tool": "WinBlaze",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+      "sha256": "1F1E36D9818F2B4C982D29792907D02A425120BD1B607DA44CBD960C558614A1",
+      "native_dll_sha256": "9FF4B2BAC5DAFD0160FF06874D21528044C7EDC2B9E1F2AC25996808834A9F62",
+      "identity_sha256": "F7C85B918B954A3FC03EF35FAFB16BA4DFD60A9B3A7A59D992004FF7DC3FD924",
+      "observed_utc": "2026-10-08T09:24:11.3182777Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "scan_ms": 2,
+    "observed_completion_ms": 373,
+    "correctness": "Correctness: issues=0, issue codes=none, incremental added=0, removed=0, modified=1, renamed=0, moved=0, last issue=none, files=72, directories=13, sized catalog entries=86, totals summary=72.0 KB, catalog sample=72.0 KB, delta=0 B",
+    "scope": "owned tiny fixture; initial scan followed by one mutation"
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "requested_utc": "2026-10-02T11:01:31.9773305Z",
+  "elevation": "administrator requested",
+  "process_id": 47520,
+  "scope": "GUI launch to observed populated tree/treemap; UAC and observation overhead included",
+  "returned_utc": "2026-10-02T11:01:40.5036493Z",
+  "tool": "WinDirStat",
+  "profile": "fanout-large"
+}

@@ -1,4 +1,7 @@
-use std::sync::mpsc::Sender;
+use std::sync::{
+    mpsc::{Sender, SyncSender},
+    Arc,
+};
 
 use winblaze_core::{
     DirectoryRecord, FileRecord, ScanEvent, ScanIssueRecord, ScanProgress, ScanSummary,
@@ -9,19 +12,56 @@ use crate::performance::ScanPipelineConfig;
 
 #[derive(Debug)]
 pub struct ScanEventPipeline {
-    sender: Sender<Vec<ScanEvent>>,
+    sender: EventBatchSender,
     config: ScanPipelineConfig,
     buffer: Vec<ScanEvent>,
     buffered_bytes: usize,
     progress: ScanProgress,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) enum EventBatchSender {
+    Unbounded(Sender<Vec<ScanEvent>>),
+    Bounded(SyncSender<Vec<ScanEvent>>),
+    Recycling(
+        SyncSender<Vec<ScanEvent>>,
+        Arc<crate::delivery::EventBatchPool>,
+    ),
+}
+
+impl EventBatchSender {
+    fn send(&self, batch: Vec<ScanEvent>) {
+        // Dropping the receiver releases a blocked bounded producer too.
+        match self {
+            Self::Unbounded(sender) => {
+                let _ = sender.send(batch);
+            }
+            Self::Bounded(sender) | Self::Recycling(sender, _) => {
+                let _ = sender.send(batch);
+            }
+        }
+    }
+
+    fn take_buffer(&self, minimum: usize) -> Vec<ScanEvent> {
+        match self {
+            Self::Recycling(_, pool) => pool.take(minimum),
+            _ => Vec::new(),
+        }
+    }
+}
+
 impl ScanEventPipeline {
     pub fn new(sender: Sender<Vec<ScanEvent>>, config: ScanPipelineConfig) -> Self {
+        Self::with_sender(EventBatchSender::Unbounded(sender), config)
+    }
+
+    pub(crate) fn with_sender(sender: EventBatchSender, config: ScanPipelineConfig) -> Self {
         Self {
             sender,
             config,
-            buffer: Vec::with_capacity(config.batch_size.max(1)),
+            // Idle workers may never emit an event, particularly when one
+            // dense directory owns all the work. Reserve only on first use.
+            buffer: Vec::new(),
             buffered_bytes: 0,
             progress: ScanProgress::default(),
         }
@@ -30,6 +70,17 @@ impl ScanEventPipeline {
     /// Clones the underlying sender so a worker thread can drive its own
     /// pipeline instance while still funneling events into the same channel.
     pub fn cloned_sender(&self) -> Sender<Vec<ScanEvent>> {
+        // The public constructor accepts an unbounded sender. Bounded
+        // pipelines are private to ScanController and use event_sender.
+        match &self.sender {
+            EventBatchSender::Unbounded(sender) => sender.clone(),
+            EventBatchSender::Bounded(_) | EventBatchSender::Recycling(_, _) => {
+                unreachable!("private bounded pipeline")
+            }
+        }
+    }
+
+    pub(crate) fn event_sender(&self) -> EventBatchSender {
         self.sender.clone()
     }
 
@@ -124,11 +175,10 @@ impl ScanEventPipeline {
         if self.buffer.is_empty() {
             return;
         }
-        let batch = std::mem::replace(
-            &mut self.buffer,
-            Vec::with_capacity(self.config.batch_size.max(1)),
-        );
-        let _ = self.sender.send(batch);
+        // Ownership moves to the consumer. Reserve another batch only when
+        // an event actually follows; final/idle flushes need no spare arena.
+        let batch = std::mem::take(&mut self.buffer);
+        self.sender.send(batch);
         self.buffered_bytes = 0;
     }
 
@@ -144,6 +194,20 @@ impl ScanEventPipeline {
                 | ScanEvent::Cancelled
                 | ScanEvent::Failed(_)
         );
+        if self.buffer.capacity() == 0 {
+            // A standalone control event flushes immediately; it cannot use
+            // the remainder of a full data batch. Existing queued data keeps
+            // its arena and delivery order.
+            let minimum = if force_flush {
+                1
+            } else {
+                self.config.batch_size.max(1)
+            };
+            self.buffer = self.sender.take_buffer(minimum);
+            if self.buffer.capacity() < minimum {
+                self.buffer.reserve_exact(minimum);
+            }
+        }
         self.buffer.push(event);
         self.buffered_bytes = self.buffered_bytes.saturating_add(estimated_bytes);
         if force_flush || self.should_flush() {

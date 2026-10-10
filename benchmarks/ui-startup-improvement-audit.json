@@ -1,0 +1,355 @@
+{
+  "note": "50 candidate audit entries, not 50 proven wins. One tested production change is implemented; existing work and unqualified candidates are distinguished. Savings are unknown until measured and are not additive.",
+  "rows": [
+    {
+      "rank": 1,
+      "opportunity": "Opt-in routine startup tracing",
+      "status": "implemented",
+      "estimated_saving": "Eliminates all routine trace file opens, size queries and writes; 50-call regression: 50 writes to zero.",
+      "risk": "low"
+    },
+    {
+      "rank": 2,
+      "opportunity": "Cache diagnostic trace destination",
+      "status": "candidate",
+      "estimated_saving": "Only affects opted-in diagnostic runs; saves repeated path resolution, not normal startup.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 3,
+      "opportunity": "Use UTF-8 literals for diagnostic tracing",
+      "status": "candidate",
+      "estimated_saving": "Avoid literal conversion when diagnostics enabled; prove encoded log behavior first.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 4,
+      "opportunity": "Lazily format dynamic diagnostic messages",
+      "status": "candidate",
+      "estimated_saving": "Avoid constructing disabled dynamic messages; inspect call-site allocation cost.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 5,
+      "opportunity": "Batch diagnostic log appends",
+      "status": "candidate",
+      "estimated_saving": "Reduce diagnostic-only I/O; preserve ordering and crash evidence.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 6,
+      "opportunity": "Avoid duplicate root-path reads",
+      "status": "candidate",
+      "estimated_saving": "Reduce initial XAML Text property reads; validate root state first.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 7,
+      "opportunity": "Reuse startup text styles",
+      "status": "candidate",
+      "estimated_saving": "Reduce repeated per-control style construction; measure object creation and visual parity.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 8,
+      "opportunity": "Reduce initial layout invalidations",
+      "status": "candidate",
+      "estimated_saving": "Combine properties before attaching controls; validate accessibility and layout.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 9,
+      "opportunity": "Remove duplicate initial ApplyShellState",
+      "status": "candidate",
+      "estimated_saving": "One pre-ready shell visibility/control refresh; must preserve initial state.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 10,
+      "opportunity": "Remove duplicate initial summary formatting",
+      "status": "candidate",
+      "estimated_saving": "Avoid summary rebuilt by ApplyShellState; profile before changing.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 11,
+      "opportunity": "Remove duplicate initial runtime formatting",
+      "status": "candidate",
+      "estimated_saving": "Avoid repeated runtime string construction; retain diagnostics correctness.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 12,
+      "opportunity": "Remove duplicate initial SetSection",
+      "status": "candidate",
+      "estimated_saving": "Avoid redundant visibility assignments; verify navigation and keyboard focus.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 13,
+      "opportunity": "Remove duplicate initial search preview",
+      "status": "candidate",
+      "estimated_saving": "One redundant FormatSearchQuery/label update.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 14,
+      "opportunity": "Remove duplicate initial event label update",
+      "status": "candidate",
+      "estimated_saving": "One overwritten event text assignment; preserve ready messaging.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 15,
+      "opportunity": "Cache immutable theme brushes per window",
+      "status": "candidate",
+      "estimated_saving": "Reduce repeated SolidColorBrush construction; first verify no mutable sharing.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 16,
+      "opportunity": "Skip setting unchanged text labels",
+      "status": "candidate",
+      "estimated_saving": "Avoid XAML invalidations when text is identical; requires measured hot labels.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 17,
+      "opportunity": "Skip setting unchanged visibility",
+      "status": "candidate",
+      "estimated_saving": "Avoid redundant XAML dependency-property assignments; small unknown gain.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 18,
+      "opportunity": "Skip setting unchanged enabled state",
+      "status": "candidate",
+      "estimated_saving": "Avoid scan-control invalidations; preserve validation transitions.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 19,
+      "opportunity": "Move native DLL initialization off loaded handler",
+      "status": "candidate",
+      "estimated_saving": "Remove LoadLibrary/symbol lookup from UI thread; needs thread-safe DLL initialization first.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 20,
+      "opportunity": "Reserve native catalog vector only when nonempty",
+      "status": "candidate",
+      "estimated_saving": "Avoid allocating 10,000 entries on empty first run; check allocation profile.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 21,
+      "opportunity": "Detect absent catalog before snapshot allocation",
+      "status": "candidate",
+      "estimated_saving": "Avoid empty-cache allocations, without racing a new scan or weakening error reporting.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 22,
+      "opportunity": "Defer diagnostics pane construction",
+      "status": "candidate",
+      "estimated_saving": "Avoid hidden diagnostics controls before first use; requires broad UI behavior tests.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 23,
+      "opportunity": "Defer cleanup pane construction",
+      "status": "candidate",
+      "estimated_saving": "Avoid hidden cleanup controls; preserve paging and import readiness.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 24,
+      "opportunity": "Defer search pane construction",
+      "status": "candidate",
+      "estimated_saving": "Avoid hidden search controls; preserve keyboard shortcuts and search state.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 25,
+      "opportunity": "Defer filter pane construction",
+      "status": "candidate",
+      "estimated_saving": "Avoid hidden filter controls; preserve query defaults.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 26,
+      "opportunity": "Defer extension pane construction",
+      "status": "candidate",
+      "estimated_saving": "Avoid hidden type controls; preserve complete totals.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 27,
+      "opportunity": "Defer toolbar overflow items",
+      "status": "candidate",
+      "estimated_saving": "Avoid creating unopened menus; requires accessibility and shortcut tests.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 28,
+      "opportunity": "Defer export dialogs",
+      "status": "already present",
+      "estimated_saving": "Dialogs are created on invocation; no new startup saving.",
+      "risk": "low"
+    },
+    {
+      "rank": 29,
+      "opportunity": "Defer GPU treemap creation",
+      "status": "already present",
+      "estimated_saving": "Renderer is demand driven; no demonstrated eager GPU startup saving.",
+      "risk": "low"
+    },
+    {
+      "rank": 30,
+      "opportunity": "Keep full cache decoding off UI thread",
+      "status": "already present",
+      "estimated_saving": "Snapshot parsing already runs on a background thread.",
+      "risk": "low"
+    },
+    {
+      "rank": 31,
+      "opportunity": "Keep scan work off UI thread",
+      "status": "already present",
+      "estimated_saving": "Native scan pipeline already asynchronous.",
+      "risk": "low"
+    },
+    {
+      "rank": 32,
+      "opportunity": "Avoid automatic initial disk scan",
+      "status": "already present",
+      "estimated_saving": "Startup waits for selected root; no new saving.",
+      "risk": "low"
+    },
+    {
+      "rank": 33,
+      "opportunity": "Keep update network request asynchronous",
+      "status": "already present",
+      "estimated_saving": "Update check already background work; do not remove update functionality.",
+      "risk": "low"
+    },
+    {
+      "rank": 34,
+      "opportunity": "Keep native bridge demand-loaded",
+      "status": "already present",
+      "estimated_saving": "Constructor defers bridge loading until scan/cache load.",
+      "risk": "low"
+    },
+    {
+      "rank": 35,
+      "opportunity": "Avoid periodic flush timer before scan",
+      "status": "already present",
+      "estimated_saving": "Flush timer created on demand.",
+      "risk": "low"
+    },
+    {
+      "rank": 36,
+      "opportunity": "Avoid image asset downloads",
+      "status": "already present",
+      "estimated_saving": "App icon assets are local resources.",
+      "risk": "low"
+    },
+    {
+      "rank": 37,
+      "opportunity": "Reuse initial query formatting result",
+      "status": "candidate",
+      "estimated_saving": "Avoid multiple formatting calls for identical empty query.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 38,
+      "opportunity": "Avoid initial empty tree sorting",
+      "status": "candidate",
+      "estimated_saving": "Check current empty-tree path before adding shortcut.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 39,
+      "opportunity": "Avoid initial empty search filtering",
+      "status": "candidate",
+      "estimated_saving": "Check default root and empty-catalog semantics before shortcut.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 40,
+      "opportunity": "Avoid initial empty extensions rendering",
+      "status": "candidate",
+      "estimated_saving": "Measure placeholder rebuilds; preserve first-run empty state.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 41,
+      "opportunity": "Avoid initial empty largest-files rendering",
+      "status": "candidate",
+      "estimated_saving": "Measure native/root requests on startup before shortcut.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 42,
+      "opportunity": "Coalesce breadcrumb refreshes",
+      "status": "candidate",
+      "estimated_saving": "Avoid duplicate navigation rebuilding; verify path validation and imported roots.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 43,
+      "opportunity": "Coalesce selection text refreshes",
+      "status": "candidate",
+      "estimated_saving": "Avoid formatting repeatedly before first populated selection.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 44,
+      "opportunity": "Reserve startup text formatting buffers",
+      "status": "candidate",
+      "estimated_saving": "Reduce reallocations in measured large labels; size evidence needed.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 45,
+      "opportunity": "Remove redundant window title assignment",
+      "status": "candidate",
+      "estimated_saving": "Avoid duplicate title APIs; check title/accessibility behavior.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 46,
+      "opportunity": "Remove redundant maximize calls",
+      "status": "candidate",
+      "estimated_saving": "Avoid extra layout; existing WinUI/HWND fallback may be needed on this machine.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 47,
+      "opportunity": "Load shared icon handles",
+      "status": "candidate",
+      "estimated_saving": "Avoid duplicate icon decoding; icon ownership and DPI semantics need checking.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 48,
+      "opportunity": "Use incremental/link optimization evidence",
+      "status": "candidate",
+      "estimated_saving": "Measure current compiler/linker settings before changing; no assured runtime gain.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 49,
+      "opportunity": "Delay nonessential counters until first frame",
+      "status": "candidate",
+      "estimated_saving": "Remove initial formatting from critical path; preserve initial diagnostics snapshot.",
+      "risk": "unqualified until regression and profiling evidence"
+    },
+    {
+      "rank": 50,
+      "opportunity": "Defer cached catalog rendering in bounded batches",
+      "status": "candidate",
+      "estimated_saving": "Reduce first-frame UI blocking for restored catalogs; test progressive correctness separately.",
+      "risk": "unqualified until regression and profiling evidence"
+    }
+  ]
+}

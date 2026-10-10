@@ -1,0 +1,273 @@
+{
+  "source": "benchmarks/runs/2026-10-04T11-07-01-169Z/report-data.json",
+  "baseline_standings": [
+    {
+      "tool": "WinBlaze",
+      "gold": 25,
+      "silver": 6,
+      "bronze": 4,
+      "place": 1
+    },
+    {
+      "tool": "WinDirStat",
+      "gold": 8,
+      "silver": 25,
+      "bronze": 2,
+      "place": 2
+    },
+    {
+      "tool": "WizTree",
+      "gold": 2,
+      "silver": 4,
+      "bronze": 29,
+      "place": 3
+    }
+  ],
+  "events": [
+    {
+      "name": "Startup \u00b7 first idle message queue",
+      "unit": "ms",
+      "scope": "Same hidden-window first-idle protocol. Does not measure a visible usable window.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Startup CPU at first idle",
+      "unit": "CPU-s",
+      "scope": "Same hidden-window first-idle observation boundary; excludes later cache restoration and usable-window work.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Startup working set at first idle",
+      "unit": "MiB",
+      "scope": "Same hidden-window first-idle observation boundary; excludes later cache restoration and usable-window work.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Startup peak working set at first idle",
+      "unit": "MiB",
+      "scope": "Same hidden-window first-idle observation boundary; excludes later cache restoration and usable-window work.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Quick folder \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Quick folder \u00b7 90th percentile completion",
+      "unit": "ms",
+      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Quick folder \u00b7 timing variability",
+      "unit": "%",
+      "scope": "Common startup + scan + CSV export. Interquartile range / median \u00d7 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Quick folder \u00b7 peak memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Quick folder \u00b7 private memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Quick folder \u00b7 CPU consumption",
+      "unit": "CPU-s",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 90th percentile completion",
+      "unit": "ms",
+      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 timing variability",
+      "unit": "%",
+      "scope": "Common startup + scan + CSV export. Interquartile range / median \u00d7 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 peak memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 private memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 CPU consumption",
+      "unit": "CPU-s",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Nonempty dense folder \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Nonempty dense folder \u00b7 90th percentile completion",
+      "unit": "ms",
+      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Nonempty dense folder \u00b7 timing variability",
+      "unit": "%",
+      "scope": "Common startup + scan + CSV export. Interquartile range / median \u00d7 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Nonempty dense folder \u00b7 peak memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Nonempty dense folder \u00b7 private memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Nonempty dense folder \u00b7 CPU consumption",
+      "unit": "CPU-s",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 90th percentile completion",
+      "unit": "ms",
+      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 timing variability",
+      "unit": "%",
+      "scope": "Common startup + scan + CSV export. Interquartile range / median \u00d7 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Administrator \u00b7 full-drive workflow",
+      "unit": "ms",
+      "scope": "Mixed scope: WinBlaze native scan + index publication (deferred cache write excluded; no GUI) versus competitor startup + scan + export. Administrator tokens; file totals differ.",
+      "comparable": false,
+      "observational": true
+    },
+    {
+      "name": "Standard-user \u00b7 full-drive peak memory",
+      "unit": "MiB",
+      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Standard-user \u00b7 full-drive private memory",
+      "unit": "MiB",
+      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Standard-user \u00b7 full-drive CPU consumption",
+      "unit": "CPU-s",
+      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Administrator \u00b7 full-drive peak memory",
+      "unit": "MiB",
+      "scope": "Mixed scope: whole native process including deferred snapshot write and tree queries versus whole competitor export process. Sampled resources; lower wins.",
+      "comparable": false,
+      "observational": true
+    },
+    {
+      "name": "Administrator \u00b7 full-drive CPU consumption",
+      "unit": "CPU-s",
+      "scope": "Mixed scope: whole native process including deferred snapshot write and tree queries versus whole competitor export process. Sampled resources; lower wins.",
+      "comparable": false,
+      "observational": true
+    },
+    {
+      "name": "Feature fixture \u00b7 scan/CSV time",
+      "unit": "ms",
+      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Feature fixture \u00b7 scan/CSV CPU",
+      "unit": "CPU-s",
+      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Feature fixture \u00b7 scan/CSV peak memory",
+      "unit": "MiB",
+      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Feature fixture \u00b7 scan/CSV private memory",
+      "unit": "MiB",
+      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
+      "comparable": true,
+      "observational": false
+    }
+  ]
+}

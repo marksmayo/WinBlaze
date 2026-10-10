@@ -159,9 +159,9 @@ fn directory_walk_scans_real_fixture_with_expected_totals() {
     assert!(directories.contains(&root.display().to_string()));
     assert!(directories.contains(&root.join("alpha").display().to_string()));
     assert!(directories.contains(&nested.display().to_string()));
-    assert!(files.contains(&("root.txt".to_string(), 4)));
-    assert!(files.contains(&("child.bin".to_string(), 11)));
-    assert!(files.contains(&("leaf.log".to_string(), 17)));
+    assert!(files.contains(&("root.txt".to_string().into(), 4)));
+    assert!(files.contains(&("child.bin".to_string().into(), 11)));
+    assert!(files.contains(&("leaf.log".to_string().into(), 17)));
 
     let summary = summary.expect("summary event");
     assert_eq!(summary.files_seen, 3);
@@ -473,6 +473,56 @@ fn directory_walk_parallel_matches_sequential_totals() {
     // 1 root + 8 buckets + 8 nested directories.
     assert_eq!(summary.directories_seen, 1 + 8 + 8);
     assert_eq!(summary.total_size_bytes, 8 * 16 * 8);
+}
+
+#[test]
+fn uneven_parallel_file_batches_preserve_dense_ids_and_exact_totals() {
+    let root = std::env::temp_dir().join(format!(
+        "winblaze-uneven-batches-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    for (branch, count) in [("a", 65), ("b", 129)] {
+        fs::create_dir_all(root.join(branch)).unwrap();
+        for id in 0..count {
+            fs::write(root.join(branch).join(format!("file-{id}.bin")), b"abc").unwrap();
+        }
+    }
+    let (controller, rx) = ScanController::channel();
+    let mut rx = FlatReceiver::new(rx);
+    let handle = controller.start_scan(ScanRequest {
+        root_path: root.clone(),
+        config: ScanRuntimeConfig {
+            root_path: root.clone(),
+            max_parallelism: 4,
+            ..Default::default()
+        },
+    });
+    let mut ids = Vec::new();
+    let mut summary = None;
+    loop {
+        match rx.recv_timeout(Duration::from_secs(10)).unwrap() {
+            ScanEvent::FileFound(file) => {
+                assert_eq!(file.size_bytes, 3);
+                ids.push(file.id.0);
+            }
+            ScanEvent::Summary(value) => summary = Some(value),
+            ScanEvent::Completed => break,
+            ScanEvent::Failed(error) => panic!("scan failed: {error:?}"),
+            _ => {}
+        }
+    }
+    handle.join();
+    fs::remove_dir_all(root).unwrap();
+    ids.sort_unstable();
+    assert_eq!(ids.len(), 194);
+    assert!(ids.windows(2).all(|pair| pair[1] == pair[0] + 1));
+    let summary = summary.unwrap();
+    assert_eq!(summary.files_seen, 194);
+    assert_eq!(summary.directories_seen, 3);
+    assert_eq!(summary.total_size_bytes, 582);
 }
 
 #[test]

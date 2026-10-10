@@ -143,24 +143,27 @@ namespace winrt::WinBlaze::UI::implementation
             break;
 
         case ThemeVariant::HighVelocity:
-            theme.app_background = { 0xFF, 0x0E, 0x0E, 0x10 };     // #0e0e10 - near black
-            theme.card_background = { 0xFF, 0x17, 0x17, 0x1A };    // #17171a - panel
-            theme.card_border = { 0xFF, 0x2B, 0x24, 0x26 };        // warm hairline
-            theme.text_primary = { 0xFF, 0xE6, 0xE1, 0xE0 };       // light warm gray
-            theme.text_secondary = { 0xFF, 0xB5, 0xAC, 0xAB };     // muted warm gray (>=7:1 on panels)
-            theme.text_on_accent = { 0xFF, 0x1A, 0x04, 0x04 };     // near-black on red
-            theme.subtle_background = { 0xFF, 0x0A, 0x0A, 0x0C };  // wells
-            theme.subtle_border = { 0xFF, 0x2B, 0x24, 0x26 };
-            theme.chip_background = { 0xFF, 0x13, 0x13, 0x15 };    // #131315
-            theme.chip_active_background = { 0xFF, 0xFF, 0x2A, 0x1A }; // vivid red
-            theme.chip_inactive_background = { 0xFF, 0x13, 0x13, 0x15 };
-            theme.chip_active_border = { 0xFF, 0xFF, 0x2A, 0x1A };
-            theme.progress_track = { 0xFF, 0x0A, 0x0A, 0x0C };
-            theme.progress_fill = { 0xFF, 0xFF, 0x2A, 0x1A };      // red fill
-            theme.volume_accent = { 0xFF, 0xFF, 0x2A, 0x1A };
-            theme.folder_accent = { 0xFF, 0xFF, 0x6B, 0x5A };      // coral
-            theme.file_accent = { 0xFF, 0xFF, 0xA2, 0x94 };        // light coral
-            theme.archive_accent = { 0xFF, 0xFF, 0xB0, 0x20 };     // amber
+            theme.app_background = { 0xFF, 0x11, 0x15, 0x1D };
+            theme.card_background = { 0xFF, 0x1A, 0x20, 0x2C };
+            theme.card_border = { 0xFF, 0x30, 0x37, 0x47 };
+            theme.text_primary = { 0xFF, 0xF0, 0xF2, 0xF6 };
+            theme.text_secondary = { 0xFF, 0xB3, 0xBD, 0xC9 };
+            theme.text_on_accent = { 0xFF, 0x1A, 0x04, 0x04 };
+            theme.subtle_background = { 0xFF, 0x14, 0x19, 0x23 };
+            theme.subtle_border = theme.card_border;
+            theme.chip_background = { 0xFF, 0x22, 0x2A, 0x38 };
+            theme.chip_active_background = { 0xFF, 0xF0, 0x65, 0x59 };
+            theme.chip_inactive_background = theme.chip_background;
+            theme.chip_active_border = theme.chip_active_background;
+            theme.progress_track = theme.subtle_background;
+            theme.progress_fill = theme.chip_active_background;
+            theme.volume_accent = theme.chip_active_background;
+            theme.folder_accent = { 0xFF, 0xE6, 0xB4, 0x5E };
+            theme.file_accent = { 0xFF, 0xA3, 0xC9, 0xFF };
+            theme.archive_accent = { 0xFF, 0xC7, 0xAC, 0xEF };
+            theme.card_radius = 12.0;
+            theme.compact_card_radius = 8.0;
+            theme.panel_radius = 10.0;
             break;
         }
         

@@ -1,0 +1,80 @@
+[
+  {
+    "tool": "WinBlaze native pipeline",
+    "run": 1,
+    "profile": "full",
+    "binary": {
+      "tool": "WinBlaze native pipeline",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\ffi_scan_repro.exe",
+      "sha256": "42088001A2D2F52B48119CA666F8C913310D0B5B6793468D65987216E5423D7F",
+      "observed_utc": "2026-10-02T11:06:53.5436817Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "elevation": "administrator token",
+    "scope": "native scan through Completed callback; includes indexing/persistence, excludes UI/export",
+    "scan_ms": 8822,
+    "summary_ms": 7398,
+    "process_ms": 10668.1545,
+    "files": 8192,
+    "directories": 0,
+    "peak_working_set_bytes_sampled": 1105469440,
+    "cpu_ms_sampled_lower_bound": 12734.375,
+    "sample_count": 221,
+    "utc": "2026-10-02T11:07:04.6255446Z",
+    "callback_note": "files and directories here count capped emitted callbacks, not aggregate disk contents"
+  },
+  {
+    "tool": "WinBlaze native pipeline",
+    "run": 2,
+    "profile": "full",
+    "binary": {
+      "tool": "WinBlaze native pipeline",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\ffi_scan_repro.exe",
+      "sha256": "42088001A2D2F52B48119CA666F8C913310D0B5B6793468D65987216E5423D7F",
+      "observed_utc": "2026-10-02T11:06:53.5436817Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "elevation": "administrator token",
+    "scope": "native scan through Completed callback; includes indexing/persistence, excludes UI/export",
+    "scan_ms": 5796,
+    "summary_ms": 4391,
+    "process_ms": 6681.3926,
+    "files": 8192,
+    "directories": 0,
+    "peak_working_set_bytes_sampled": 1099849728,
+    "cpu_ms_sampled_lower_bound": 11593.75,
+    "sample_count": 138,
+    "utc": "2026-10-02T11:07:11.3284811Z",
+    "callback_note": "files and directories here count capped emitted callbacks, not aggregate disk contents"
+  },
+  {
+    "tool": "WinBlaze native pipeline",
+    "run": 3,
+    "profile": "full",
+    "binary": {
+      "tool": "WinBlaze native pipeline",
+      "product_version": null,
+      "file_version": null,
+      "executable_path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\ffi_scan_repro.exe",
+      "sha256": "42088001A2D2F52B48119CA666F8C913310D0B5B6793468D65987216E5423D7F",
+      "observed_utc": "2026-10-02T11:06:53.5436817Z",
+      "revision": "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+    },
+    "elevation": "administrator token",
+    "scope": "native scan through Completed callback; includes indexing/persistence, excludes UI/export",
+    "scan_ms": 5721,
+    "summary_ms": 4178,
+    "process_ms": 6659.1718,
+    "files": 8192,
+    "directories": 0,
+    "peak_working_set_bytes_sampled": 1101570048,
+    "cpu_ms_sampled_lower_bound": 11640.625,
+    "sample_count": 138,
+    "utc": "2026-10-02T11:07:18.0075823Z",
+    "callback_note": "files and directories here count capped emitted callbacks, not aggregate disk contents"
+  }
+]

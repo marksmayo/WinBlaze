@@ -1,0 +1,10 @@
+[
+    {"comparison":"Administrator / MFT access", "state":"measured", "detail":"Three raw MFT phase runs and three administrator-token full-volume exports per competitor. WinBlaze native pipeline includes indexing/persistence; UI/export costs differ."},
+    {"comparison":"Matching access context", "state":"partial", "detail":"Elevated CLI/native processes share administrator tokens. Live file counts and policy differences remain; original GUI and standard-user CLI contexts were not normalized."},
+    {"comparison":"Nonempty dense folders", "state":"measured", "detail":"8,192 files of 256 bytes: three engine/export/WinBlaze GUI runs. Logical-byte and file totals match. Completed WinBlaze root treemap showed only three tiles."},
+    {"comparison":"Allocation accounting", "state":"measured", "detail":"Windows FileStandardInfo sample: quick file logical 1,024 / allocation 4,096 bytes; dense file logical 256 / allocation 256 bytes. WizTree reports zero aggregate allocation for resident dense data; allocation definitions differ."},
+    {"comparison":"Incremental add / modify / remove", "state":"measured", "detail":"WinBlaze detected each mutation correctly; single app-duration observations 70 / 54 / 66 ms. Competitor incremental workflows were not timed."},
+    {"comparison":"GUI scan-to-populated view", "state":"partial", "detail":"Dense GUI content checked in all three tools. WinDirStat populated treemap; WizTree empty allocation-based treemap; WinBlaze three root tiles. No comparable precise launch-to-ready timings; administrator GUIs expose title-only accessibility."},
+    {"comparison":"Input latency during full scan", "state":"inconclusive", "detail":"Search click attempted while WinBlaze scanned C:. Panel response could not be verified, so dispatch/capture timing is not input latency. Exploratory run finished in 49.54 s with 608 ms peak frame interval; excluded from baseline medians."},
+    {"comparison":"Visible / usable window startup", "state":"partial", "detail":"Three first-idle hidden-window proxy runs per tool; one cache decode observation. No precise visible-window or total cache-to-ready timing."}
+]

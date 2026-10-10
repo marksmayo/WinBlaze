@@ -1,8 +1,13 @@
+pub mod content;
+mod content_hash;
 pub mod controller;
+mod delivery;
 pub mod errors;
+pub mod file_details;
 pub mod filesystem;
 pub mod ntfs;
 pub mod performance;
+pub mod permissions;
 pub mod pipeline;
 pub mod policy;
 pub mod scheduler;
@@ -12,6 +17,7 @@ pub mod types;
 mod winfind;
 
 pub use controller::{ScanController, ScanHandle, ScanRequest};
+pub use delivery::ScanEventReceiver;
 pub use errors::{
     classify_io_error, is_permission_failure, is_transient_io_error, ScanErrorKind, ScanErrorRecord,
 };
@@ -30,4 +36,10 @@ pub use policy::{
     ReparseTargetKind, ReparseTraversalPolicy,
 };
 pub use scheduler::{ScanScheduler, WorkerCount};
-pub use types::{ScanBackend, ScanRuntimeConfig};
+pub use types::{ScanBackend, ScanRules, ScanRuntimeConfig};
+pub mod allocation;
+pub mod directory_metadata;
+
+pub mod storage_maintenance;
+
+pub mod hardlinks;

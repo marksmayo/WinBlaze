@@ -1,0 +1,1082 @@
+{
+  "metric": "Empty-file scale · timing variability",
+  "formula": "R-7 (p75 - p25) / median × 100",
+  "runs": 10,
+  "scope": "unchanged whole process startup + complete scan/index/persistence + CSV export",
+  "guardrails": [
+    "No padded runtime",
+    "No excluded slow runs",
+    "No changed medal definitions",
+    "All files and output correctness retained",
+    "Already implemented candidates are not new wins",
+    "Ranking provisional until phase evidence"
+  ],
+  "baseline": {
+    "WinBlaze": {
+      "median_ms": 101.71,
+      "iqr_ms": 18.93,
+      "variability_pct": 18.61173925867662
+    },
+    "WinDirStat": {
+      "median_ms": 474.235,
+      "iqr_ms": 16.3225,
+      "variability_pct": 3.4418589939586894
+    },
+    "WizTree": {
+      "median_ms": 906.695,
+      "iqr_ms": 119.705,
+      "variability_pct": 13.202344779666806
+    }
+  },
+  "rows": [
+    {
+      "rank": 1,
+      "phase": "Worker scheduling",
+      "candidate": "Worker-local directory counters",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 2,
+      "phase": "Worker scheduling",
+      "candidate": "Worker-local byte counters",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 3,
+      "phase": "Worker scheduling",
+      "candidate": "Publish counters once per directory",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 4,
+      "phase": "Worker scheduling",
+      "candidate": "Notify only workers that can consume new tasks",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Current gold benchmark RED26.38% vs16.13%. Implemented conditional queue notifications: notify all for new work or terminal completion, skip leaf completions that add no work. Public leaf-worker termination and mixed-file totals guards pass before change; post-change test17034 pending. No measured gain claimed.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 5,
+      "phase": "Worker scheduling",
+      "candidate": "Release queue lock before task conversion",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 6,
+      "phase": "Worker scheduling",
+      "candidate": "Move queued task ownership instead of cloning",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 7,
+      "phase": "Worker scheduling",
+      "candidate": "Reserve child-task storage from observed fanout",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 8,
+      "phase": "Worker scheduling",
+      "candidate": "Reuse empty worker task vectors",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 9,
+      "phase": "Worker scheduling",
+      "candidate": "Avoid redundant completion wakeups",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 10,
+      "phase": "Worker scheduling",
+      "candidate": "Bound worker creation for known tiny roots",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Controlled rotating n10 1/2/4-worker scale sweep completed; all16384files and fixture totals validate. Current4-worker setting has the lowest producer and process medians; do not blindly reduce parallelism to chase consistency.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 11,
+      "phase": "Event delivery",
+      "candidate": "Reuse returned event batch buffers",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 12,
+      "phase": "Event delivery",
+      "candidate": "Reserve batch capacity once per worker",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 13,
+      "phase": "Event delivery",
+      "candidate": "Avoid allocating an empty final batch",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 14,
+      "phase": "Event delivery",
+      "candidate": "Coalesce redundant progress snapshots",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 15,
+      "phase": "Event delivery",
+      "candidate": "Send progress only after meaningful counter change",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 16,
+      "phase": "Event delivery",
+      "candidate": "Avoid receiver wakeups for empty batches",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 17,
+      "phase": "Event delivery",
+      "candidate": "Reduce extra event enum dispatch passes",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 18,
+      "phase": "Event delivery",
+      "candidate": "Separate terminal delivery from live previews",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "Already present; not a new optimization. Terminal-only CLI delivery already implemented and public callback/export/reopen regressions pass.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 19,
+      "phase": "Event delivery",
+      "candidate": "Move record strings through every batch boundary",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 20,
+      "phase": "Event delivery",
+      "candidate": "Bound pending batch memory without dropping events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 21,
+      "phase": "Directory metadata",
+      "candidate": "Reuse metadata scratch across directories",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Already present; not a new optimization. Thread-local directory metadata buffer pooling already implemented; allocation RED24 to GREEN<=1.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 22,
+      "phase": "Directory metadata",
+      "candidate": "Skip dot names before conversion",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "Already present; not a new optimization. Dot-name conversion already avoided; public allocation RED2 to GREEN0.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 23,
+      "phase": "Directory metadata",
+      "candidate": "Avoid repeat metadata-class negotiation",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 24,
+      "phase": "Directory metadata",
+      "candidate": "Encode ordinary names once",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 25,
+      "phase": "Directory metadata",
+      "candidate": "Avoid copying borrowed UTF16 record fields",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 26,
+      "phase": "Directory metadata",
+      "candidate": "Reuse record-boundary validation results",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 27,
+      "phase": "Directory metadata",
+      "candidate": "Avoid rereading buffer header fields",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 28,
+      "phase": "Directory metadata",
+      "candidate": "Reserve filename capacity from exact encoding length",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 29,
+      "phase": "Directory metadata",
+      "candidate": "Reduce zeroing of overwritten scratch bytes",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 30,
+      "phase": "Directory metadata",
+      "candidate": "Keep error fallback off successful metadata path",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 31,
+      "phase": "Catalog construction",
+      "candidate": "Arithmetic lookup for contiguous directory IDs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "New directory-lookup arithmetic change: public RED2064396 bytes; focused5 tests and broad gates pass, line coverage92.34%. CLI build76792 running; n10 comparison pending.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 32,
+      "phase": "Catalog construction",
+      "candidate": "In-place ordering for dense file IDs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Already present; not a new optimization. Dense file-ID permutation already implemented; public large temporary allocation RED262144 to GREEN0.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 33,
+      "phase": "Catalog construction",
+      "candidate": "Bypass ordering for already sorted IDs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Already present; not a new optimization. Ordered-ID bypass already implemented; public temporary allocation RED262144 to GREEN0.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 34,
+      "phase": "Catalog construction",
+      "candidate": "Transfer record arenas without a second array",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Already present; not a new optimization. Record arenas already transfer without a second array; public handoff allocation budgets pass.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 35,
+      "phase": "Catalog construction",
+      "candidate": "Trim unused publication capacity",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "Already present; not a new optimization. File and directory capacity trimming already implemented; exact-record regressions pass.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 36,
+      "phase": "Catalog construction",
+      "candidate": "Reserve exact child-index counts",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 37,
+      "phase": "Catalog construction",
+      "candidate": "Reuse parent positions during rollup",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 38,
+      "phase": "Catalog construction",
+      "candidate": "Skip sorting child lists with fewer than two items",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 39,
+      "phase": "Catalog construction",
+      "candidate": "Avoid repeated child-size key extraction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 40,
+      "phase": "Catalog construction",
+      "candidate": "Release transient parent arrays immediately after grouping",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 41,
+      "phase": "CSV serialization",
+      "candidate": "Reuse decimal formatting scratch",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 42,
+      "phase": "CSV serialization",
+      "candidate": "Write ordinary unescaped fields in one call",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 43,
+      "phase": "CSV serialization",
+      "candidate": "Borrow parent paths during file export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 44,
+      "phase": "CSV serialization",
+      "candidate": "Avoid allocating a complete joined file path",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 45,
+      "phase": "CSV serialization",
+      "candidate": "Batch adjacent constant CSV delimiters",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 46,
+      "phase": "CSV serialization",
+      "candidate": "Reserve escaping scratch from field size",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 47,
+      "phase": "CSV serialization",
+      "candidate": "Avoid repeated directory lookup per file",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 48,
+      "phase": "CSV serialization",
+      "candidate": "Write directory totals without intermediate Strings",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 49,
+      "phase": "CSV serialization",
+      "candidate": "Reduce flush calls while retaining successful close",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 50,
+      "phase": "CSV serialization",
+      "candidate": "Size output buffering for the scale fixture",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 51,
+      "phase": "Snapshot persistence",
+      "candidate": "Borrow sorted record slices for persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 52,
+      "phase": "Snapshot persistence",
+      "candidate": "Reuse directory encoding scratch",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 53,
+      "phase": "Snapshot persistence",
+      "candidate": "Reuse file encoding scratch",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 54,
+      "phase": "Snapshot persistence",
+      "candidate": "Batch adjacent scalar encodings",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 55,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid sorting already sorted session records",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 56,
+      "phase": "Snapshot persistence",
+      "candidate": "Drop publication lookups before disk persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 57,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid duplicate snapshot writes at completion",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 58,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid repeated backup existence queries",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 59,
+      "phase": "Snapshot persistence",
+      "candidate": "Release temporary serializer indexes before rename",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 60,
+      "phase": "Snapshot persistence",
+      "candidate": "Avoid allocating intermediate complete snapshot bytes",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 61,
+      "phase": "Process startup",
+      "candidate": "Borrow command arguments instead of cloning",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Already present; not a new optimization. Main replacement-scan persistence already borrows sorted TreeIndex slices.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 62,
+      "phase": "Process startup",
+      "candidate": "Avoid formatting usage text on valid arguments",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Already present; not a new optimization. Directory persistence already reuses one encoding buffer.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 63,
+      "phase": "Process startup",
+      "candidate": "Reduce native CLI import initialization",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Already present; not a new optimization. File persistence already reuses one encoding buffer.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 64,
+      "phase": "Process startup",
+      "candidate": "Remove unused CLI linker dependencies",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 65,
+      "phase": "Process startup",
+      "candidate": "Keep startup logging lazy until first event",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 66,
+      "phase": "Process startup",
+      "candidate": "Avoid redundant cache-root normalization",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 67,
+      "phase": "Process startup",
+      "candidate": "Resolve executable-independent config once",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Already present; not a new optimization. Duplicate completion snapshot write already avoided using dirty/publication state.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 68,
+      "phase": "Process startup",
+      "candidate": "Avoid loading previous snapshots for replacement scans",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 69,
+      "phase": "Process startup",
+      "candidate": "Avoid CLI initialization of GUI preview state",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Already present; not a new optimization. Main sorted-record serializer does not allocate file/directory permutation arrays.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 70,
+      "phase": "Process startup",
+      "candidate": "Reduce thread startup dependencies before first scan",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "Already present; not a new optimization. Main snapshot persistence already streams into a1MiB buffered writer.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 71,
+      "phase": "Path and string handling",
+      "candidate": "Reserve exact child directory path capacity",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 72,
+      "phase": "Path and string handling",
+      "candidate": "Consume owned OsString in display conversion",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 73,
+      "phase": "Path and string handling",
+      "candidate": "Avoid formatting already UTF8 directory paths",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 74,
+      "phase": "Path and string handling",
+      "candidate": "Reuse root prefix during path assembly",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 75,
+      "phase": "Path and string handling",
+      "candidate": "Borrow ancestors during cycle checks",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 76,
+      "phase": "Path and string handling",
+      "candidate": "Avoid duplicate root normalization",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 77,
+      "phase": "Path and string handling",
+      "candidate": "Reuse filesystem error path conversion",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 78,
+      "phase": "Path and string handling",
+      "candidate": "Avoid duplicate extension extraction",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Already present; not a new optimization. Replacement scans already open an empty repository.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 79,
+      "phase": "Path and string handling",
+      "candidate": "Avoid storing derived full file paths",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "Already present; not a new optimization. Terminal-only CLI already avoids GUI preview state.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 80,
+      "phase": "Path and string handling",
+      "candidate": "Bound temporary path capacity retained by workers",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 81,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Skip physical identity tracking for zero allocation",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 82,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid compressed-size query when metadata proves zero allocation",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Already present; not a new optimization. display_name already consumes OsString with into_string and lossy fallback.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 83,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid allocation rounding for zero logical size",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 84,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid hardlink dedup lock for zero allocation",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 85,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid repeated volume identity for ordinary entries",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 86,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Use already-open handles for fallback metadata",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 87,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid reopening entries with sufficient batched metadata",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 88,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Keep sparse-file fallback separate from ordinary files",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 89,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Cache volume cluster size per safe identity",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "Already present; not a new optimization. Derived full file paths are already omitted from walk records.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 90,
+      "phase": "Zero-byte metadata work",
+      "candidate": "Avoid unnecessary zero-byte counter atomic updates",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "The existing gold benchmark was RED54.86% vs15.44%. New candidate implemented: shared directory-walk logical/allocation counters skip zero additions independently; file counts and IDs unchanged. For16384zero-allocation empty files this avoids32768shared atomic read-modify-write operations. No measured variability savings claimed; public mixed empty/nonempty correctness test passes:49files,4directories,8logical bytes, exact summed physical bytes; broad gates and n10 rerun required.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 91,
+      "phase": "Finalization and output",
+      "candidate": "Wait on terminal channel instead of polling",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Already present; not a new optimization. CLI already waits on a terminal channel instead of polling.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 92,
+      "phase": "Finalization and output",
+      "candidate": "Join scan workers once",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 93,
+      "phase": "Finalization and output",
+      "candidate": "Avoid duplicate terminal state publication",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 94,
+      "phase": "Finalization and output",
+      "candidate": "Release completed pipelines before export",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 95,
+      "phase": "Finalization and output",
+      "candidate": "Avoid redundant final progress logging",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Already present; not a new optimization. Progress logs already throttle to1second; file/directory events skip logging.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 96,
+      "phase": "Finalization and output",
+      "candidate": "Reuse JSON event formatting storage",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Already present; not a new optimization. EventLog already reuses line formatting storage.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 97,
+      "phase": "Finalization and output",
+      "candidate": "Keep event log handle open through scan",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "Already present; not a new optimization. EventLog already keeps one open handle.",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 98,
+      "phase": "Finalization and output",
+      "candidate": "Avoid flushing empty log buffers",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 99,
+      "phase": "Finalization and output",
+      "candidate": "Move auxiliary snapshot state instead of cloning",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    },
+    {
+      "rank": 100,
+      "phase": "Finalization and output",
+      "candidate": "Drop temporary export owners before process exit",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "status": "hypothesis; source audit and public red/green test required",
+      "risk": "unverified; only zero-to-low-risk variants accepted",
+      "estimated_variability_savings": "Unquantified; cannot exceed this phase contribution to measured IQR. No additive or guaranteed savings claim."
+    }
+  ],
+  "control": {
+    "path": "benchmarks/empty-scale-control-iteration9.json",
+    "n": 10,
+    "variability_pct": {
+      "WinBlaze": 13.922109691676809,
+      "WinDirStat": 29.072605175030862,
+      "WizTree": 104.51901788450262
+    },
+    "interpretation": "WinBlaze gold before new optimization. All tools substantially slower than earlier batch. No causal product improvement established."
+  },
+  "diagnostics": {
+    "phase_test": "Actual behavior RED missing opt-in phase file, then GREEN; both shipped CLI integration tests pass",
+    "validation_session": 37972,
+    "next": "n10 phase diagnosis after build; instrumentation is not counted as an optimization",
+    "coverage_percent": 92.37,
+    "build": "pass",
+    "phases": {
+      "session_start": {
+        "n": 10,
+        "median_ms": 0.522,
+        "iqr_ms": 0.13424999999999998
+      },
+      "scan_and_catalog": {
+        "n": 10,
+        "median_ms": 104.79400000000001,
+        "iqr_ms": 52.8245
+      },
+      "finalization": {
+        "n": 10,
+        "median_ms": 25.106,
+        "iqr_ms": 16.039250000000003
+      },
+      "csv_export": {
+        "n": 10,
+        "median_ms": 27.429499999999997,
+        "iqr_ms": 11.689999999999998
+      }
+    },
+    "scope": "diagnostic only: redirected stdout and opt-in phase logging; never medal evidence"
+  },
+  "worker_sweep": {
+    "path": "benchmarks/experiment-directory-workers-scale.json",
+    "scope": "producer-only diagnostic, not medals",
+    "results": [
+      {
+        "workers": 1,
+        "n": 10,
+        "scan_median_ms": 100.5,
+        "scan_variability": 10.199004975124378,
+        "process_median_ms": 245.6336,
+        "process_variability": 43.4699690921763,
+        "scan_ms": [
+          102,
+          89,
+          99,
+          140,
+          103,
+          107,
+          94,
+          102,
+          92,
+          87
+        ]
+      },
+      {
+        "workers": 2,
+        "n": 10,
+        "scan_median_ms": 65.5,
+        "scan_variability": 20.99236641221374,
+        "process_median_ms": 251.71859999999998,
+        "process_variability": 26.267844330931457,
+        "scan_ms": [
+          70,
+          49,
+          86,
+          60,
+          74,
+          55,
+          62,
+          59,
+          90,
+          69
+        ]
+      },
+      {
+        "workers": 4,
+        "n": 10,
+        "scan_median_ms": 38,
+        "scan_variability": 7.894736842105263,
+        "process_median_ms": 178.4116,
+        "process_variability": 11.401893150445389,
+        "scan_ms": [
+          39,
+          34,
+          36,
+          38,
+          45,
+          43,
+          39,
+          34,
+          36,
+          38
+        ]
+      }
+    ]
+  },
+  "zero_atomic_validation": {
+    "workspace": "pass",
+    "examples": "pass",
+    "strict_clippy": "pass",
+    "rustfmt": "pass",
+    "coverage_percent": 92.37,
+    "release": "pass",
+    "correctness": "49mixed files exact counts/bytes; all30complete exports match fixture",
+    "first_batch": {
+      "WinBlaze": 8.773014492449887,
+      "WinDirStat": 25.97374924349406,
+      "WizTree": 317.4710014104152,
+      "medal": "gold"
+    },
+    "confirmation": {
+      "WinBlaze": 26.381823665426758,
+      "WinDirStat": 16.130944855457553,
+      "WizTree": 28.08550750659502,
+      "medal": "silver"
+    },
+    "performance_green": "not stable; independent confirmation remains RED"
+  },
+  "latest_measurement": {
+    "source": "variability-small-buffers-confirmation.json",
+    "runs_per_product": 10,
+    "validated_exports": 30,
+    "medal": "bronze",
+    "products": {
+      "WinBlaze": {
+        "median_ms": 158.29500000000002,
+        "variability_pct": 17.65690640892008
+      },
+      "WinDirStat": {
+        "median_ms": 773.965,
+        "variability_pct": 15.141188555038019
+      },
+      "WizTree": {
+        "median_ms": 1498.785,
+        "variability_pct": 6.6980921212848985
+      }
+    }
+  },
+  "next_action": "Stable gold not achieved. Investigate process-startup variability with matched diagnostic controls; do not select a favorable batch or change measurement scope. Keep all n10 observations."
+}

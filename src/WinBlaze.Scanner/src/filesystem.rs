@@ -33,10 +33,8 @@ pub fn discover_available_drive_roots() -> Vec<PathBuf> {
         if mask != 0 {
             return (b'A'..=b'Z')
                 .enumerate()
-                .filter_map(|(index, letter)| {
-                    ((mask & (1u32 << index)) != 0)
-                        .then(|| PathBuf::from(format!("{}:\\", letter as char)))
-                })
+                .filter(|(index, _)| (mask & (1u32 << *index)) != 0)
+                .map(|(_, letter)| PathBuf::from(format!("{}:\\", letter as char)))
                 .collect();
         }
     }

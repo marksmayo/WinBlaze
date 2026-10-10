@@ -1,0 +1,186 @@
+{
+  "verified": true,
+  "outputs": [
+    {
+      "tool": "WinBlaze",
+      "run": 1,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 2,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 3,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 4,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 5,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 6,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 7,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 8,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 9,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinBlaze",
+      "run": 10,
+      "files": 8192,
+      "sha256": "84dd91996d6900c2b16424538c5a26dd69f45ce25ec81138947288d6c86e3873"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 1,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 2,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 3,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 4,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 5,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 6,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 7,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 8,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 9,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WinDirStat",
+      "run": 10,
+      "files": 8192,
+      "sha256": "e4bb31397f48b99c3fd5a7a0a3d6296b4d47e939510bc78caf4a925739de9784"
+    },
+    {
+      "tool": "WizTree",
+      "run": 1,
+      "files": 8192,
+      "sha256": "4303a1835a2058e1f85f74bf3da7823d6a54bff45e0ed9af076a77b2edee5d43"
+    },
+    {
+      "tool": "WizTree",
+      "run": 2,
+      "files": 8192,
+      "sha256": "2dd84c7afde438a4eb5255181c62e343307d7c0d34c19d0c7b320b8ba78317c7"
+    },
+    {
+      "tool": "WizTree",
+      "run": 3,
+      "files": 8192,
+      "sha256": "d698ca7aa6cb5f5380c143a7a37158daf5d35a8ef28a47ad02cf2320e551bc29"
+    },
+    {
+      "tool": "WizTree",
+      "run": 4,
+      "files": 8192,
+      "sha256": "0cb2ddcc4c0ed6afad26e3ad8bf354285b22feadfc2cd491de9541554571bf4a"
+    },
+    {
+      "tool": "WizTree",
+      "run": 5,
+      "files": 8192,
+      "sha256": "72f05ec05c63b2389922c2ebe5027fe384030b3be86775569f6be91338cdfc5c"
+    },
+    {
+      "tool": "WizTree",
+      "run": 6,
+      "files": 8192,
+      "sha256": "3334ba536d6b188bfc807ed34919ef5d5448ba0bd148d38d4b51b473c87f9d14"
+    },
+    {
+      "tool": "WizTree",
+      "run": 7,
+      "files": 8192,
+      "sha256": "78a40dcfc4f5709c6d209957b290eb52cee2a3d529b3683afe430136ce93229d"
+    },
+    {
+      "tool": "WizTree",
+      "run": 8,
+      "files": 8192,
+      "sha256": "0ab21e36c2c702b51c611da0e69db21a256267a694373d4d12aa250a65061d9e"
+    },
+    {
+      "tool": "WizTree",
+      "run": 9,
+      "files": 8192,
+      "sha256": "3b02881f19fcfae51f311c65dcd00ed84536c8c5357e64ace27ebc83b2afd119"
+    },
+    {
+      "tool": "WizTree",
+      "run": 10,
+      "files": 8192,
+      "sha256": "f0b90cbc9000479f534464f16ea47466a4c44402a8a6e6689a4b187b2018a02d"
+    }
+  ],
+  "allocation_semantics": "Resident fixture: Windows allocation256 for WinBlaze/WinDirStat; WizTree allocation0, consistent with no nonresident extents"
+}

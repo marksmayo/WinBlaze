@@ -1,0 +1,33 @@
+{
+  "rust_line_coverage_percent": 93.29,
+  "required_percent": 92,
+  "passed": [
+    "workspace tests",
+    "example build/live output validation",
+    "strict all-target/all-feature clippy",
+    "rustfmt",
+    "Windows logging I/O",
+    "10 directory UX cases",
+    "UI smoke",
+    "UI negative",
+    "client accessibility (3 passes)",
+    "210 feature observations and negative validators",
+    "DLL identity regression",
+    "offline and interactive report checks",
+    "JSON and extension CSV public-interface tests",
+    "UI JSON/filtered CSV save and invalid filter regression",
+    "CSV interoperability public-interface regressions (WinBlaze / WinDirStat / WizTree)",
+    "Atomic native CSV reopen and invalid-filter destination preservation",
+    "Complete extension totals and stable 10,051-file largest pages",
+    "Windows geometry and exact PNG pixel decode",
+    "9,001-file offline import / dense PNG / largest-file UI paging",
+    "Advanced filtered CSV UI with multiple patterns and byte bounds",
+    "Legacy CSV date compatibility through parser and actual UI",
+    "Atomic JSON result replacement with real read-only write failure"
+  ],
+  "pending": [
+    "replacement administrator MFT phase rerun after canceled prompt"
+  ],
+  "implemented_production_optimizations": 9,
+  "audited_candidates": 100
+}

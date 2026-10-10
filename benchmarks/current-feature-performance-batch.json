@@ -1,0 +1,518 @@
+{
+  "batch_id": "20261009T140503047Z",
+  "requested_runs": 10,
+  "state": "complete",
+  "started_utc": "2026-10-09T14:05:03.0520340Z",
+  "cache": "uncontrolled; sequential repeats",
+  "sample_interval_ms": 10,
+  "elevation": "standard user token",
+  "fixture": {
+    "schema": 1,
+    "files": 224,
+    "logical_bytes": 234881024,
+    "duplicate_groups": 32,
+    "duplicate_files": 128,
+    "metadata_decoy_pairs": 32,
+    "duplicate_names": [
+      "group-000-copy-0.bin",
+      "group-000-copy-1.bin",
+      "group-000-copy-2.bin",
+      "group-000-copy-3.bin",
+      "group-001-copy-0.bin",
+      "group-001-copy-1.bin",
+      "group-001-copy-2.bin",
+      "group-001-copy-3.bin",
+      "group-002-copy-0.bin",
+      "group-002-copy-1.bin",
+      "group-002-copy-2.bin",
+      "group-002-copy-3.bin",
+      "group-003-copy-0.bin",
+      "group-003-copy-1.bin",
+      "group-003-copy-2.bin",
+      "group-003-copy-3.bin",
+      "group-004-copy-0.bin",
+      "group-004-copy-1.bin",
+      "group-004-copy-2.bin",
+      "group-004-copy-3.bin",
+      "group-005-copy-0.bin",
+      "group-005-copy-1.bin",
+      "group-005-copy-2.bin",
+      "group-005-copy-3.bin",
+      "group-006-copy-0.bin",
+      "group-006-copy-1.bin",
+      "group-006-copy-2.bin",
+      "group-006-copy-3.bin",
+      "group-007-copy-0.bin",
+      "group-007-copy-1.bin",
+      "group-007-copy-2.bin",
+      "group-007-copy-3.bin",
+      "group-008-copy-0.bin",
+      "group-008-copy-1.bin",
+      "group-008-copy-2.bin",
+      "group-008-copy-3.bin",
+      "group-009-copy-0.bin",
+      "group-009-copy-1.bin",
+      "group-009-copy-2.bin",
+      "group-009-copy-3.bin",
+      "group-010-copy-0.bin",
+      "group-010-copy-1.bin",
+      "group-010-copy-2.bin",
+      "group-010-copy-3.bin",
+      "group-011-copy-0.bin",
+      "group-011-copy-1.bin",
+      "group-011-copy-2.bin",
+      "group-011-copy-3.bin",
+      "group-012-copy-0.bin",
+      "group-012-copy-1.bin",
+      "group-012-copy-2.bin",
+      "group-012-copy-3.bin",
+      "group-013-copy-0.bin",
+      "group-013-copy-1.bin",
+      "group-013-copy-2.bin",
+      "group-013-copy-3.bin",
+      "group-014-copy-0.bin",
+      "group-014-copy-1.bin",
+      "group-014-copy-2.bin",
+      "group-014-copy-3.bin",
+      "group-015-copy-0.bin",
+      "group-015-copy-1.bin",
+      "group-015-copy-2.bin",
+      "group-015-copy-3.bin",
+      "group-016-copy-0.bin",
+      "group-016-copy-1.bin",
+      "group-016-copy-2.bin",
+      "group-016-copy-3.bin",
+      "group-017-copy-0.bin",
+      "group-017-copy-1.bin",
+      "group-017-copy-2.bin",
+      "group-017-copy-3.bin",
+      "group-018-copy-0.bin",
+      "group-018-copy-1.bin",
+      "group-018-copy-2.bin",
+      "group-018-copy-3.bin",
+      "group-019-copy-0.bin",
+      "group-019-copy-1.bin",
+      "group-019-copy-2.bin",
+      "group-019-copy-3.bin",
+      "group-020-copy-0.bin",
+      "group-020-copy-1.bin",
+      "group-020-copy-2.bin",
+      "group-020-copy-3.bin",
+      "group-021-copy-0.bin",
+      "group-021-copy-1.bin",
+      "group-021-copy-2.bin",
+      "group-021-copy-3.bin",
+      "group-022-copy-0.bin",
+      "group-022-copy-1.bin",
+      "group-022-copy-2.bin",
+      "group-022-copy-3.bin",
+      "group-023-copy-0.bin",
+      "group-023-copy-1.bin",
+      "group-023-copy-2.bin",
+      "group-023-copy-3.bin",
+      "group-024-copy-0.bin",
+      "group-024-copy-1.bin",
+      "group-024-copy-2.bin",
+      "group-024-copy-3.bin",
+      "group-025-copy-0.bin",
+      "group-025-copy-1.bin",
+      "group-025-copy-2.bin",
+      "group-025-copy-3.bin",
+      "group-026-copy-0.bin",
+      "group-026-copy-1.bin",
+      "group-026-copy-2.bin",
+      "group-026-copy-3.bin",
+      "group-027-copy-0.bin",
+      "group-027-copy-1.bin",
+      "group-027-copy-2.bin",
+      "group-027-copy-3.bin",
+      "group-028-copy-0.bin",
+      "group-028-copy-1.bin",
+      "group-028-copy-2.bin",
+      "group-028-copy-3.bin",
+      "group-029-copy-0.bin",
+      "group-029-copy-1.bin",
+      "group-029-copy-2.bin",
+      "group-029-copy-3.bin",
+      "group-030-copy-0.bin",
+      "group-030-copy-1.bin",
+      "group-030-copy-2.bin",
+      "group-030-copy-3.bin",
+      "group-031-copy-0.bin",
+      "group-031-copy-1.bin",
+      "group-031-copy-2.bin",
+      "group-031-copy-3.bin"
+    ],
+    "extensions": {
+      "txt": 32,
+      "dat": 64,
+      "bin": 128
+    },
+    "generation": "seed 104729, 1 MiB files; each true group has four byte-identical copies; decoys differ by contents"
+  },
+  "selected_tools": [
+    "WinBlaze"
+  ],
+  "only_winblaze_scan_csv": false,
+  "only_winblaze_jobs": [],
+  "jobs": [
+    {
+      "id": "wb-scan-csv",
+      "tool": "WinBlaze",
+      "kind": "csv-wb",
+      "operation": "scan-csv-fixture",
+      "scope": "Startup + scan/index/persistence + CSV export; duplicate fixture"
+    },
+    {
+      "id": "wb-cache-load",
+      "tool": "WinBlaze",
+      "kind": "cache-load",
+      "operation": "cache-load",
+      "scope": "Startup + persisted native catalog decode; no GUI"
+    },
+    {
+      "id": "wb-cached-csv",
+      "tool": "WinBlaze",
+      "kind": "csv-native",
+      "operation": "cached-csv",
+      "scope": "Startup + catalog decode + complete CSV export; no scan/GUI"
+    },
+    {
+      "id": "wb-json",
+      "tool": "WinBlaze",
+      "kind": "json-native",
+      "operation": "json-export",
+      "scope": "Startup + persisted catalog decode + full JSON export; no scan/GUI"
+    },
+    {
+      "id": "wb-detailed-csv",
+      "tool": "WinBlaze",
+      "kind": "detailed-csv-native",
+      "operation": "detailed-csv-export",
+      "scope": "Startup + catalog decode + current owner/physical identity queries + fourteen-column CSV export; no content reads/GUI"
+    },
+    {
+      "id": "wb-flame-layout",
+      "tool": "WinBlaze",
+      "kind": "flame-layout-native",
+      "operation": "flame-layout",
+      "scope": "Native adapter startup + generated 4097-node hierarchy + 100 weighted flame layouts + proportional-span checks + JSON; excludes GPU/UI rendering"
+    },
+    {
+      "id": "wb-sunburst-layout",
+      "tool": "WinBlaze",
+      "kind": "sunburst-layout-native",
+      "operation": "sunburst-layout",
+      "scope": "Native adapter startup + generated 4097-node hierarchy + 100 weighted sunburst layouts + angular-span checks + JSON; excludes GPU/UI rendering"
+    },
+    {
+      "id": "wb-permission-controls",
+      "tool": "WinBlaze",
+      "kind": "permission-controls-native",
+      "operation": "permission-account-controls",
+      "scope": "Native adapter startup + 100 passes over 4096 generated ACL-view rows + compiled-regex account exclusion/highlighting/ACE-rights filtering + checked counts + JSON; excludes filesystem ACL queries/GUI"
+    },
+    {
+      "id": "wb-detailed-json",
+      "tool": "WinBlaze",
+      "kind": "detailed-json-native",
+      "operation": "detailed-json-export",
+      "scope": "Startup + catalog decode + current owner/physical identity queries + detailed JSON export; no content reads/GUI"
+    },
+    {
+      "id": "wb-tsv",
+      "tool": "WinBlaze",
+      "kind": "tsv-native",
+      "operation": "tsv-export",
+      "scope": "Startup + catalog decode + complete quoted TSV export; no scan/GUI"
+    },
+    {
+      "id": "wb-import-json",
+      "tool": "WinBlaze",
+      "kind": "csv-native",
+      "operation": "json-import-export",
+      "scope": "Startup + own JSON import/catalog build + complete CSV re-export; no scan/GUI"
+    },
+    {
+      "id": "wb-import-wd-json",
+      "tool": "WinBlaze",
+      "kind": "csv-native",
+      "operation": "windirstat-json-import",
+      "scope": "Startup + installed WinDirStat JSON import/catalog build + complete CSV re-export; no scan/GUI"
+    },
+    {
+      "id": "wb-import-tsv",
+      "tool": "WinBlaze",
+      "kind": "csv-native",
+      "operation": "tsv-import-export",
+      "scope": "Startup + own TSV import/catalog build + complete CSV re-export; no scan/GUI"
+    },
+    {
+      "id": "wb-import-wiz-utc",
+      "tool": "WinBlaze",
+      "kind": "csv-native",
+      "operation": "wiztree-utc-csv-import",
+      "scope": "Startup + installed WizTree explicit UTC CSV import + complete CSV re-export; no scan/GUI"
+    },
+    {
+      "id": "wb-multiple-roots",
+      "tool": "WinBlaze",
+      "kind": "multiple-roots-native",
+      "operation": "multiple-root-scan-csv",
+      "scope": "Startup + two disjoint 32-file folder scans + combined catalog build/physical metadata reconciliation + complete CSV export; metadata-decoy subset, 64 files; no GUI"
+    },
+    {
+      "id": "wb-regex",
+      "tool": "WinBlaze",
+      "kind": "regex-native",
+      "operation": "regex-search",
+      "scope": "Startup + catalog decode + complete-catalog regex filename search + matching-row CSV; no scan/GUI"
+    },
+    {
+      "id": "wb-allocated-search",
+      "tool": "WinBlaze",
+      "kind": "allocated-native",
+      "operation": "allocated-size-search",
+      "scope": "Startup + catalog decode + allocated-size bound search + matching-row CSV; no scan/GUI"
+    },
+    {
+      "id": "wb-storage-cost",
+      "tool": "WinBlaze",
+      "kind": "storage-cost-native",
+      "operation": "storage-cost-estimate",
+      "scope": "Startup + catalog decode + allocated bytes/UTC age storage-tier cost estimate + JSON; no scan/GUI"
+    },
+    {
+      "id": "wb-duplicates-sha256",
+      "tool": "WinBlaze",
+      "kind": "duplicates-sha256-native",
+      "operation": "cached-duplicates-sha256",
+      "scope": "Startup + catalog decode + SHA256 hashing + byte-for-byte duplicate verification + digest CSV report; no scan/GUI"
+    },
+    {
+      "id": "wb-duplicates-md5",
+      "tool": "WinBlaze",
+      "kind": "duplicates-md5-native",
+      "operation": "cached-duplicates-md5",
+      "scope": "Startup + catalog decode + MD5 hashing + byte-for-byte duplicate verification + digest CSV report; no scan/GUI"
+    },
+    {
+      "id": "wb-duplicates-sha1",
+      "tool": "WinBlaze",
+      "kind": "duplicates-sha1-native",
+      "operation": "cached-duplicates-sha1",
+      "scope": "Startup + catalog decode + SHA1 hashing + byte-for-byte duplicate verification + digest CSV report; no scan/GUI"
+    },
+    {
+      "id": "wb-duplicates-sha512",
+      "tool": "WinBlaze",
+      "kind": "duplicates-sha512-native",
+      "operation": "cached-duplicates-sha512",
+      "scope": "Startup + catalog decode + SHA512 hashing + byte-for-byte duplicate verification + digest CSV report; no scan/GUI"
+    },
+    {
+      "id": "wb-hardlinks",
+      "tool": "WinBlaze",
+      "kind": "hardlink-native",
+      "operation": "hardlink-consolidation",
+      "scope": "Native adapter startup + owned identical 2MiB file creation + locked byte-verified hard-link consolidation + byte/identity checks + cleanup; no GUI"
+    },
+    {
+      "id": "wb-compression",
+      "tool": "WinBlaze",
+      "kind": "compression-native",
+      "operation": "ntfs-compression",
+      "scope": "Native adapter startup + owned 2MiB zero-file creation + compression/allocation checks + decompression/byte checks + cleanup; no GUI"
+    },
+    {
+      "id": "wb-sparsify",
+      "tool": "WinBlaze",
+      "kind": "sparsify-native",
+      "operation": "ntfs-sparsification",
+      "scope": "Native adapter startup + owned mixed 2MiB file creation + verified-zero sparse conversion + byte/allocation checks + cleanup; no GUI"
+    },
+    {
+      "id": "wb-vhd",
+      "tool": "WinBlaze",
+      "kind": "vhd-native",
+      "operation": "vhd-zero-block-compaction",
+      "scope": "Native adapter startup + invalid-disk refusal + owned empty 16MiB dynamic VHDX creation + detached zero-block compaction/size validation + cleanup; no mounting/GUI"
+    },
+    {
+      "id": "wb-filter",
+      "tool": "WinBlaze",
+      "kind": "filtered-native",
+      "operation": "filtered-export",
+      "scope": "Startup + persisted catalog decode + *.bin files-only CSV export; no scan/GUI"
+    },
+    {
+      "id": "wb-extensions",
+      "tool": "WinBlaze",
+      "kind": "extensions-native",
+      "operation": "extension-summary",
+      "scope": "Startup + catalog decode + native extension API; no scan/GUI/CSV"
+    },
+    {
+      "id": "wb-import",
+      "tool": "WinBlaze",
+      "kind": "csv-native",
+      "operation": "csv-import-export",
+      "scope": "Startup + own-format CSV import + catalog build + complete CSV re-export; no scan/GUI"
+    },
+    {
+      "id": "wb-import-wd",
+      "tool": "WinBlaze",
+      "kind": "csv-native",
+      "operation": "windirstat-csv-import",
+      "scope": "Startup + WinDirStat CSV import + catalog build + complete CSV re-export; no scan/GUI"
+    },
+    {
+      "id": "wb-import-wiz",
+      "tool": "WinBlaze",
+      "kind": "csv-native",
+      "operation": "wiztree-csv-import",
+      "scope": "Startup + WizTree CSV import + catalog build + complete CSV re-export; local dates use this PC timezone; no scan/GUI"
+    },
+    {
+      "id": "wb-advanced-filter",
+      "tool": "WinBlaze",
+      "kind": "advanced-filter-native",
+      "operation": "advanced-filtered-export",
+      "scope": "Startup + catalog decode + *.bin;unique-???.txt + exactly 1MiB logical size + UTC date bounds CSV export; no scan/GUI"
+    },
+    {
+      "id": "wb-largest",
+      "tool": "WinBlaze",
+      "kind": "largest-native",
+      "operation": "largest-files",
+      "scope": "Startup + catalog decode + every largest-file page (50 per page) + CSV serialization; no scan/GUI"
+    },
+    {
+      "id": "wb-flame-png",
+      "tool": "WinBlaze",
+      "kind": "png",
+      "operation": "flame-png",
+      "scope": "GUI startup + persisted catalog decode + native tree queries + flame layout/GPU rendering + 1920x1080 PNG serialization; no scan"
+    },
+    {
+      "id": "wb-sunburst-png",
+      "tool": "WinBlaze",
+      "kind": "png",
+      "operation": "sunburst-png",
+      "scope": "GUI startup + persisted catalog decode + native tree queries + sunburst sector layout/GPU rendering + 1920x1080 PNG serialization; no scan"
+    },
+    {
+      "id": "wb-png",
+      "tool": "WinBlaze",
+      "kind": "png",
+      "operation": "treemap-png",
+      "scope": "GUI startup + persisted catalog decode + native tree/extension queries + GPU treemap layout + 1920x1080 PNG serialization; no scan"
+    },
+    {
+      "id": "wb-duplicates",
+      "tool": "WinBlaze",
+      "kind": "duplicates-native",
+      "operation": "content-duplicates",
+      "scope": "Startup + scan/index/persistence + byte-for-byte duplicate verification + CSV report; no GUI"
+    },
+    {
+      "id": "wb-permissions",
+      "tool": "WinBlaze",
+      "kind": "permissions-native",
+      "operation": "permission-export",
+      "scope": "Startup + scan/index/persistence + owner/group/DACL reads + SDDL CSV report; no GUI"
+    },
+    {
+      "id": "wb-actions",
+      "tool": "WinBlaze",
+      "kind": "actions-native",
+      "operation": "file-actions",
+      "scope": "Native adapter startup + owned fixture creation + collision refusal + file move/recycle + folder rename + batch file/folder move/recycle; excludes GUI confirmation"
+    },
+    {
+      "id": "wb-watch",
+      "tool": "WinBlaze",
+      "kind": "watch-native",
+      "operation": "change-monitoring",
+      "scope": "Native adapter startup + subscription + add/modify/remove notifications + 100ms ignored-write observation; excludes GUI rescan"
+    },
+    {
+      "id": "wb-mft",
+      "tool": "WinBlaze",
+      "kind": "mft",
+      "operation": "raw-mft-dump",
+      "scope": "Startup + raw C: NTFS MFT dump to local SSD; administrator token; no scan tree/GUI"
+    },
+    {
+      "id": "wd-scan-csv",
+      "tool": "WinDirStat",
+      "kind": "csv-wd",
+      "operation": "scan-csv-fixture",
+      "scope": "Startup + scan + CSV export; duplicate fixture"
+    },
+    {
+      "id": "wd-duplicates",
+      "tool": "WinDirStat",
+      "kind": "duplicates",
+      "operation": "content-duplicates",
+      "scope": "Startup + scan + content-duplicate detection + CSV report; saved hash settings"
+    },
+    {
+      "id": "wd-json",
+      "tool": "WinDirStat",
+      "kind": "json",
+      "operation": "json-export",
+      "scope": "Startup + scan + JSON export"
+    },
+    {
+      "id": "wd-permissions",
+      "tool": "WinDirStat",
+      "kind": "permissions",
+      "operation": "permission-export",
+      "scope": "Startup + scan + accessible ACL reads + CSV report; saved settings"
+    },
+    {
+      "id": "wiz-scan-csv",
+      "tool": "WizTree",
+      "kind": "csv-wiz",
+      "operation": "scan-csv-fixture",
+      "scope": "Startup + scan + CSV export; duplicate fixture"
+    },
+    {
+      "id": "wiz-filter",
+      "tool": "WizTree",
+      "kind": "filtered",
+      "operation": "filtered-export",
+      "scope": "Startup + scan + *.bin filter + files-only CSV export"
+    },
+    {
+      "id": "wiz-extensions",
+      "tool": "WizTree",
+      "kind": "extensions-wiz",
+      "operation": "extension-summary",
+      "scope": "Startup + scan + file-type CSV export"
+    },
+    {
+      "id": "wiz-png",
+      "tool": "WizTree",
+      "kind": "png",
+      "operation": "treemap-png",
+      "scope": "Startup + scan + treemap layout + 1920x1080 PNG serialization"
+    },
+    {
+      "id": "wiz-import",
+      "tool": "WizTree",
+      "kind": "csv-wiz",
+      "operation": "csv-import-export",
+      "scope": "Startup + own-format CSV import + CSV re-export; includes serialization"
+    },
+    {
+      "id": "wiz-mft",
+      "tool": "WizTree",
+      "kind": "mft",
+      "operation": "raw-mft-dump",
+      "scope": "Startup + raw C: NTFS MFT dump to local SSD; administrator token; no scan tree/GUI"
+    }
+  ],
+  "completed_utc": "2026-10-09T14:09:48.8214852Z"
+}

@@ -88,7 +88,7 @@ machine and storage context.
 
 ## Runtime Data
 
-- Startup trace: `%TEMP%\WinBlaze-startup.log`
+- Startup trace: `%TEMP%\WinBlaze-startup.log` (enable routine tracing with `WINBLAZE_STARTUP_TRACE=1`; failures remain logged)
 - Native scanner/index events: `%LOCALAPPDATA%\WinBlaze\logs\events.jsonl`
 - Failure reports: `%LOCALAPPDATA%\WinBlaze\logs\failures.jsonl`
 - Binary index snapshot: `%LOCALAPPDATA%\WinBlaze\index\winblaze.index.bin`
@@ -103,3 +103,62 @@ machine and storage context.
 - A direct active-shell `NavigationView` host wrapper previously built but
   crashed inside `Microsoft.UI.Xaml.dll` after activation; use small verified
   navigation changes until that is isolated.
+
+
+## Parity feature checks
+
+### Release OS XAML desktop host
+
+Release/x64 builds now stage the OS XAML desktop host from the current UI
+sources. Run MSBuild from a Visual Studio developer shell; its post-build target
+uses PowerShell 7, records source/binary hashes, and backs up previous binaries
+under `artifacts/` before staging the four Release binaries. Debug builds retain
+WinUI. Use `/p:WinBlazeUiHost=WinUI` for an explicit Release fallback.
+
+To build and validate an isolated OS XAML output after restoring UI NuGet packages:
+
+```powershell
+pwsh -NoProfile -File scripts/build-os-xaml-ui.ps1
+pwsh -NoProfile -File tests/ui/os-xaml-build.ps1
+pwsh -NoProfile -File tests/ui/os-xaml-package.ps1 -BuildDirectory artifacts/os-xaml-ui/full-os-candidate -OutputRoot artifacts/os-xaml-package
+```
+
+The builder discovers Visual Studio, Windows SDK and restored package headers,
+builds the native DLL, CLI and updater, and records source and binary hashes.
+Generated sources and outputs stay under repository `artifacts/`. Reviewed
+source transformations adapt the current full UI to the OS XAML runtime; they
+include owned asynchronous shutdown and its desktop window adapter. The host
+retains bitmap window icons, PMv2, SegmentHeap and first-use imports for all six
+DLLs declared in the project. Import checks use Python; UI checks use Windows
+PowerShell 5 in a desktop session. The Release directory's `winblaze-host.json`
+records its staged host, source hashes, binary hashes and backup directory.
+
+For an explicitly selected portable package, use
+`scripts/package-portable.ps1 -UiHost OsXaml -BuildDirectory artifacts/os-xaml-ui/full-os-candidate`.
+The packager verifies all four binaries against the build inventory and uses a
+separate `-os-xaml-portable` name. The default packaging option retains its
+legacy WinUI directory layout.
+The default packaging path includes the Release directory's existing WinUI
+sidecars even when its executable is the OS XAML host. The explicit OS XAML
+package verifies the smaller four-binary inventory. Benchmark medals require
+fresh observations against the staged binaries; isolated build results do not
+replace those observations. See `benchmarks/ITERATION_26_RELEASE_OS_XAML.md` for
+runtime evidence and remaining validation limits.
+
+`cargo build --release -p winblaze-native` builds both the C ABI DLL and the shipped `target/release/winblaze-cli.exe`. The portable packaging script stages the CLI; the MSI definition includes it too.
+
+Run the real Windows feature regressions in a desktop session:
+
+```powershell
+powershell -NoProfile -File tests/ui/parity.ps1
+powershell -NoProfile -File tests/ui/import-scan.ps1
+powershell -NoProfile -File tests/ui/export-features.ps1
+```
+
+Build `tests/native/file-actions.vcxproj` and `tests/native/directory-watcher.vcxproj` with MSBuild Release/x64. Each executable requires its own generated fixture directory argument. These tests only operate on files they create. The full refresh builds both adapters before timing when `-SkipBuild` is omitted:
+
+```powershell
+pwsh -NoProfile -File benchmarks/run-winblaze-refresh.ps1 -Runs 10
+```
+
+Administrator raw-volume runs remain separate; `run-feature-comparison.ps1 -OnlyMft -Runs 10` measures both WinBlaze and WizTree raw MFT exports with an administrator token. MFT/ACL outputs are validated then removed; aggregate timing, CPU/memory samples and binary identities are retained. Never lower repetition counts when rerunning benchmarks.

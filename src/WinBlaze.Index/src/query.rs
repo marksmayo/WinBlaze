@@ -57,24 +57,28 @@ impl IndexCatalog {
     }
 
     pub fn search(&self, query: &SearchQuery) -> Vec<IndexSearchHit> {
-        // Pre-compute per-query invariants once rather than re-computing inside every
-        // per-entry predicate call.
-        //
-        // 1. Lowercase the pattern a single time; matches_text receives a &str so it
-        //    never needs to allocate for Prefix/Contains/Substring modes.
-        // 2. Normalize extensions a single time; the inner loop previously called
-        //    normalize_extension() for every (entry × extension candidate) pair.
-        let pattern_lower: Option<String> = query.pattern.as_deref().map(str::to_ascii_lowercase);
-        let normalized_extensions: Vec<String> = query
-            .extensions
-            .iter()
-            .filter_map(|ext| normalize_extension(ext))
-            .collect();
-
         let candidate_count = usize::from(query.include_files) * self.files.len()
             + usize::from(query.include_directories) * self.aggregated_directories.len();
-        let initial_capacity = query.limit.unwrap_or(256).min(candidate_count);
-        let mut hits = Vec::with_capacity(initial_capacity);
+        if query.limit == Some(0)
+            || candidate_count == 0
+            || query
+                .size
+                .min_bytes
+                .zip(query.size.max_bytes)
+                .is_some_and(|(min, max)| min > max)
+            || query
+                .modified
+                .modified_after_utc
+                .zip(query.modified.modified_before_utc)
+                .is_some_and(|(after, before)| after >= before)
+        {
+            return Vec::new();
+        }
+        // Text predicates compare borrowed UTF-8 bytes case-insensitively.
+        // Do not allocate query normalization or a result buffer before a match.
+        let pattern = query.pattern.as_deref();
+        let extensions = PreparedExtensions::new(&query.extensions);
+        let mut hits = Vec::new();
 
         if query.include_files {
             hits.extend(self.files.iter().filter_map(|file| {
@@ -83,22 +87,10 @@ impl IndexCatalog {
                     full_path: &file.full_path,
                     size_bytes: file.size_bytes,
                     allocation_bytes: file.allocation_bytes,
-                    modified_utc: file.modified_utc,
+                    modified_utc: file.modified_utc(),
                 };
-                if matches_query(
-                    query,
-                    pattern_lower.as_deref(),
-                    &normalized_extensions,
-                    &file_params,
-                ) {
-                    Some(IndexSearchHit {
-                        kind: IndexRecordKind::File,
-                        name: file.name.clone(),
-                        full_path: file.full_path.clone(),
-                        size_bytes: file.size_bytes,
-                        allocation_bytes: file.allocation_bytes,
-                        modified_utc: file.modified_utc,
-                    })
+                if matches_query(query, pattern, extensions.as_slice(), &file_params) {
+                    Some(CandidateHit::File(file))
                 } else {
                     None
                 }
@@ -114,33 +106,55 @@ impl IndexCatalog {
                     allocation_bytes: directory.total_bytes,
                     modified_utc: None,
                 };
-                if matches_query(
-                    query,
-                    pattern_lower.as_deref(),
-                    &normalized_extensions,
-                    &file_params,
-                ) {
-                    Some(IndexSearchHit {
-                        kind: IndexRecordKind::Directory,
-                        name: directory.name.clone(),
-                        full_path: directory.full_path.clone(),
-                        size_bytes: directory.total_bytes,
-                        allocation_bytes: directory.total_bytes,
-                        modified_utc: None,
-                    })
+                if matches_query(query, pattern, extensions.as_slice(), &file_params) {
+                    Some(CandidateHit::Directory(directory))
                 } else {
                     None
                 }
             }));
         }
 
-        sort_hits(&mut hits, query.sort_field, query.sort_direction);
+        if let Some(limit) = query.limit.filter(|&limit| limit < hits.len()) {
+            if matches!(query.sort_field, SortField::Name | SortField::Path) {
+                // The ordinal tie-break reproduces stable ascending order and
+                // its reversed descending order, without allocating lowercase
+                // keys for all matches. Only the selected prefix is sorted.
+                let mut order: Vec<usize> = (0..hits.len()).collect();
+                let compare = |a: &usize, b: &usize| {
+                    let left = hits[*a].params();
+                    let right = hits[*b].params();
+                    let (left, right) = if query.sort_field == SortField::Name {
+                        (left.name, right.name)
+                    } else {
+                        (left.full_path, right.full_path)
+                    };
+                    let ordering = left
+                        .bytes()
+                        .map(|byte| byte.to_ascii_lowercase())
+                        .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+                        .then_with(|| a.cmp(b));
+                    if query.sort_direction == SortDirection::Descending {
+                        ordering.reverse()
+                    } else {
+                        ordering
+                    }
+                };
+                order.select_nth_unstable_by(limit - 1, compare);
+                order.truncate(limit);
+                order.sort_unstable_by(compare);
+                hits = order.into_iter().map(|index| hits[index]).collect();
+            } else {
+                sort_hits(&mut hits, query.sort_field, query.sort_direction);
+            }
+        } else {
+            sort_hits(&mut hits, query.sort_field, query.sort_direction);
+        }
 
         if let Some(limit) = query.limit {
             hits.truncate(limit);
         }
 
-        hits
+        hits.into_iter().map(CandidateHit::into_owned).collect()
     }
 }
 
@@ -152,13 +166,11 @@ struct FileMatchParams<'a> {
     modified_utc: Option<i64>,
 }
 
-// `pattern_lower` is the already-lowercased search pattern (None when no pattern).
-// `normalized_extensions` are pre-normalized extension strings (empty when no filter).
-// Both are computed once per query in `IndexCatalog::search` rather than per entry.
+// Borrowed query filters retain case-insensitive matching without owned keys.
 fn matches_query(
     query: &SearchQuery,
     pattern_lower: Option<&str>,
-    normalized_extensions: &[String],
+    extensions: &[&str],
     file_params: &FileMatchParams,
 ) -> bool {
     if !pattern_lower.is_none_or(|pattern| {
@@ -172,18 +184,15 @@ fn matches_query(
         return false;
     }
 
-    if !normalized_extensions.is_empty() {
+    if !extensions.is_empty() {
         // Compare the raw extension case-insensitively against the already
-        // lowercased query extensions — no per-entry String allocation.
+        // lowercased query extensions â€” no per-entry String allocation.
         let extension = std::path::Path::new(file_params.full_path)
             .extension()
             .and_then(|value| value.to_str());
 
         match extension {
-            Some(raw)
-                if normalized_extensions
-                    .iter()
-                    .any(|ext| ext.eq_ignore_ascii_case(raw)) => {}
+            Some(raw) if extensions.iter().any(|ext| ext.eq_ignore_ascii_case(raw)) => {}
             _ => return false,
         }
     }
@@ -233,8 +242,7 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
         .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
-// `pattern` is already lowercased by the caller (IndexCatalog::search).
-// Exact mode uses eq_ignore_ascii_case directly and does not need a lowercased pattern.
+// Every mode compares ASCII case without changing UTF-8 bytes.
 fn matches_text(pattern: &str, mode: &MatchMode, name: &str, full_path: &str) -> bool {
     match mode {
         MatchMode::Exact => {
@@ -251,35 +259,102 @@ fn matches_text(pattern: &str, mode: &MatchMode, name: &str, full_path: &str) ->
     }
 }
 
-fn normalize_extension(extension: &str) -> Option<String> {
-    let normalized = extension
-        .trim()
-        .trim_start_matches('.')
-        .to_ascii_lowercase();
-    if normalized.is_empty() {
-        None
-    } else {
-        Some(normalized)
+fn normalize_extension(extension: &str) -> Option<&str> {
+    let normalized = extension.trim().trim_start_matches('.');
+    (!normalized.is_empty()).then_some(normalized)
+}
+
+// Most UI queries select only a handful of extensions. Normalize once into
+// borrowed stack slots, with an owned pointer vector for longer filter lists.
+struct PreparedExtensions<'a> {
+    inline: [&'a str; 8],
+    len: usize,
+    overflow: Vec<&'a str>,
+}
+impl<'a> PreparedExtensions<'a> {
+    fn new(extensions: &'a [String]) -> Self {
+        let mut prepared = Self {
+            inline: [""; 8],
+            len: 0,
+            overflow: Vec::new(),
+        };
+        for extension in extensions.iter().filter_map(|ext| normalize_extension(ext)) {
+            if prepared.len < prepared.inline.len() {
+                prepared.inline[prepared.len] = extension;
+            } else {
+                if prepared.overflow.is_empty() {
+                    prepared.overflow.extend_from_slice(&prepared.inline);
+                }
+                prepared.overflow.push(extension);
+            }
+            prepared.len += 1;
+        }
+        prepared
+    }
+    fn as_slice(&self) -> &[&str] {
+        if self.overflow.is_empty() {
+            &self.inline[..self.len]
+        } else {
+            &self.overflow
+        }
     }
 }
 
-fn sort_hits(hits: &mut [IndexSearchHit], sort_field: SortField, sort_direction: SortDirection) {
-    // sort_unstable_by_cached_key calls the key closure exactly once per element (O(N))
-    // rather than once per comparison (O(N log N)).  For Name and Path sorts this
-    // eliminates the O(N log N) String allocations that the previous sort_by approach
-    // incurred by calling to_ascii_lowercase() inside the comparator.
-    //
-    // sort_unstable_by_key is used for numeric fields (zero allocation, no need to cache).
+#[derive(Clone, Copy)]
+enum CandidateHit<'a> {
+    File(&'a FileRecord),
+    Directory(&'a DirectoryRecord),
+}
+
+impl CandidateHit<'_> {
+    fn params(&self) -> FileMatchParams<'_> {
+        match self {
+            Self::File(file) => FileMatchParams {
+                name: &file.name,
+                full_path: &file.full_path,
+                size_bytes: file.size_bytes,
+                allocation_bytes: file.allocation_bytes,
+                modified_utc: file.modified_utc(),
+            },
+            Self::Directory(directory) => FileMatchParams {
+                name: &directory.name,
+                full_path: &directory.full_path,
+                size_bytes: directory.total_bytes,
+                allocation_bytes: directory.total_bytes,
+                modified_utc: None,
+            },
+        }
+    }
+
+    fn into_owned(self) -> IndexSearchHit {
+        let params = self.params();
+        IndexSearchHit {
+            kind: match self {
+                Self::File(_) => IndexRecordKind::File,
+                Self::Directory(_) => IndexRecordKind::Directory,
+            },
+            name: params.name.to_owned(),
+            full_path: params.full_path.to_owned(),
+            size_bytes: params.size_bytes,
+            allocation_bytes: params.allocation_bytes,
+            modified_utc: params.modified_utc,
+        }
+    }
+}
+
+fn sort_hits(hits: &mut [CandidateHit<'_>], sort_field: SortField, sort_direction: SortDirection) {
+    // Sort borrowed candidates; names and full paths are copied only after the
+    // result limit is applied. Preserve the existing stable textual ordering.
     match sort_field {
-        SortField::Name => {
-            hits.sort_by_cached_key(|h| h.name.to_ascii_lowercase());
-        }
+        SortField::Name => hits.sort_by_cached_key(|hit| hit.params().name.to_ascii_lowercase()),
         SortField::Path => {
-            hits.sort_by_cached_key(|h| h.full_path.to_ascii_lowercase());
+            hits.sort_by_cached_key(|hit| hit.params().full_path.to_ascii_lowercase())
         }
-        SortField::SizeBytes => hits.sort_unstable_by_key(|h| h.size_bytes),
-        SortField::AllocationBytes => hits.sort_unstable_by_key(|h| h.allocation_bytes),
-        SortField::ModifiedUtc => hits.sort_unstable_by_key(|h| h.modified_utc),
+        SortField::SizeBytes => hits.sort_unstable_by_key(|hit| hit.params().size_bytes),
+        SortField::AllocationBytes => {
+            hits.sort_unstable_by_key(|hit| hit.params().allocation_bytes)
+        }
+        SortField::ModifiedUtc => hits.sort_unstable_by_key(|hit| hit.params().modified_utc),
     }
     if sort_direction == SortDirection::Descending {
         hits.reverse();
@@ -320,26 +395,22 @@ mod tests {
         transaction.upsert_file(&FileRecord {
             id: FileId(1),
             parent_directory_id: DirectoryId(10),
-            name: String::from("alpha.log"),
-            full_path: String::from("C:\\root\\alpha.log"),
+            name: String::from("alpha.log").into(),
+            full_path: String::from("C:\\root\\alpha.log").into(),
             size_bytes: 10,
             allocation_bytes: 16,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: Some(10),
-            accessed_utc: None,
+            timestamps: winblaze_core::FileTimestamps::new(None, Some(10), None),
         });
         transaction.upsert_file(&FileRecord {
             id: FileId(2),
             parent_directory_id: DirectoryId(10),
-            name: String::from("beta.txt"),
-            full_path: String::from("C:\\root\\beta.txt"),
+            name: String::from("beta.txt").into(),
+            full_path: String::from("C:\\root\\beta.txt").into(),
             size_bytes: 20,
             allocation_bytes: 32,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: Some(20),
-            accessed_utc: None,
+            timestamps: winblaze_core::FileTimestamps::new(None, Some(20), None),
         });
 
         let catalog = IndexCatalog::from_transaction(&transaction);
@@ -366,32 +437,28 @@ mod tests {
         let previous = vec![FileRecord {
             id: winblaze_core::FileId(1),
             parent_directory_id: winblaze_core::DirectoryId(10),
-            name: String::from("old.txt"),
-            full_path: String::from("C:\\root\\old.txt"),
+            name: String::from("old.txt").into(),
+            full_path: String::from("C:\\root\\old.txt").into(),
             size_bytes: 10,
             allocation_bytes: 16,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: Some(10),
-            accessed_utc: None,
+            timestamps: winblaze_core::FileTimestamps::new(None, Some(10), None),
         }];
         let current = vec![FileRecord {
             id: winblaze_core::FileId(1),
             parent_directory_id: winblaze_core::DirectoryId(10),
-            name: String::from("new.txt"),
-            full_path: String::from("C:\\root\\new.txt"),
+            name: String::from("new.txt").into(),
+            full_path: String::from("C:\\root\\new.txt").into(),
             size_bytes: 11,
             allocation_bytes: 16,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: Some(11),
-            accessed_utc: None,
+            timestamps: winblaze_core::FileTimestamps::new(None, Some(11), None),
         }];
 
         let change_set = catalog.apply_incremental_files(&mut transaction, &previous, &current);
         assert_eq!(change_set.changes.len(), 1);
         assert_eq!(catalog.files.len(), 1);
-        assert_eq!(catalog.files[0].name, "new.txt");
+        assert_eq!(catalog.files[0].name.as_ref(), "new.txt");
     }
 
     fn sample_catalog() -> IndexCatalog {
@@ -421,14 +488,12 @@ mod tests {
             transaction.upsert_file(&FileRecord {
                 id: FileId(id),
                 parent_directory_id: DirectoryId(10),
-                name: String::from(name),
-                full_path: String::from(path),
+                name: String::from(name).into(),
+                full_path: String::from(path).into(),
                 size_bytes: size,
                 allocation_bytes: alloc,
                 attributes: FileAttributes::ARCHIVE,
-                created_utc: None,
-                modified_utc: Some(modified),
-                accessed_utc: None,
+                timestamps: winblaze_core::FileTimestamps::new(None, Some(modified), None),
             });
         }
         IndexCatalog::from_transaction(&transaction)

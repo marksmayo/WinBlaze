@@ -1,0 +1,262 @@
+[
+    {
+        "run":  1,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  122.3264,
+        "process_wall_ms":  215.764,
+        "scan_export_ms":  57,
+        "phases":  {
+                       "session_started_us":  181,
+                       "terminal_received_us":  44528,
+                       "finalized_us":  53750,
+                       "exported_us":  57271
+                   },
+        "cpu_ms":  62.5,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-1.csv"
+    },
+    {
+        "run":  2,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  8.5871000000000013,
+        "process_wall_ms":  61.613400000000006,
+        "scan_export_ms":  16,
+        "phases":  {
+                       "session_started_us":  221,
+                       "terminal_received_us":  5863,
+                       "finalized_us":  10148,
+                       "exported_us":  15306
+                   },
+        "cpu_ms":  46.875,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-2.csv"
+    },
+    {
+        "run":  3,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  8.1317,
+        "process_wall_ms":  47.963100000000004,
+        "scan_export_ms":  13,
+        "phases":  {
+                       "session_started_us":  157,
+                       "terminal_received_us":  5297,
+                       "finalized_us":  8821,
+                       "exported_us":  12774
+                   },
+        "cpu_ms":  78.125,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-3.csv"
+    },
+    {
+        "run":  4,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  9.1457,
+        "process_wall_ms":  54.8902,
+        "scan_export_ms":  12,
+        "phases":  {
+                       "session_started_us":  198,
+                       "terminal_received_us":  4825,
+                       "finalized_us":  8139,
+                       "exported_us":  12120
+                   },
+        "cpu_ms":  15.625,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-4.csv"
+    },
+    {
+        "run":  5,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  7.7657000000000007,
+        "process_wall_ms":  44.7515,
+        "scan_export_ms":  12,
+        "phases":  {
+                       "session_started_us":  132,
+                       "terminal_received_us":  4288,
+                       "finalized_us":  8126,
+                       "exported_us":  12219
+                   },
+        "cpu_ms":  31.25,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-5.csv"
+    },
+    {
+        "run":  6,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  6.4107,
+        "process_wall_ms":  47.525800000000004,
+        "scan_export_ms":  13,
+        "phases":  {
+                       "session_started_us":  184,
+                       "terminal_received_us":  5547,
+                       "finalized_us":  8936,
+                       "exported_us":  12726
+                   },
+        "cpu_ms":  31.25,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-6.csv"
+    },
+    {
+        "run":  7,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  9.4583000000000013,
+        "process_wall_ms":  48.5264,
+        "scan_export_ms":  13,
+        "phases":  {
+                       "session_started_us":  155,
+                       "terminal_received_us":  4810,
+                       "finalized_us":  7911,
+                       "exported_us":  12382
+                   },
+        "cpu_ms":  15.625,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-7.csv"
+    },
+    {
+        "run":  8,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  6.0088,
+        "process_wall_ms":  43.216300000000004,
+        "scan_export_ms":  11,
+        "phases":  {
+                       "session_started_us":  147,
+                       "terminal_received_us":  5266,
+                       "finalized_us":  7900,
+                       "exported_us":  11075
+                   },
+        "cpu_ms":  15.625,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-8.csv"
+    },
+    {
+        "run":  9,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  5.7331,
+        "process_wall_ms":  42.5741,
+        "scan_export_ms":  13,
+        "phases":  {
+                       "session_started_us":  164,
+                       "terminal_received_us":  4390,
+                       "finalized_us":  8826,
+                       "exported_us":  13030
+                   },
+        "cpu_ms":  31.25,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-9.csv"
+    },
+    {
+        "run":  10,
+        "binary":  {
+                       "tool":  "WinBlaze tiny phase diagnostic",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2BCA6B745BEA5E52A45F18DC4DA2909D75F701E3A7094A4E20D5146C9D18E375",
+                       "observed_utc":  "2026-10-05T22:27:21.6821247Z",
+                       "revision":  "1f7c8f7c9c9e76fd9f660b103053ca567d4170a8"
+                   },
+        "launch_request_ms":  6.1611,
+        "process_wall_ms":  36.6289,
+        "scan_export_ms":  10,
+        "phases":  {
+                       "session_started_us":  111,
+                       "terminal_received_us":  4290,
+                       "finalized_us":  6790,
+                       "exported_us":  9701
+                   },
+        "cpu_ms":  15.625,
+        "scope":  "DIAGNOSTIC ONLY: redirected stdout, direct Process.Start, opt-in phase file, no sampled-resource loop; not medal evidence",
+        "csv":  "C:\\Users\\markm\\Github\\WinBlaze\\artifacts\\empty-scale-process\\f5b138f7-60ba-432f-8443-f08bf4d516ae\\run-10.csv"
+    }
+]

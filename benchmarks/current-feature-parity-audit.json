@@ -1,0 +1,20 @@
+{
+  "reviewed_utc": "2026-10-04T04:47:09.156780+00:00",
+  "windirstat_source_tag": "release/v2.8.0",
+  "windirstat_source_commit": "579dd76d6870b4efbb9497644698155fdab84284",
+  "source_zip_sha256": "6f5f278a20432057add4501508037bd51650edf7f91b119890133978601b565c",
+  "feature_counts": {
+    "full": 43,
+    "partial": 1,
+    "none": 0,
+    "unknown": 0
+  },
+  "functional_probes": 90,
+  "runs_per_probe": 10,
+  "limits": [
+    "Administrator-positive validation awaits fresh prompt approval",
+    "MTP test hardware unavailable",
+    "Closed-source absence scoped to audited exposed interface"
+  ],
+  "verification_record": "FEATURE_PARITY_AUDIT.md"
+}

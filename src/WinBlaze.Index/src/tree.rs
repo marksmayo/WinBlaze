@@ -61,14 +61,69 @@ impl TreeEntry<'_> {
 /// and capping keeps the first query's partial sort cheap.
 const LARGEST_FILE_CACHE_CAP: usize = 10_000;
 
+/// Optional export metadata, kept out of the hot-path file record.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct FileExportMetadata {
+    pub owner: Option<String>,
+    pub volume_identity: Option<String>,
+    pub file_identity: Option<String>,
+    pub link_count: Option<u32>,
+}
+enum DirectoryLookup {
+    Dense { first: u64, len: usize },
+    Sparse(IdHashMap<u64, u32>),
+}
+
+impl DirectoryLookup {
+    fn new(directories: &[DirectoryRecord]) -> Self {
+        let first = directories.first().map_or(0, |directory| directory.id.0);
+        if directories.len() <= u32::MAX as usize
+            && directories
+                .iter()
+                .enumerate()
+                .all(|(index, directory)| first.checked_add(index as u64) == Some(directory.id.0))
+        {
+            Self::Dense {
+                first,
+                len: directories.len(),
+            }
+        } else {
+            Self::Sparse(
+                directories
+                    .iter()
+                    .enumerate()
+                    .map(|(index, directory)| (directory.id.0, index as u32))
+                    .collect(),
+            )
+        }
+    }
+
+    fn get(&self, id: &u64) -> Option<u32> {
+        match self {
+            Self::Dense { first, len } => {
+                let index = id.checked_sub(*first)?;
+                (index < *len as u64).then_some(index as u32)
+            }
+            Self::Sparse(indices) => indices.get(id).copied(),
+        }
+    }
+
+    fn contains_key(&self, id: &u64) -> bool {
+        self.get(id).is_some()
+    }
+}
+
 pub struct TreeIndex {
+    export_metadata: winblaze_core::IdHashMap<u64, FileExportMetadata>,
     volumes: Vec<VolumeRecord>,
     directories: Vec<DirectoryRecord>,
     files: Vec<FileRecord>,
     nodes: Vec<DirNode>,
-    dir_children: Vec<u32>,
-    file_children: Vec<u32>,
-    dir_index_by_id: IdHashMap<u64, u32>,
+    dir_children: std::sync::OnceLock<Vec<u32>>,
+    pending_dir_children: std::sync::Mutex<Option<Vec<u32>>>,
+    file_children: std::sync::OnceLock<Vec<u32>>,
+    dir_index_by_id: DirectoryLookup,
     root: Option<u32>,
     /// File indices ordered by allocation size descending, capped at
     /// [`LARGEST_FILE_CACHE_CAP`]. Built lazily on the first largest-files
@@ -77,21 +132,24 @@ pub struct TreeIndex {
 }
 
 impl TreeIndex {
+    pub fn file_export_metadata(&self, id: u64) -> Option<&FileExportMetadata> {
+        self.export_metadata.get(&id)
+    }
+    pub fn set_file_export_metadata(&mut self, id: u64, metadata: FileExportMetadata) {
+        self.export_metadata.insert(id, metadata);
+    }
+
     pub fn build(transaction: BufferedIndexTransaction) -> Self {
         let (volumes, directories, files) = transaction.into_record_vecs();
         // Sort an index array by id and gather once, rather than
         // `sort_unstable_by_key` on the records themselves: the records are
         // ~100-byte structs and pdqsort swaps them O(n log n) times, whereas
-        // gathering through a sorted `u32` index moves each record exactly
-        // once (the id keys are cheap u64 swaps). ~2.3M files on a full drive.
+        // applying a sorted index permutation moves the records O(n) times
+        // without duplicating their array. ~2.3M files on a full drive.
         let directories = sort_records_by_id(directories, |directory| directory.id.0);
         let files = sort_records_by_id(files, |file| file.id.0);
 
-        let dir_index_by_id: IdHashMap<u64, u32> = directories
-            .iter()
-            .enumerate()
-            .map(|(index, directory)| (directory.id.0, index as u32))
-            .collect();
+        let dir_index_by_id = DirectoryLookup::new(&directories);
 
         // Resolve each directory's structural parent. Self-parents and
         // missing parents make a directory a root candidate; among the
@@ -109,22 +167,22 @@ impl TreeIndex {
                 let structural = directory
                     .parent_directory_id
                     .filter(|parent| parent.0 != directory.id.0)
-                    .and_then(|parent| dir_index_by_id.get(&parent.0).copied())
+                    .and_then(|parent| dir_index_by_id.get(&parent.0))
                     .filter(|parent| *parent != index);
                 // Orphans and secondary roots hang off the chosen root.
                 structural.or(root)
             })
             .collect();
 
-        let file_parent: Vec<Option<u32>> = files
-            .iter()
-            .map(|file| {
-                dir_index_by_id
-                    .get(&file.parent_directory_id.0)
-                    .copied()
-                    .or(root)
-            })
-            .collect();
+        // Resolve file parents in each pass instead of retaining a second
+        // file-sized array. Walk-scan directory IDs use an arithmetic lookup;
+        // sparse IDs retain the same map and orphan-to-root semantics.
+        let file_parent = |file: &FileRecord| {
+            dir_index_by_id
+                .get(&file.parent_directory_id.0)
+                .or(root)
+                .unwrap_or(u32::MAX)
+        };
 
         // Group children per parent with a counting pass + prefix sums.
         let dir_count = directories.len();
@@ -133,8 +191,10 @@ impl TreeIndex {
             dir_child_counts[*parent as usize] += 1;
         }
         let mut file_child_counts = vec![0u32; dir_count];
-        for parent in file_parent.iter().flatten() {
-            file_child_counts[*parent as usize] += 1;
+        for parent in files.iter().map(&file_parent) {
+            if parent != u32::MAX {
+                file_child_counts[parent as usize] += 1;
+            }
         }
 
         let mut nodes = Vec::with_capacity(dir_count);
@@ -153,7 +213,10 @@ impl TreeIndex {
         }
 
         let mut dir_children = vec![0u32; dir_offset as usize];
-        let mut dir_fill: Vec<u32> = nodes.iter().map(|node| node.dir_children.0).collect();
+        let mut dir_fill = dir_child_counts;
+        for (cursor, node) in dir_fill.iter_mut().zip(&nodes) {
+            *cursor = node.dir_children.0;
+        }
         for (child, parent) in dir_parent.iter().enumerate() {
             if let Some(parent) = parent {
                 let slot = &mut dir_fill[*parent as usize];
@@ -162,29 +225,25 @@ impl TreeIndex {
             }
         }
 
-        let mut file_children = vec![0u32; file_offset as usize];
-        let mut file_fill: Vec<u32> = nodes.iter().map(|node| node.file_children.0).collect();
-        for (child, parent) in file_parent.iter().enumerate() {
-            if let Some(parent) = parent {
-                let slot = &mut file_fill[*parent as usize];
-                file_children[*slot as usize] = child as u32;
-                *slot += 1;
-            }
-        }
-
+        // Ingest scratch is not needed by rollups or display ordering.
+        drop(dir_parent);
+        drop(dir_fill);
+        drop(file_child_counts);
         let mut tree = Self {
+            export_metadata: Default::default(),
             volumes,
             directories,
             files,
             nodes,
-            dir_children,
-            file_children,
+            dir_children: std::sync::OnceLock::new(),
+            pending_dir_children: std::sync::Mutex::new(None),
+            file_children: std::sync::OnceLock::new(),
             dir_index_by_id,
             root,
             largest_files: std::sync::OnceLock::new(),
         };
-        tree.compute_rollups();
-        tree.sort_children();
+        tree.compute_rollups(&dir_children);
+        *tree.pending_dir_children.get_mut().expect("new tree mutex") = Some(dir_children);
         tree
     }
 
@@ -192,20 +251,21 @@ impl TreeIndex {
     /// reverse sweep accumulates each directory into its parent. Directories
     /// unreachable from the root (only possible with cyclic parent links in
     /// corrupt data) keep zero rollups.
-    fn compute_rollups(&mut self) {
+    fn compute_rollups(&mut self, dir_children: &[u32]) {
         // Direct file contributions first.
-        for index in 0..self.nodes.len() {
-            let (start, end) = self.nodes[index].file_children;
-            let mut rollup = DirRollup::default();
-            for slot in start..end {
-                let file = &self.files[self.file_child_at(slot)];
+        for file in &self.files {
+            if let Some(index) = self
+                .dir_index_by_id
+                .get(&file.parent_directory_id.0)
+                .or(self.root)
+            {
+                let rollup = &mut self.nodes[index as usize].rollup;
                 rollup.logical_bytes = rollup.logical_bytes.saturating_add(file.size_bytes);
                 rollup.physical_bytes = rollup.physical_bytes.saturating_add(file.allocation_bytes);
                 rollup.file_count += 1;
                 rollup.item_count += 1;
-                rollup.modified_utc_max = max_option(rollup.modified_utc_max, file.modified_utc);
+                rollup.modified_utc_max = max_option(rollup.modified_utc_max, file.modified_utc());
             }
-            self.nodes[index].rollup = rollup;
         }
 
         let Some(root) = self.root else {
@@ -222,7 +282,7 @@ impl TreeIndex {
             cursor += 1;
             let (start, end) = self.nodes[current as usize].dir_children;
             for slot in start..end {
-                let child = self.dir_children[slot as usize];
+                let child = dir_children[slot as usize];
                 parent_of[child as usize] = current;
                 order.push(child);
             }
@@ -255,31 +315,54 @@ impl TreeIndex {
         }
     }
 
-    fn file_child_at(&self, slot: u32) -> usize {
-        self.file_children[slot as usize] as usize
+    fn ordered_directories(&self) -> &[u32] {
+        self.dir_children.get_or_init(|| {
+            let mut children = self
+                .pending_dir_children
+                .lock()
+                .expect("child order mutex")
+                .take()
+                .unwrap_or_default();
+            for node in &self.nodes {
+                children[node.dir_children.0 as usize..node.dir_children.1 as usize]
+                    .sort_unstable_by(|a, b| {
+                        self.nodes[*b as usize]
+                            .rollup
+                            .physical_bytes
+                            .cmp(&self.nodes[*a as usize].rollup.physical_bytes)
+                    });
+            }
+            children
+        })
     }
 
-    /// Sorts every directory's child lists largest-physical-first so callers
-    /// can stream children in display order.
-    fn sort_children(&mut self) {
-        for index in 0..self.nodes.len() {
-            let (dir_start, dir_end) = self.nodes[index].dir_children;
-            let nodes = &self.nodes;
-            self.dir_children[dir_start as usize..dir_end as usize].sort_unstable_by(|a, b| {
-                nodes[*b as usize]
-                    .rollup
-                    .physical_bytes
-                    .cmp(&nodes[*a as usize].rollup.physical_bytes)
-            });
-
-            let (file_start, file_end) = self.nodes[index].file_children;
-            let files = &self.files;
-            self.file_children[file_start as usize..file_end as usize].sort_unstable_by(|a, b| {
-                files[*b as usize]
-                    .allocation_bytes
-                    .cmp(&files[*a as usize].allocation_bytes)
-            });
-        }
+    fn ordered_files(&self) -> &[u32] {
+        self.file_children.get_or_init(|| {
+            let count = self.nodes.last().map_or(0, |node| node.file_children.1) as usize;
+            let mut children = vec![0; count];
+            let mut cursors: Vec<u32> =
+                self.nodes.iter().map(|node| node.file_children.0).collect();
+            for (index, file) in self.files.iter().enumerate() {
+                if let Some(parent) = self
+                    .dir_index_by_id
+                    .get(&file.parent_directory_id.0)
+                    .or(self.root)
+                {
+                    let cursor = &mut cursors[parent as usize];
+                    children[*cursor as usize] = index as u32;
+                    *cursor += 1;
+                }
+            }
+            for node in &self.nodes {
+                children[node.file_children.0 as usize..node.file_children.1 as usize]
+                    .sort_unstable_by(|a, b| {
+                        self.files[*b as usize]
+                            .allocation_bytes
+                            .cmp(&self.files[*a as usize].allocation_bytes)
+                    });
+            }
+            children
+        })
     }
 
     pub fn volumes(&self) -> &[VolumeRecord] {
@@ -300,7 +383,7 @@ impl TreeIndex {
     }
 
     pub fn rollup_for(&self, directory_id: u64) -> Option<&DirRollup> {
-        let index = *self.dir_index_by_id.get(&directory_id)? as usize;
+        let index = self.dir_index_by_id.get(&directory_id)? as usize;
         Some(&self.nodes[index].rollup)
     }
 
@@ -316,6 +399,12 @@ impl TreeIndex {
             self.files[*b as usize]
                 .allocation_bytes
                 .cmp(&self.files[*a as usize].allocation_bytes)
+                .then_with(|| {
+                    self.files[*a as usize]
+                        .id
+                        .0
+                        .cmp(&self.files[*b as usize].id.0)
+                })
         };
 
         // Requests within the cache cap are served from a memoized order
@@ -329,6 +418,7 @@ impl TreeIndex {
                     order.truncate(cap);
                 }
                 order.sort_unstable_by(compare);
+                order.shrink_to_fit();
                 order
             });
             for &index in cached.iter().take(take) {
@@ -348,8 +438,27 @@ impl TreeIndex {
         }
     }
 
+    /// Visits a stable page of largest files without limiting the total result set.
+    pub fn for_each_largest_file_page(
+        &self,
+        offset: usize,
+        limit: usize,
+        mut visit: impl FnMut(&FileRecord),
+    ) {
+        if offset >= self.files.len() || limit == 0 {
+            return;
+        }
+        let mut position = 0;
+        self.for_each_largest_file(offset.saturating_add(limit), |file| {
+            if position >= offset {
+                visit(file);
+            }
+            position += 1;
+        });
+    }
+
     pub fn directory_full_path(&self, directory_id: u64) -> Option<&str> {
-        let index = *self.dir_index_by_id.get(&directory_id)? as usize;
+        let index = self.dir_index_by_id.get(&directory_id)? as usize;
         Some(self.directories[index].full_path.as_str())
     }
 
@@ -357,17 +466,53 @@ impl TreeIndex {
     /// from older snapshots carry one), otherwise parent path + name.
     pub fn file_display_path(&self, file: &FileRecord) -> String {
         if !file.full_path.is_empty() {
-            return file.full_path.clone();
+            return file.full_path.to_string();
         }
         match self.directory_full_path(file.parent_directory_id.0) {
             Some(parent) => winblaze_core::join_path(parent, &file.name),
-            None => file.name.clone(),
+            None => file.name.to_string(),
         }
+    }
+
+    /// Matches catalog display paths with the export source-protection semantics.
+    /// ASCII paths are compared in fragments without materializing each path.
+    pub fn contains_file_display_path(&self, path: &str) -> bool {
+        let target = path.trim_start_matches(r"\\?\").to_lowercase();
+        self.files.iter().any(|file| {
+            if !file.full_path.is_empty() {
+                let source = file.full_path.trim_start_matches(r"\\?\");
+                if source.is_ascii() && target.is_ascii() {
+                    return source.eq_ignore_ascii_case(&target);
+                }
+            } else {
+                let raw_parent = self
+                    .directory_full_path(file.parent_directory_id.0)
+                    .unwrap_or("");
+                let parent = raw_parent.trim_start_matches(r"\\?\");
+                if parent.is_ascii()
+                    && file.name.is_ascii()
+                    && target.is_ascii()
+                    && !file.name.contains('\\')
+                {
+                    let separator = !raw_parent.is_empty() && !raw_parent.ends_with('\\');
+                    let length = parent.len() + usize::from(separator) + file.name.len();
+                    return target.len() == length
+                        && target[..parent.len()].eq_ignore_ascii_case(parent)
+                        && (!separator || target.as_bytes()[parent.len()] == b'\\')
+                        && target[parent.len() + usize::from(separator)..]
+                            .eq_ignore_ascii_case(&file.name);
+                }
+            }
+            self.file_display_path(file)
+                .trim_start_matches(r"\\?\")
+                .to_lowercase()
+                == target
+        })
     }
 
     /// Total direct children (directories + files) of `directory_id`.
     pub fn child_count(&self, directory_id: u64) -> Option<u64> {
-        let index = *self.dir_index_by_id.get(&directory_id)? as usize;
+        let index = self.dir_index_by_id.get(&directory_id)? as usize;
         let node = &self.nodes[index];
         Some(
             u64::from(node.dir_children.1 - node.dir_children.0)
@@ -387,10 +532,23 @@ impl TreeIndex {
         limit: usize,
         mut visit: impl FnMut(TreeEntry<'_>),
     ) -> Option<u64> {
-        let index = *self.dir_index_by_id.get(&directory_id)? as usize;
+        let index = self.dir_index_by_id.get(&directory_id)? as usize;
         let node = &self.nodes[index];
 
         // Both lists are pre-sorted physical-desc; merge them.
+        if limit == 0 {
+            return Some(0);
+        }
+        let dir_children = if node.dir_children.0 == node.dir_children.1 {
+            &[][..]
+        } else {
+            self.ordered_directories()
+        };
+        let file_children = if node.file_children.0 == node.file_children.1 {
+            &[][..]
+        } else {
+            self.ordered_files()
+        };
         let mut dir_cursor = node.dir_children.0 as usize;
         let dir_end = node.dir_children.1 as usize;
         let mut file_cursor = node.file_children.0 as usize;
@@ -400,11 +558,11 @@ impl TreeIndex {
 
         while emitted < limit as u64 && (dir_cursor < dir_end || file_cursor < file_end) {
             let next_dir_physical = (dir_cursor < dir_end).then(|| {
-                let child = self.dir_children[dir_cursor] as usize;
+                let child = dir_children[dir_cursor] as usize;
                 self.nodes[child].rollup.physical_bytes
             });
             let next_file_physical = (file_cursor < file_end)
-                .then(|| self.files[self.file_children[file_cursor] as usize].allocation_bytes);
+                .then(|| self.files[file_children[file_cursor] as usize].allocation_bytes);
 
             let take_dir = match (next_dir_physical, next_file_physical) {
                 (Some(dir_bytes), Some(file_bytes)) => dir_bytes >= file_bytes,
@@ -413,7 +571,7 @@ impl TreeIndex {
             };
 
             if take_dir {
-                let child = self.dir_children[dir_cursor] as usize;
+                let child = dir_children[dir_cursor] as usize;
                 dir_cursor += 1;
                 if skipped < offset as u64 {
                     skipped += 1;
@@ -424,7 +582,7 @@ impl TreeIndex {
                     rollup: &self.nodes[child].rollup,
                 });
             } else {
-                let child = self.file_children[file_cursor] as usize;
+                let child = file_children[file_cursor] as usize;
                 file_cursor += 1;
                 if skipped < offset as u64 {
                     skipped += 1;
@@ -439,35 +597,82 @@ impl TreeIndex {
     }
 }
 
-/// Sorts `records` ascending by their id without swapping the (large) record
-/// structs during the sort: an index array is sorted by the cheap u64 key and
-/// the records are gathered through it exactly once. `T: Default` lets the
-/// gather `mem::take` each record out of the source in place.
-fn sort_records_by_id<T: Default>(mut records: Vec<T>, key: impl Fn(&T) -> u64) -> Vec<T> {
+/// Sorts compact keys, then applies their permutation in O(n) record swaps.
+/// Keeping the original record allocation avoids a volume-sized temporary copy.
+fn sort_records_by_id<T>(mut records: Vec<T>, key: impl Fn(&T) -> u64) -> Vec<T> {
+    // Reopened snapshots and ordered scanner output already have the desired
+    // order. Check it without allocating the volume-sized permutation array.
+    if records.iter().is_sorted_by_key(&key) {
+        return records;
+    }
+    // Directory-walk IDs are a dense range, but worker completion can shuffle
+    // their arrival order. Place each record directly at its ID offset, without
+    // allocating sort keys. Sparse MFT IDs retain the general path below.
+    let (minimum, maximum) = records
+        .iter()
+        .fold((u64::MAX, 0), |(minimum, maximum), record| {
+            let id = key(record);
+            (minimum.min(id), maximum.max(id))
+        });
+    if maximum
+        .checked_sub(minimum)
+        .and_then(|range| range.checked_add(1))
+        == u64::try_from(records.len()).ok()
+    {
+        let mut unique = true;
+        'positions: for position in 0..records.len() {
+            loop {
+                let id = key(&records[position]);
+                let destination = (id - minimum) as usize;
+                if destination == position {
+                    break;
+                }
+                // A duplicate must not produce an endless permutation cycle.
+                // Swaps preserve all records, so the general sort remains safe.
+                if key(&records[destination]) == id {
+                    unique = false;
+                    break 'positions;
+                }
+                records.swap(position, destination);
+            }
+        }
+        if unique {
+            return records;
+        }
+    }
     // Decorate each index with its id key so the sort compares a compact
     // (u64, u32) array rather than chasing pointers into the ~100-byte records
-    // (which would miss cache on every comparison). The gather then moves each
-    // record exactly once, vs pdqsort swapping the large structs O(n log n).
+    // (which would miss cache on every comparison). Permutation cycles then
+    // swap large records O(n) times instead of O(n log n).
     let mut keyed: Vec<(u64, u32)> = records
         .iter()
         .enumerate()
         .map(|(index, record)| (key(record), index as u32))
         .collect();
     keyed.sort_unstable_by_key(|&(id, _)| id);
-    keyed
-        .into_iter()
-        .map(|(_, index)| std::mem::take(&mut records[index as usize]))
-        .collect()
+    // Reuse the key slots as original-position -> sorted-position mapping.
+    // The original indices remain intact while this inverse is constructed.
+    // Apply its cycles in place: each swap settles at least one record. This
+    // avoids a second ~140-byte-per-file array on multi-million-entry scans.
+    for destination in 0..keyed.len() {
+        let original = keyed[destination].1 as usize;
+        keyed[original].0 = destination as u64;
+    }
+    for position in 0..keyed.len() {
+        while keyed[position].0 as usize != position {
+            let destination = keyed[position].0 as usize;
+            records.swap(position, destination);
+            keyed.swap(position, destination);
+        }
+    }
+    records
 }
 
 /// Picks the root directory: a record whose parent is missing or itself.
 /// Prefers id 5 (the NTFS root record number, which both scanner backends
 /// use for the scan root), then the largest candidate by subtree membership
 /// proxy (smallest id) for stability.
-fn choose_root(
-    directories: &[DirectoryRecord],
-    dir_index_by_id: &IdHashMap<u64, u32>,
-) -> Option<u32> {
+fn choose_root(directories: &[DirectoryRecord], dir_index_by_id: &DirectoryLookup) -> Option<u32> {
     let is_root_like = |directory: &DirectoryRecord| match directory.parent_directory_id {
         None => true,
         Some(parent) => parent.0 == directory.id.0 || !dir_index_by_id.contains_key(&parent.0),
@@ -475,7 +680,7 @@ fn choose_root(
 
     // The scan root is record 5 on both backends; check it directly instead
     // of scanning every directory to find it.
-    if let Some(&index) = dir_index_by_id.get(&5) {
+    if let Some(index) = dir_index_by_id.get(&5) {
         if is_root_like(&directories[index as usize]) {
             return Some(index);
         }
@@ -518,14 +723,12 @@ mod tests {
         FileRecord {
             id: FileId(id),
             parent_directory_id: DirectoryId(parent),
-            name: name.to_string(),
-            full_path: format!(r"C:\{name}"),
+            name: name.to_string().into(),
+            full_path: format!(r"C:\{name}").into(),
             size_bytes: logical,
             allocation_bytes: physical,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: Some(id as i64 * 100),
-            accessed_utc: None,
+            timestamps: winblaze_core::FileTimestamps::new(None, Some(id as i64 * 100), None),
         }
     }
 
@@ -604,7 +807,7 @@ mod tests {
                     TreeEntry::Directory { record, rollup } => {
                         (record.name.clone(), rollup.physical_bytes)
                     }
-                    TreeEntry::File(file) => (file.name.clone(), file.allocation_bytes),
+                    TreeEntry::File(file) => (file.name.to_string(), file.allocation_bytes),
                 });
             })
             .expect("children");

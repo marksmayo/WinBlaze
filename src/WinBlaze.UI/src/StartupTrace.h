@@ -3,6 +3,8 @@
 #include <windows.h>
 
 #include <cstdint>
+#include <array>
+#include <cstring>
 #include <string>
 #include <string_view>
 
@@ -90,16 +92,48 @@ inline void WinBlazeWriteUtf8Line(std::wstring const& path, std::string_view lin
         return;
     }
 
-    const char newline[] = "\r\n";
     DWORD written = 0;
-    WriteFile(file, line.data(), static_cast<DWORD>(line.size()), &written, nullptr);
-    WriteFile(file, newline, sizeof(newline) - 1, &written, nullptr);
+    std::array<char, 512> buffer;
+    if (line.size() <= buffer.size() - 2) {
+        if (!line.empty()) {
+            std::memcpy(buffer.data(), line.data(), line.size());
+        }
+        buffer[line.size()] = '\r';
+        buffer[line.size() + 1] = '\n';
+        WriteFile(file, buffer.data(), static_cast<DWORD>(line.size() + 2), &written, nullptr);
+    } else {
+        const char newline[] = "\r\n";
+        WriteFile(file, line.data(), static_cast<DWORD>(line.size()), &written, nullptr);
+        WriteFile(file, newline, sizeof(newline) - 1, &written, nullptr);
+    }
 
     CloseHandle(file);
 }
 
+inline bool WinBlazeStartupTraceEnabled()
+{
+    // Diagnostic mode is selected once at process launch. Routine operation
+    // avoids synchronous disk writes; ReportFailure remains unconditional.
+    static const bool enabled = [] {
+        WCHAR value[2]{};
+        return GetEnvironmentVariableW(L"WINBLAZE_STARTUP_TRACE", value, 2) == 1
+            && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 inline void TraceStartup(std::wstring_view message)
 {
+    if (!WinBlazeStartupTraceEnabled()) {
+        return;
+    }
+    LARGE_INTEGER counter{};
+    QueryPerformanceCounter(&counter);
+    static const long long frequency = [] {
+        LARGE_INTEGER value{};
+        QueryPerformanceFrequency(&value);
+        return value.QuadPart;
+    }();
     WCHAR temp_path[MAX_PATH]{};
     const DWORD temp_length = GetTempPathW(MAX_PATH, temp_path);
     if (temp_length == 0 || temp_length >= MAX_PATH) {
@@ -108,7 +142,11 @@ inline void TraceStartup(std::wstring_view message)
 
     std::wstring log_path(temp_path, temp_path + temp_length);
     log_path += L"WinBlaze-startup.log";
-    WinBlazeWriteUtf8Line(log_path, WinBlazeWideToUtf8(message));
+    const std::string line = "{\"pid\":" + std::to_string(GetCurrentProcessId()) +
+        ",\"qpc\":" + std::to_string(counter.QuadPart) +
+        ",\"qpc_frequency\":" + std::to_string(frequency) +
+        ",\"message\":\"" + WinBlazeJsonEscape(message) + "\"}";
+    WinBlazeWriteUtf8Line(log_path, line);
 }
 
 inline std::wstring WinBlazeFailureLogPath()

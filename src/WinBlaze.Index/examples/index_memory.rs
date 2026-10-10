@@ -29,14 +29,12 @@ fn main() {
         tx.upsert_file(&FileRecord {
             id: FileId(id),
             parent_directory_id: DirectoryId(10),
-            name: format!("file-{id:08}.bin"),
-            full_path: format!("C:\\bench\\dir\\file-{id:08}.bin"),
+            name: format!("file-{id:08}.bin").into(),
+            full_path: format!("C:\\bench\\dir\\file-{id:08}.bin").into(),
             size_bytes: 0,
             allocation_bytes: 0,
             attributes: FileAttributes::ARCHIVE,
-            created_utc: None,
-            modified_utc: None,
-            accessed_utc: None,
+            timestamps: winblaze_core::FileTimestamps::new(None, None, None),
         });
     }
     repo.apply_transaction(&tx).expect("persist transaction");

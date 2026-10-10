@@ -1,8 +1,17 @@
-#include "pch.h"
+﻿#include "pch.h"
+#include "PermissionView.h"
+#include "SearchInput.h"
+#include "ByteFormat.h"
 #include "NativeBridge.h"
+#include "TreemapGeometry.h"
+#include "ShellContext.h"
+#include "PortableDevices.h"
+#include "VirtualDisks.h"
+#include "TreemapPng.h"
 #include "MainWindow.xaml.h"
 #include "ShellTheme.h"
 #include "StartupTrace.h"
+#include "FileActions.h"
 
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Web.Http.h>
@@ -17,6 +26,8 @@
 #include <vector>
 
 #include <objbase.h>
+#include <shobjidl.h>
+#include <microsoft.ui.xaml.window.h>
 #include <sddl.h>
 #include <aclapi.h>
 
@@ -578,7 +589,7 @@ namespace
         tm.tm_isdst = 0;
 
         const auto unix_seconds = _mkgmtime64(&tm);
-        if (unix_seconds < 0) {
+        if (unix_seconds < 0 || tm.tm_year != year - 1900 || tm.tm_mon != month - 1 || tm.tm_mday != day) {
             return std::nullopt;
         }
 
@@ -587,64 +598,12 @@ namespace
 
     std::optional<uint64_t> ParseSizeTextBytes(std::wstring text)
     {
-        text = TrimCopy(std::move(text));
-        if (text.empty()) {
-            return std::nullopt;
-        }
-
-        text.erase(std::remove(text.begin(), text.end(), L','), text.end());
-        std::transform(text.begin(), text.end(), text.begin(), [](wchar_t ch) {
-            return static_cast<wchar_t>(std::towlower(ch));
-        });
-
-        std::wistringstream stream(text);
-        long double value = 0.0;
-        std::wstring unit;
-        stream >> value >> unit;
-        if (!stream || value < 0.0) {
-            return std::nullopt;
-        }
-
-        long double scale = 1.0;
-        if (unit == L"t" || unit == L"tb" || unit == L"tib") {
-            scale = 1024.0L * 1024.0L * 1024.0L * 1024.0L;
-        } else if (unit == L"g" || unit == L"gb" || unit == L"gib") {
-            scale = 1024.0L * 1024.0L * 1024.0L;
-        } else if (unit == L"m" || unit == L"mb" || unit == L"mib") {
-            scale = 1024.0L * 1024.0L;
-        } else if (unit == L"k" || unit == L"kb" || unit == L"kib") {
-            scale = 1024.0L;
-        } else if (!unit.empty() && unit != L"b" && unit != L"byte" && unit != L"bytes") {
-            return std::nullopt;
-        }
-
-        const long double bytes = value * scale;
-        if (bytes > static_cast<long double>(UINT64_MAX)) {
-            return UINT64_MAX;
-        }
-        return static_cast<uint64_t>(bytes);
+        return ::WinBlaze::UI::ParseByteSize(std::move(text));
     }
 
     std::wstring FormatBytes(uint64_t size)
     {
-        constexpr double KB = 1024.0;
-        constexpr double MB = KB * 1024.0;
-        constexpr double GB = MB * 1024.0;
-        const double value = static_cast<double>(size);
-        std::wostringstream stream;
-        stream.setf(std::ios::fixed);
-        stream.precision(1);
-        if (value >= GB) {
-            stream << (value / GB) << L" GB";
-        } else if (value >= MB) {
-            stream << (value / MB) << L" MB";
-        } else if (value >= KB) {
-            stream << (value / KB) << L" KB";
-        } else {
-            stream.precision(0);
-            stream << value << L" B";
-        }
-        return stream.str();
+        return ::WinBlaze::UI::FormatByteSize(size);
     }
 
     std::wstring FormatFileTimeUtc(int64_t file_time_ticks)
@@ -777,6 +736,17 @@ namespace winrt::WinBlaze::UI::implementation
     MainWindow::MainWindow()
     {
         TraceStartup(L"MainWindow::MainWindow begin");
+        int argumentCount = 0;
+        auto arguments = CommandLineToArgvW(GetCommandLineW(), &argumentCount);
+        if (arguments) {
+            if (argumentCount == 3 && std::wstring(arguments[1]) == L"--treemap-png") { m_benchmark_png_path = arguments[2]; }
+            if(argumentCount==3 && (std::wstring(arguments[1])==L"--flame-png" || std::wstring(arguments[1])==L"--sunburst-png")) {
+                m_visualization_layout=std::wstring(arguments[1])==L"--flame-png"?2:3;
+                m_benchmark_png_path=arguments[2];
+            }
+
+            LocalFree(arguments);
+        }
         try {
             Closed({ this, &MainWindow::OnWindowClosed });
             BuildShell();
@@ -803,17 +773,8 @@ namespace winrt::WinBlaze::UI::implementation
             TraceStartup(L"MainWindow after select visualization target");
             UpdatePerformanceCounters(L"startup");
             TraceStartup(L"MainWindow after performance counters");
-            SetSection(ShellSection::Overview);
-            TraceStartup(L"MainWindow after set section");
-            ApplyShellState();
-            TraceStartup(L"MainWindow after first apply shell state");
-            UpdateSummaryText();
-            TraceStartup(L"MainWindow after summary text");
-            UpdateRuntimeSnapshot();
-            TraceStartup(L"MainWindow after runtime snapshot");
-            UpdateCatalogSnapshot();
-            TraceStartup(L"MainWindow after snapshot updates");
             m_shell_ready = true;
+            m_initializing_shell = false;
             ApplyShellState();
             TraceStartup(L"MainWindow after shell ready apply");
             TraceStartup(L"MainWindow auto scan skipped; waiting for user-selected root");
@@ -928,9 +889,8 @@ namespace winrt::WinBlaze::UI::implementation
             sidebar_stack.Children().Append(wordmark);
 
             auto version_caption = TextBlock{};
-            version_caption.Text(L"v2.0 high-velocity");
-            version_caption.FontSize(10.0);
-            version_caption.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+            version_caption.Text(L"Version " + winrt::to_hstring(kCurrentVersion));
+            version_caption.FontSize(12.0);
             version_caption.Foreground(make_brush(theme.text_secondary));
             version_caption.Margin(Thickness{ 1.0, 0.0, 0.0, 14.0 });
             sidebar_stack.Children().Append(version_caption);
@@ -940,11 +900,11 @@ namespace winrt::WinBlaze::UI::implementation
                 item.Content(box_value(winrt::hstring(label)));
                 item.HorizontalAlignment(HorizontalAlignment::Stretch);
                 item.HorizontalContentAlignment(HorizontalAlignment::Left);
-                item.Padding(Thickness{ 12.0, 8.0, 12.0, 8.0 });
-                item.CornerRadius(CornerRadius{ 4.0, 4.0, 4.0, 4.0 });
+                item.Padding(Thickness{ 12.0, 10.0, 12.0, 10.0 });
+                item.CornerRadius(CornerRadius{ 8.0, 8.0, 8.0, 8.0 });
                 item.BorderThickness(Thickness{ 0.0, 0.0, 0.0, 0.0 });
-                item.FontSize(12.0);
-                item.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+                item.FontSize(14.0);
+                item.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Segoe UI"));
                 if (active) {
                     item.Background(make_brush(theme.chip_active_background));
                     item.Foreground(make_brush(theme.text_on_accent));
@@ -985,8 +945,8 @@ namespace winrt::WinBlaze::UI::implementation
                 item.BorderThickness(Thickness{ 0.0, 0.0, 0.0, 0.0 });
                 item.Background(make_brush(Windows::UI::Colors::Transparent()));
                 item.Foreground(make_brush(theme.text_secondary));
-                item.FontSize(11.0);
-                item.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+                item.FontSize(12.0);
+                item.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Segoe UI"));
                 Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item, winrt::hstring(label));
                 item.Click([this, view](auto const&, auto const&) { SwitchView(view); });
                 m_sidebar_items[view] = item;
@@ -996,9 +956,8 @@ namespace winrt::WinBlaze::UI::implementation
             make_sidebar_caption_item(L"SUPPORT", AppView::Support);
 
             m_sidebar_status_text = TextBlock{};
-            m_sidebar_status_text.Text(L"ENGINE: idle");
-            m_sidebar_status_text.FontSize(10.0);
-            m_sidebar_status_text.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
+            m_sidebar_status_text.Text(L"Ready to scan.");
+            m_sidebar_status_text.FontSize(12.0);
             m_sidebar_status_text.Foreground(make_brush(theme.folder_accent));
             m_sidebar_status_text.TextWrapping(TextWrapping::WrapWholeWords);
             m_sidebar_status_text.Margin(Thickness{ 0.0, 8.0, 0.0, 0.0 });
@@ -1045,9 +1004,9 @@ namespace winrt::WinBlaze::UI::implementation
         auto file_flyout = MenuFlyout{};
 
         auto select_drive_item = MenuFlyoutItem{};
-        select_drive_item.Text(L"Select drive...");
+        select_drive_item.Text(L"Choose folder...");
         select_drive_item.Click([this](auto const&, auto const&) {
-            FocusRootPathBox();
+            BrowseForFolder();
         });
         file_flyout.Items().Append(select_drive_item);
 
@@ -1057,6 +1016,97 @@ namespace winrt::WinBlaze::UI::implementation
             BeginScanFromCurrentRoot();
         });
         file_flyout.Items().Append(rescan_item);
+
+        auto import_csv_item = MenuFlyoutItem{};
+        import_csv_item.Text(L"Open scan (CSV, TSV, JSON, MFT)...");
+        import_csv_item.Click([this](auto const&, auto const&) { ImportCsv(); });
+        file_flyout.Items().Append(import_csv_item);
+
+        auto export_csv_item = MenuFlyoutItem{};
+        export_csv_item.Text(L"Export CSV...");
+        export_csv_item.Click([this](auto const&, auto const&) { ExportCsv(); });
+        auto detailed_csv_item = MenuFlyoutItem{};
+        detailed_csv_item.Text(L"Export detailed CSV...");
+        detailed_csv_item.Click([this](auto const&, auto const&) { ExportCatalog(false, false, 6); });
+        file_flyout.Items().Append(detailed_csv_item);
+
+        file_flyout.Items().Append(export_csv_item);
+
+        auto detailed_json = MenuFlyoutItem{};
+        detailed_json.Text(L"Export detailed JSON...");
+        detailed_json.Click([this](auto const&, auto const&) { ExportCatalog(true, false, 5); });
+        file_flyout.Items().Append(detailed_json);
+        auto export_json_item = MenuFlyoutItem{};
+        export_json_item.Text(L"Export JSON...");
+        export_json_item.Click([this](auto const&, auto const&) { ExportCatalog(true, false); });
+        file_flyout.Items().Append(export_json_item);
+        for(auto const& [text,kind] : std::vector<std::pair<std::wstring,uint32_t>>{{L"Export duplicate report...",1},{L"Export permissions report...",2},{L"Export raw MFT...",3},{L"Export TSV...",4}}){
+            auto item=MenuFlyoutItem{};item.Text(winrt::hstring(text));item.Click([this,kind](auto const&,auto const&){ExportCatalog(false,false,kind);});file_flyout.Items().Append(item);
+        }
+        auto consolidate_duplicates = MenuFlyoutItem{};
+        consolidate_duplicates.Text(L"Consolidate duplicates...");
+        consolidate_duplicates.Click([this](auto const&, auto const&) { ConsolidateDuplicates(); });
+        file_flyout.Items().Append(consolidate_duplicates);
+        auto investigate_duplicates = MenuFlyoutItem{};
+        investigate_duplicates.Text(L"Investigate duplicates...");
+        investigate_duplicates.Click([this](auto const&, auto const&) { InvestigateDuplicates(); });
+        file_flyout.Items().Append(investigate_duplicates);
+        m_monitor_item=ToggleMenuFlyoutItem{};m_monitor_item.Text(L"Monitor file-system changes");
+        m_monitor_item.Click([this](auto const&,auto const&){m_monitor_enabled=m_monitor_item.IsChecked();RestartMonitoring();});file_flyout.Items().Append(m_monitor_item);
+
+        auto portable_device = MenuFlyoutItem{};
+        portable_device.Text(L"Scan portable device...");
+        portable_device.Click([this](auto const&, auto const&) { ScanPortableDevice(); });
+        file_flyout.Items().Append(portable_device);
+        auto multiple_roots = MenuFlyoutItem{};
+        multiple_roots.Text(L"Scan multiple roots...");
+        multiple_roots.Click([this](auto const&, auto const&) { ScanMultipleRoots(); });
+        file_flyout.Items().Append(multiple_roots);
+
+        auto volume_space = ToggleMenuFlyoutItem{};
+        volume_space.Text(L"Show free and unaccounted space");
+        volume_space.Click([this, volume_space](auto const&, auto const&) {
+            m_treemap_volume_space = volume_space.IsChecked();
+            m_volume_space_cache_root.clear();
+            m_treemap_render_dirty = true;
+            ScheduleTreemapRender(L"volume space option changed");
+        });
+        file_flyout.Items().Append(volume_space);
+
+        auto maintenance = MenuFlyoutItem{};
+        maintenance.Text(L"NTFS maintenance...");
+        maintenance.Click([this](auto const&, auto const&) { RunMaintenance(); });
+        file_flyout.Items().Append(maintenance);
+
+        auto costs = MenuFlyoutItem{};
+        costs.Text(L"Storage tier costs...");
+        costs.Click([this](auto const&, auto const&) { ShowStorageCosts(); });
+        file_flyout.Items().Append(costs);
+
+        auto manage = MenuFlyoutItem{};
+        manage.Text(L"Manage files and folders...");
+        manage.Click([this](auto const&, auto const&) { ManageItems(); });
+        file_flyout.Items().Append(manage);
+
+        auto permissions = MenuFlyoutItem{};
+        permissions.Text(L"Explore permissions...");
+        permissions.Click([this](auto const&, auto const&) { ExplorePermissions(); });
+        file_flyout.Items().Append(permissions);
+
+        auto change_history = MenuFlyoutItem{};
+        change_history.Text(L"Change history...");
+        change_history.Click([this](auto const&, auto const&) { ShowChangeHistory(); });
+        file_flyout.Items().Append(change_history);
+
+        auto export_filtered_item = MenuFlyoutItem{};
+        export_filtered_item.Text(L"Export filtered CSV...");
+        export_filtered_item.Click([this](auto const&, auto const&) { ExportCatalog(false, true); });
+        file_flyout.Items().Append(export_filtered_item);
+
+        auto png_item = MenuFlyoutItem{};
+        png_item.Text(L"Export treemap PNG...");
+        png_item.Click([this](auto const&, auto const&) { ExportTreemapPng(); });
+        file_flyout.Items().Append(png_item);
 
         auto exit_item = MenuFlyoutItem{};
         exit_item.Text(L"Exit");
@@ -1192,23 +1242,106 @@ namespace winrt::WinBlaze::UI::implementation
             scan_stack.Spacing(10);
             scan_card.Child(scan_stack);
 
-            scan_stack.Children().Append(make_card_title(L"Scan"));
+            scan_stack.Children().Append(make_card_title(L"Choose what to scan"));
 
-            auto root_row = StackPanel{};
-            root_row.Orientation(Orientation::Horizontal);
-            root_row.Spacing(12);
+            auto address_row = Grid{};
+            address_row.ColumnSpacing(12);
+            auto drive_column = ColumnDefinition{};
+            drive_column.Width(GridLength{ 1, GridUnitType::Auto });
+            address_row.ColumnDefinitions().Append(drive_column);
+            auto path_column = ColumnDefinition{};
+            path_column.Width(GridLength{ 1, GridUnitType::Star });
+            address_row.ColumnDefinitions().Append(path_column);
+            auto browse_column = ColumnDefinition{};
+            browse_column.Width(GridLength{ 1, GridUnitType::Auto });
+            address_row.ColumnDefinitions().Append(browse_column);
+
+            m_drive_box = ComboBox{};
+            m_drive_box.PlaceholderText(L"Drive");
+            m_drive_box.Width(130);
+            m_drive_box.MinHeight(40);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_drive_box, L"Scan drive");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(m_drive_box, L"Select a drive to fill the path. Start scan when ready.");
+            const auto drive_buffer_size = GetLogicalDriveStringsW(0, nullptr);
+            std::vector<wchar_t> drives(drive_buffer_size + 1);
+            if (GetLogicalDriveStringsW(static_cast<DWORD>(drives.size()), drives.data()) != 0) {
+                for (auto drive = drives.data(); *drive; drive += wcslen(drive) + 1) {
+                    auto choice = ComboBoxItem{};
+                    choice.Content(box_value(std::wstring(L"Drive ") + drive[0] + L":"));
+                    choice.Tag(box_value(winrt::hstring(drive)));
+                    m_drive_box.Items().Append(choice);
+                }
+            }
+            m_drive_box.SelectionChanged([this](auto const&, auto const&) {
+                if (auto selected = m_drive_box.SelectedItem().try_as<ComboBoxItem>()) {
+                    m_root_path_box.Text(unbox_value<winrt::hstring>(selected.Tag()));
+                }
+            });
+            address_row.Children().Append(m_drive_box);
 
             m_root_path_box = TextBox{};
-            m_root_path_box.MinWidth(360);
+            m_root_path_box.MinWidth(120);
+            m_root_path_box.MinHeight(40);
             m_root_path_box.Text(m_current_root_path.c_str());
-            m_root_path_box.PlaceholderText(L"Root path to scan");
+            m_root_path_box.TextChanged([this](auto const&, auto const&) {
+                if (auto selected = m_drive_box.SelectedItem().try_as<ComboBoxItem>()) {
+                    if (unbox_value<winrt::hstring>(selected.Tag()) != m_root_path_box.Text()) {
+                        m_drive_box.SelectedIndex(-1);
+                    }
+                }
+                if (m_root_validation_text) {
+                    m_root_validation_text.Text(L"Choose a drive or folder. Enter to scan.");
+                    m_root_validation_text.Foreground(MakeBrush(ActiveShellTheme().text_secondary));
+                }
+                RefreshScanControls();
+            });
+            m_root_path_box.PlaceholderText(L"Folder or drive, e.g. C:\\Users");
+            m_root_path_box.KeyDown([this](auto const&, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args) {
+                if (args.Key() == Windows::System::VirtualKey::Enter) {
+                    args.Handled(true);
+                    BeginScanFromCurrentRoot();
+                }
+            });
             Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
                 m_root_path_box,
                 L"Scan root path");
             Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
                 m_root_path_box,
                 L"Enter the folder or volume root to scan.");
-            root_row.Children().Append(m_root_path_box);
+            Grid::SetColumn(m_root_path_box, 1);
+            address_row.Children().Append(m_root_path_box);
+            m_browse_folder_button = Button{};
+            m_browse_folder_button.Content(box_value(L"Browse..."));
+            m_browse_folder_button.MinHeight(40);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_browse_folder_button, L"Browse for folder");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(m_browse_folder_button, L"Choose a folder. Selecting a folder does not start a scan.");
+            m_browse_folder_button.Click([this](auto const&, auto const&) { BrowseForFolder(); });
+            Grid::SetColumn(m_browse_folder_button, 2);
+            address_row.Children().Append(m_browse_folder_button);
+            scan_stack.Children().Append(address_row);
+            auto rules_panel = StackPanel{};
+            rules_panel.Spacing(8);
+            auto rules_label = TextBlock{};
+            rules_label.Text(L"Optional scan rules");
+            rules_panel.Children().Append(rules_label);
+            m_scan_excludes = TextBox{};
+            m_scan_excludes.AcceptsReturn(true);
+            m_scan_excludes.MaxHeight(100);
+            m_scan_excludes.PlaceholderText(L"Excluded paths relative to this root, one per line (e.g. node_modules)");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_scan_excludes, L"Excluded scan paths");
+            rules_panel.Children().Append(m_scan_excludes);
+            m_scan_includes = TextBox{};
+            m_scan_includes.AcceptsReturn(true);
+            m_scan_includes.MaxHeight(100);
+            m_scan_includes.PlaceholderText(L"Include file-name patterns, one per line (e.g. *.pdf). Empty includes all files.");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_scan_includes, L"Included file patterns");
+            rules_panel.Children().Append(m_scan_includes);
+            scan_stack.Children().Append(rules_panel);
+
+
+            auto root_row = StackPanel{};
+            root_row.Orientation(Orientation::Horizontal);
+            root_row.Spacing(8);
 
             m_start_scan_button = Button{};
             m_start_scan_button.Content(box_value(L"Start scan"));
@@ -1222,7 +1355,7 @@ namespace winrt::WinBlaze::UI::implementation
             m_start_scan_button.Background(make_brush(theme.chip_active_background));
             m_start_scan_button.Foreground(make_brush(theme.text_on_accent));
             m_start_scan_button.FontWeight({ 700 });
-            m_start_scan_button.CornerRadius(CornerRadius{ 4.0, 4.0, 4.0, 4.0 });
+            m_start_scan_button.CornerRadius(CornerRadius{ 8.0, 8.0, 8.0, 8.0 });
             root_row.Children().Append(m_start_scan_button);
 
             m_incremental_scan_button = Button{};
@@ -1282,6 +1415,13 @@ namespace winrt::WinBlaze::UI::implementation
             root_row.Children().Append(diagnostics_reveal_button);
 
             scan_stack.Children().Append(root_row);
+            m_root_validation_text = TextBlock{};
+            m_root_validation_text.Text(L"Choose a drive or folder. Enter to scan.");
+            m_root_validation_text.FontSize(12.0);
+            m_root_validation_text.Foreground(make_brush(theme.text_secondary));
+            m_root_validation_text.TextWrapping(TextWrapping::WrapWholeWords);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(m_root_validation_text, L"DirectoryValidation");
+            scan_stack.Children().Append(m_root_validation_text);
 
             Grid::SetRow(scan_card, 0);
             Grid::SetColumn(scan_card, 0);
@@ -1390,7 +1530,7 @@ namespace winrt::WinBlaze::UI::implementation
         shell.Children().Append(summary_card);
         TraceStartup(L"BuildShell after summary card");
 
-        {
+        m_build_search_panel = [this, shell, apply_card_style, make_card_title] {
             auto search_card = Border{};
             m_search_card = search_card;
             apply_card_style(search_card);
@@ -1470,6 +1610,11 @@ namespace winrt::WinBlaze::UI::implementation
             auto exact_item = ComboBoxItem{};
             exact_item.Content(box_value(L"Exact"));
             m_match_mode_box.Items().Append(exact_item);
+            for (auto text : { L"Prefix", L"Regex" }) {
+                auto item = ComboBoxItem{};
+                item.Content(box_value(text));
+                m_match_mode_box.Items().Append(item);
+            }
             m_match_mode_box.SelectedIndex(0);
             m_match_mode_box.SelectionChanged({ this, &MainWindow::OnSearchOptionsChanged });
             search_options_row.Children().Append(m_match_mode_box);
@@ -1488,6 +1633,11 @@ namespace winrt::WinBlaze::UI::implementation
             auto sort_type_item = ComboBoxItem{};
             sort_type_item.Content(box_value(L"Type"));
             m_sort_field_box.Items().Append(sort_type_item);
+            for (auto text : { L"Allocated", L"Modified" }) {
+                auto item = ComboBoxItem{};
+                item.Content(box_value(text));
+                m_sort_field_box.Items().Append(item);
+            }
             m_sort_field_box.SelectedIndex(0);
             m_sort_field_box.SelectionChanged({ this, &MainWindow::OnSearchOptionsChanged });
             search_options_row.Children().Append(m_sort_field_box);
@@ -1508,6 +1658,21 @@ namespace winrt::WinBlaze::UI::implementation
             search_options_row.Children().Append(m_sort_direction_box);
 
             search_stack.Children().Append(search_options_row);
+            auto bounds_row = StackPanel{};
+            bounds_row.Orientation(Orientation::Horizontal);
+            bounds_row.Spacing(12);
+            auto bound = [&](TextBox& box, wchar_t const* caption) {
+                box = TextBox{};
+                box.Width(170);
+                box.PlaceholderText(caption);
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(box, caption);
+                box.TextChanged({ this, &MainWindow::OnSearchQueryChanged });
+                bounds_row.Children().Append(box);
+            };
+            bound(m_max_size_box, L"Maximum logical size");
+            bound(m_min_allocated_box, L"Minimum allocated size");
+            bound(m_max_allocated_box, L"Maximum allocated size");
+            search_stack.Children().Append(bounds_row);
             TraceStartup(L"BuildShell search options row end");
 
             auto search_date_row = StackPanel{};
@@ -1549,13 +1714,17 @@ namespace winrt::WinBlaze::UI::implementation
 
             m_search_results_panel = StackPanel{};
             m_search_results_panel.Spacing(6);
-            search_stack.Children().Append(m_search_results_panel);
+            auto results_scroll = ScrollViewer{};
+            results_scroll.MaxHeight(240);
+            results_scroll.Content(m_search_results_panel);
+            search_stack.Children().Append(results_scroll);
 
             Grid::SetRow(search_card, 4);
             Grid::SetColumn(search_card, 0);
             Grid::SetColumnSpan(search_card, 2);
             shell.Children().Append(search_card);
-        }
+            RefreshInstantSearch();
+        };
         TraceStartup(L"BuildShell search card end");
 
         {
@@ -1608,7 +1777,8 @@ namespace winrt::WinBlaze::UI::implementation
             tree_action_row.Children().Append(m_tree_window_next_button);
 
             auto tree_action_hint = TextBlock{};
-            tree_action_hint.Text(L"Double-click folders to expand; rows page in a virtualized window.");
+            tree_action_hint.Text(L"Click a folder arrow to explore its contents.");
+            tree_action_hint.TextWrapping(TextWrapping::WrapWholeWords);
             tree_action_hint.Opacity(0.72);
             tree_action_hint.VerticalAlignment(VerticalAlignment::Center);
             tree_action_row.Children().Append(tree_action_hint);
@@ -1618,7 +1788,7 @@ namespace winrt::WinBlaze::UI::implementation
             m_tree_catalog_keys.clear();
 
             m_tree_list_status_text = TextBlock{};
-            m_tree_list_status_text.Text(L"Scan or load a cached catalog to build the folder tree; rows render in virtualized ListView containers.");
+            m_tree_list_status_text.Text(L"Choose a folder above to explore its disk usage.");
             m_tree_list_status_text.Opacity(0.72);
             m_tree_list_status_text.TextWrapping(TextWrapping::WrapWholeWords);
             append_tree_row(m_tree_list_status_text, false);
@@ -1640,7 +1810,7 @@ namespace winrt::WinBlaze::UI::implementation
                 return label;
             };
             // Widths mirror CreateTreeNodeListItem's row cells: expander
-            // glyph (14) + spacing + name block (300) collapse into one Name
+            // button (24) + spacing + name block (290) collapse into one Name
             // column; the remaining columns match the row cell min-widths.
             tree_list_header.Children().Append(make_tree_header_label(L"Name", 326.0));
             tree_list_header.Children().Append(make_tree_header_label(L"Usage", 150.0));
@@ -1738,6 +1908,7 @@ namespace winrt::WinBlaze::UI::implementation
         m_detail_card = detail_card;
         apply_card_style(detail_card);
 
+        m_build_detail_panel = [this, detail_card, make_card_title, make_brush, theme] {
         auto detail_stack = StackPanel{};
         detail_stack.Spacing(6);
         detail_card.Child(detail_stack);
@@ -1796,6 +1967,8 @@ namespace winrt::WinBlaze::UI::implementation
             L"Size, allocation size, timestamps, and metadata for the selected file.",
             theme.file_accent,
             theme.subtle_border);
+        UpdateBreadcrumbs();
+        };
         TraceStartup(L"BuildShell detail card end");
 
         // Right pane beside the folder tree: extension legend fills the
@@ -1837,10 +2010,45 @@ namespace winrt::WinBlaze::UI::implementation
             };
             treemap_card.Child(treemap_stack);
 
-            append_treemap_row(make_card_title(L"Treemap"), false);
+            auto treemap_heading = StackPanel{};
+            treemap_heading.Orientation(Orientation::Horizontal);
+            treemap_heading.Spacing(16);
+            treemap_heading.Children().Append(make_card_title(L"Treemap"));
+            auto size_basis = ComboBox{};
+            m_treemap_size_basis = size_basis;
+            size_basis.Items().Append(box_value(L"Allocated size"));
+            size_basis.Items().Append(box_value(L"Logical size"));
+            size_basis.SelectedIndex(0);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(size_basis, L"Treemap size basis");
+            size_basis.SelectionChanged([this, size_basis](auto const&, auto const&) {
+                m_treemap_logical_size = size_basis.SelectedIndex() == 1;
+                m_treemap_render_dirty = true;
+                ScheduleTreemapRender(L"treemap size basis changed");
+            });
+            treemap_heading.Children().Append(size_basis);
+            auto layout_choice = ComboBox{};
+            layout_choice.Items().Append(box_value(L"Balanced rectangles"));
+            layout_choice.Items().Append(box_value(L"Horizontal strips"));
+            layout_choice.Items().Append(box_value(L"Flame graph"));
+            layout_choice.Items().Append(box_value(L"Sunburst"));
+            layout_choice.SelectedIndex(m_visualization_layout);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(layout_choice, L"Treemap layout");
+            layout_choice.SelectionChanged([this, layout_choice](auto const&, auto const&) {
+                m_visualization_layout = layout_choice.SelectedIndex();
+                m_treemap_strips = m_visualization_layout == 1;
+                m_treemap_render_dirty = true;
+                ScheduleTreemapRender(L"treemap layout changed");
+            });
+            append_treemap_row(treemap_heading, false);
+            append_treemap_row(layout_choice, false);
+            m_volume_space_summary = TextBlock{};
+            m_volume_space_summary.Text(L"Volume space hidden");
+            m_volume_space_summary.TextWrapping(TextWrapping::WrapWholeWords);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_volume_space_summary, L"Volume space summary");
+            append_treemap_row(m_volume_space_summary, false);
 
             auto treemap_subtitle = TextBlock{};
-            treemap_subtitle.Text(L"Scan or load a cached catalog to render proportional usage tiles.");
+            treemap_subtitle.Text(L"Larger tiles use more space. Hover for details; click to select.");
             treemap_subtitle.Opacity(0.75);
             treemap_subtitle.TextWrapping(TextWrapping::WrapWholeWords);
             append_treemap_row(treemap_subtitle, false);
@@ -1859,7 +2067,7 @@ namespace winrt::WinBlaze::UI::implementation
                 L"GPU treemap surface");
             Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
                 m_treemap_surface,
-                L"Direct2D SwapChainPanel surface showing catalog usage tiles. Hover or tap a tile to update selection details.");
+                L"Disk usage map. Larger tiles use more space. Hover or click a tile for details.");
             append_treemap_row(m_treemap_surface, true);
 
             m_treemap_render_status = ProbeTreemapRenderStack();
@@ -1868,7 +2076,6 @@ namespace winrt::WinBlaze::UI::implementation
                 L"SwapChainPanel host is initialized. " + m_treemap_render_status));
             m_treemap_surface_status_text.Opacity(0.72);
             m_treemap_surface_status_text.TextWrapping(TextWrapping::WrapWholeWords);
-            append_treemap_row(m_treemap_surface_status_text, false);
 
             m_treemap_zoom_overlay = Border{};
             m_treemap_zoom_overlay.CornerRadius(UniformRadius(theme.panel_radius));
@@ -1900,7 +2107,7 @@ namespace winrt::WinBlaze::UI::implementation
         }
         TraceStartup(L"BuildShell treemap card end");
 
-        {
+        m_build_runtime_panel = [this, shell, apply_card_style, make_card_title] {
             auto runtime_card = Border{};
             m_diagnostics_card = runtime_card;
             apply_card_style(runtime_card);
@@ -1949,6 +2156,7 @@ namespace winrt::WinBlaze::UI::implementation
             m_developer_diagnostics_panel = StackPanel{};
             m_developer_diagnostics_panel.Spacing(6);
             runtime_stack.Children().Append(m_developer_diagnostics_panel);
+            m_developer_diagnostics_panel.Children().Append(m_treemap_surface_status_text);
 
             m_runtime_snapshot_text = TextBlock{};
             m_runtime_snapshot_text.Text(L"UI batching: startup, flushes=0, queued events=0, last latency=0 ms, last input=0 ms, flush cost=0 ms");
@@ -1989,15 +2197,19 @@ namespace winrt::WinBlaze::UI::implementation
             Grid::SetColumn(runtime_card, 0);
             Grid::SetColumnSpan(runtime_card, 2);
             shell.Children().Append(runtime_card);
-        }
+            UpdateRuntimeSnapshot();
+            UpdateCatalogSnapshot();
+            UpdatePerformanceCounters(L"runtime panel opened");
+        };
         TraceStartup(L"BuildShell runtime card end");
 
         // --- Sidebar view hosts (Dashboard/Insights/Cleanup/Settings/
         // Support). Each is a scrollable card covering the explorer pane
         // area; content is rebuilt on switch so data stays fresh.
-        {
+        m_build_view_host = [this, shell, apply_card_style](AppView view) {
             auto make_view_card = [&](Microsoft::UI::Xaml::Controls::Border& card_storage,
                                       Microsoft::UI::Xaml::Controls::StackPanel& content_storage) {
+                if (card_storage) return;
                 auto card = Border{};
                 card_storage = card;
                 apply_card_style(card);
@@ -2016,12 +2228,15 @@ namespace winrt::WinBlaze::UI::implementation
                 Grid::SetColumnSpan(card, 2);
                 shell.Children().Append(card);
             };
-            make_view_card(m_dashboard_card, m_dashboard_content);
-            make_view_card(m_insights_card, m_insights_content);
-            make_view_card(m_cleanup_card, m_cleanup_content);
-            make_view_card(m_settings_card, m_settings_content);
-            make_view_card(m_support_card, m_support_content);
-        }
+            switch (view) {
+            case AppView::Dashboard: make_view_card(m_dashboard_card, m_dashboard_content); break;
+            case AppView::Insights: make_view_card(m_insights_card, m_insights_content); break;
+            case AppView::Cleanup: make_view_card(m_cleanup_card, m_cleanup_content); break;
+            case AppView::Settings: make_view_card(m_settings_card, m_settings_content); break;
+            case AppView::Support: make_view_card(m_support_card, m_support_content); break;
+            default: break;
+            }
+        };
 
         {
             // The panes size to the window now (star rows); no outer scroll.
@@ -2067,6 +2282,7 @@ namespace winrt::WinBlaze::UI::implementation
         winrt::Windows::Foundation::IInspectable const&,
         Microsoft::UI::Xaml::WindowEventArgs const&)
     {
+        if(m_watch_timer)m_watch_timer.Stop();m_watcher.reset();
         if (m_composition_rendering_registered) {
             Microsoft::UI::Xaml::Media::CompositionTarget::Rendering(m_composition_rendering_token);
             m_composition_rendering_registered = false;
@@ -2174,15 +2390,1304 @@ namespace winrt::WinBlaze::UI::implementation
         BeginScanFromCurrentRoot(true);
     }
 
+    winrt::fire_and_forget MainWindow::ImportCsv()
+    {
+        auto lifetime = get_strong();
+        if (m_session_active || m_export_active) { UpdateStatus(L"Finish the current operation first."); co_return; }
+        std::wstring path;
+        try {
+            auto dialog = winrt::create_instance<IFileOpenDialog>(CLSID_FileOpenDialog);
+            const COMDLG_FILTERSPEC filters[] = {{L"Scan files (CSV, TSV, JSON, MFT)", L"*.csv;*.tsv;*.json;*.mft"}};
+            winrt::check_hresult(dialog->SetFileTypes(1, filters));
+            winrt::check_hresult(dialog->SetTitle(L"Open saved scan"));
+            HWND owner{};
+            winrt::check_hresult(lifetime.as<::IWindowNative>()->get_WindowHandle(&owner));
+            const auto shown = dialog->Show(owner);
+            if (shown == HRESULT_FROM_WIN32(ERROR_CANCELLED)) { co_return; }
+            winrt::check_hresult(shown);
+            winrt::com_ptr<IShellItem> file;
+            winrt::check_hresult(dialog->GetResult(file.put()));
+            PWSTR chosen{};
+            winrt::check_hresult(file->GetDisplayName(SIGDN_FILESYSPATH, &chosen));
+            path = chosen; CoTaskMemFree(chosen);
+        } catch (...) { UpdateStatus(L"Could not select a saved scan."); co_return; }
+        if (m_session_active || m_export_active) { co_return; }
+        using namespace Microsoft::UI::Xaml::Controls;
+        ComboBox time_mode;
+        time_mode.Items().Append(winrt::box_value(L"Local time on this PC"));
+        time_mode.Items().Append(winrt::box_value(L"UTC (exportUTCTime=1)"));
+        time_mode.SelectedIndex(0);
+        time_mode.Header(winrt::box_value(L"WizTree timestamp convention"));
+        ContentDialog options;
+        options.XamlRoot(Content().XamlRoot());
+        options.Title(winrt::box_value(L"Open scan"));
+        options.Content(time_mode);
+        options.PrimaryButtonText(L"Open");
+        options.CloseButtonText(L"Cancel");
+        options.DefaultButton(ContentDialogButton::Primary);
+        if (co_await options.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+        const bool wiztree_utc = time_mode.SelectedIndex() == 1;
+        if (m_session_active || m_export_active) { co_return; }
+        m_export_active = true;
+        ++m_snapshot_load_generation;
+        RefreshScanControls();
+        UpdateStatus(L"Opening saved snapshot...");
+        winrt::apartment_context ui_thread;
+        co_await winrt::resume_background();
+        uint32_t result = 4;
+        try { result = ::WinBlaze::UI::NativeBridge::ImportCsv(path.c_str(), wiztree_utc); } catch (...) {}
+        co_await ui_thread;
+        m_export_active = false;
+        if (result == 0) {
+            m_imported_snapshot = true;
+            m_multiple_root_paths.clear();
+            ::WinBlaze::UI::NativeBridge::TreeRoot([this](WbTreeNode const& node) {
+                m_current_root_path = Utf8ToWide(std::string_view{node.name.ptr, node.name.len});
+                RootPathBox().Text(m_current_root_path);
+            });
+            m_last_scan_duration_text = L"Imported snapshot: " + path;
+            LoadPersistedCatalogSnapshot();
+        } else { UpdateStatus(result == 2 ? L"Scan could not be opened: unsupported, malformed, or incomplete. Previous catalog kept." : L"Scan read failed. Previous catalog kept."); }
+        RefreshScanControls();
+    }
+
+    HRESULT MainWindow::SaveTreemapPng(std::wstring const& path, int width, int height, bool grayscale)
+    {
+        if (!TreeArenaActive()) { return E_FAIL; }
+        if (width < 1 || height < 1 || width > 8192 || height > 8192) { return E_INVALIDARG; }
+        const int oldWidth = m_treemap_render_width, oldHeight = m_treemap_render_height;
+        m_png_export_grayscale = grayscale;
+        m_png_export_path = path;
+        m_png_export_result = E_FAIL;
+        m_treemap_render_dirty = true;
+        RenderTreemapProbeFrame(width, height);
+        m_png_export_path.clear();
+        const HRESULT result = m_png_export_result;
+        m_treemap_render_dirty = true;
+        RenderTreemapProbeFrame((std::max)(1,oldWidth),(std::max)(1,oldHeight));
+        return result;
+    }
+
+    winrt::fire_and_forget MainWindow::ExportTreemapPng()
+    {
+        auto lifetime = get_strong();
+        if (m_session_active || m_export_active) { UpdateStatus(L"Finish the current operation first."); co_return; }
+        if (!TreeArenaActive()) { UpdateStatus(L"Scan a folder or open a CSV snapshot first."); co_return; }
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto panel = StackPanel{};
+        panel.Spacing(12);
+        auto width_input = TextBox{};
+        width_input.Text(L"1920");
+        width_input.Header(box_value(L"Width in pixels (1-8192)"));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(width_input, L"PNG width");
+        auto height_input = TextBox{};
+        height_input.Text(L"1080");
+        height_input.Header(box_value(L"Height in pixels (1-8192)"));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(height_input, L"PNG height");
+        panel.Children().Append(width_input);
+        panel.Children().Append(height_input);
+        ComboBox basis;
+        basis.Items().Append(box_value(L"Allocated size"));
+        basis.Items().Append(box_value(L"Logical size"));
+        basis.SelectedIndex(m_treemap_logical_size ? 1 : 0);
+        basis.Header(box_value(L"Size basis:"));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(basis, L"PNG size basis");
+        CheckBox free_space, grayscale;
+        free_space.Content(box_value(L"Include free / unaccounted space (live allocated-size volume root only)"));
+        free_space.IsChecked(m_treemap_volume_space);
+        grayscale.Content(box_value(L"Grayscale"));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(free_space, L"PNG free and unaccounted space");
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(grayscale, L"PNG grayscale");
+        panel.Children().Append(basis);
+        panel.Children().Append(free_space);
+        panel.Children().Append(grayscale);
+        ContentDialog options;
+        options.XamlRoot(Content().XamlRoot());
+        options.Title(box_value(L"Treemap PNG dimensions"));
+        options.Content(panel);
+        options.PrimaryButtonText(L"Continue");
+        options.CloseButtonText(L"Cancel");
+        if (co_await options.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+        int width{}, height{};
+        try {
+            auto pixels = [](TextBox const& input) {
+                const auto text = TrimCopy(input.Text().c_str());
+                if (text.empty() || text.find_first_not_of(L"0123456789") != std::wstring::npos) {
+                    throw std::invalid_argument("pixels");
+                }
+                const int value = std::stoi(text);
+                if (value < 1 || value > 8192) { throw std::invalid_argument("pixels"); }
+                return value;
+            };
+            width = pixels(width_input);
+            height = pixels(height_input);
+        } catch (...) { UpdateStatus(L"PNG dimensions must be whole pixels from 1 to 8192."); co_return; }
+        if (m_session_active || m_export_active) { co_return; }
+        std::wstring path;
+        try {
+            auto dialog = winrt::create_instance<IFileSaveDialog>(CLSID_FileSaveDialog);
+            const COMDLG_FILTERSPEC filters[] = {{L"PNG treemap image",L"*.png"}};
+            winrt::check_hresult(dialog->SetFileTypes(1,filters));
+            winrt::check_hresult(dialog->SetDefaultExtension(L"png"));
+            winrt::check_hresult(dialog->SetFileName(L"WinBlaze-treemap.png"));
+            HWND owner{}; winrt::check_hresult(lifetime.as<::IWindowNative>()->get_WindowHandle(&owner));
+            const auto shown = dialog->Show(owner);
+            if (shown == HRESULT_FROM_WIN32(ERROR_CANCELLED)) { co_return; }
+            winrt::check_hresult(shown);
+            winrt::com_ptr<IShellItem> item; winrt::check_hresult(dialog->GetResult(item.put()));
+            PWSTR chosen{}; winrt::check_hresult(item->GetDisplayName(SIGDN_FILESYSPATH,&chosen));
+            path = chosen; CoTaskMemFree(chosen);
+        } catch (...) { UpdateStatus(L"Could not select a PNG destination."); co_return; }
+        if (m_session_active || m_export_active) { co_return; }
+        m_export_active = true; RefreshScanControls();
+        const bool old_logical = m_treemap_logical_size, old_space = m_treemap_volume_space;
+        m_treemap_logical_size = basis.SelectedIndex() == 1;
+        m_treemap_volume_space = free_space.IsChecked().Value();
+        const auto result = SaveTreemapPng(path, width, height, grayscale.IsChecked().Value());
+        m_treemap_logical_size = old_logical;
+        m_treemap_volume_space = old_space;
+        m_treemap_render_dirty = true;
+        ScheduleTreemapRender(L"restore view after configured PNG export");
+        m_export_active = false; RefreshScanControls();
+        UpdateStatus(SUCCEEDED(result) ? L"Treemap PNG exported to " + path : L"Treemap PNG export failed: " + HresultText(result));
+    }
+
+    winrt::fire_and_forget MainWindow::ExportCsv()
+    {
+        ExportCatalog(false, false);
+        co_return;
+    }
+
+    winrt::fire_and_forget MainWindow::ExportCatalog(bool json, bool filtered, uint32_t analysis)
+    {
+        namespace Controls = Microsoft::UI::Xaml::Controls;
+        auto lifetime = get_strong();
+        (void)lifetime;
+        if (m_session_active || m_export_active) {
+            UpdateStatus(L"Finish the scan or export before exporting.");
+            co_return;
+        }
+        if (analysis != 3 && !::WinBlaze::UI::NativeBridge::TreeRoot([](auto const&) {})) {
+            UpdateStatus(L"Scan a folder or load a catalog before exporting.");
+            co_return;
+        }
+        std::wstring extension;
+        WbCsvFilter filter{};
+        if (filtered) {
+            auto panel = Controls::StackPanel{};
+            panel.Spacing(10);
+            auto input = Controls::TextBox{};
+            input.Text(L"*.bin");
+            input.Header(box_value(L"Filename patterns (semicolon separated)"));
+            input.PlaceholderText(L"*.bin; report?.txt (blank = all files)");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(input, L"Export filename patterns");
+            panel.Children().Append(input);
+            auto minimum = Controls::TextBox{};
+            auto maximum = Controls::TextBox{};
+            auto after = Controls::TextBox{};
+            auto before = Controls::TextBox{};
+            minimum.Header(box_value(L"Minimum logical bytes (optional)"));
+            maximum.Header(box_value(L"Maximum logical bytes (optional)"));
+            after.Header(box_value(L"Modified on or after (UTC YYYY-MM-DD)"));
+            before.Header(box_value(L"Modified on or before (UTC YYYY-MM-DD)"));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(minimum, L"Export minimum bytes");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(maximum, L"Export maximum bytes");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(after, L"Export modified after UTC");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(before, L"Export modified before UTC");
+            panel.Children().Append(minimum); panel.Children().Append(maximum);
+            panel.Children().Append(after); panel.Children().Append(before);
+            Controls::ContentDialog dialog;
+            dialog.XamlRoot(Content().as<Microsoft::UI::Xaml::FrameworkElement>().XamlRoot());
+            dialog.Title(box_value(L"Export matching files to CSV"));
+            dialog.Content(panel);
+            dialog.PrimaryButtonText(L"Continue");
+            dialog.CloseButtonText(L"Cancel");
+            try {
+                if (co_await dialog.ShowAsync() != Controls::ContentDialogResult::Primary) { co_return; }
+                extension = TrimCopy(input.Text().c_str());
+                auto bytes = [](Controls::TextBox const& box, uint64_t& out) {
+                    const auto text = TrimCopy(box.Text().c_str());
+                    if (text.empty()) { return false; }
+                    if (text.find_first_not_of(L"0123456789") != std::wstring::npos) { throw std::invalid_argument("bytes"); }
+                    out = std::stoull(text); return true;
+                };
+                if (bytes(minimum, filter.min_bytes)) { filter.flags |= 1; }
+                if (bytes(maximum, filter.max_bytes)) { filter.flags |= 2; }
+                auto date = [](Controls::TextBox const& box, int64_t& out, bool endOfDay) {
+                    const auto text = TrimCopy(box.Text().c_str());
+                    if (text.empty()) { return false; }
+                    const auto parsed = ParseUtcDateBoundary(text);
+                    if (text.size() != 10 || !parsed) { throw std::invalid_argument("date"); }
+                    out = *parsed / kFileTimeTicksPerSecond - kUnixToFileTimeSeconds + (endOfDay ? 86399 : 0);
+                    return true;
+                };
+                if (date(after, filter.modified_after_utc, false)) { filter.flags |= 4; }
+                if (date(before, filter.modified_before_utc, true)) { filter.flags |= 8; }
+                if (((filter.flags & 3) == 3 && filter.min_bytes > filter.max_bytes) ||
+                    ((filter.flags & 12) == 12 && filter.modified_after_utc > filter.modified_before_utc) ||
+                    extension.find_first_of(L"\\/:\r\n") != std::wstring::npos) { throw std::invalid_argument("bounds"); }
+            } catch (winrt::hresult_error const&) { co_return; }
+            catch (...) { UpdateStatus(L"Check export filters: filename wildcards, whole byte counts, valid UTC dates, and ordered bounds."); co_return; }
+        }
+        const std::wstring analysisRoot=RootPathBox()?std::wstring(RootPathBox().Text()):m_current_root_path;
+        // Dialogs yield to the UI: recheck scan state before choosing a destination.
+        if (m_session_active || m_export_active) { UpdateStatus(L"Finish the scan or export first."); co_return; }
+        std::wstring path;
+        try {
+            auto dialog = winrt::create_instance<IFileSaveDialog>(CLSID_FileSaveDialog);
+            const COMDLG_FILTERSPEC filters[] = {{analysis == 3 ? L"Raw MFT" : analysis == 4 ? L"TSV files" : json ? L"JSON files" : L"CSV files", analysis == 3 ? L"*.mft" : analysis == 4 ? L"*.tsv" : json ? L"*.json" : L"*.csv"}};
+            winrt::check_hresult(dialog->SetFileTypes(1, filters));
+            winrt::check_hresult(dialog->SetDefaultExtension(analysis == 3 ? L"mft" : analysis == 4 ? L"tsv" : json ? L"json" : L"csv"));
+            winrt::check_hresult(dialog->SetFileName(analysis == 3 ? L"WinBlaze-volume.mft" : analysis == 4 ? L"WinBlaze-scan.tsv" : analysis == 1 ? L"WinBlaze-duplicates.csv" : analysis == 2 ? L"WinBlaze-permissions.csv" : json ? L"WinBlaze-scan.json" : (filtered ? L"WinBlaze-filtered.csv" : L"WinBlaze-scan.csv")));
+            HWND owner{};
+            winrt::check_hresult(lifetime.as<::IWindowNative>()->get_WindowHandle(&owner));
+            const auto shown = dialog->Show(owner);
+            if (shown == HRESULT_FROM_WIN32(ERROR_CANCELLED)) { co_return; }
+            winrt::check_hresult(shown);
+            winrt::com_ptr<IShellItem> file;
+            winrt::check_hresult(dialog->GetResult(file.put()));
+            PWSTR chosen{};
+            winrt::check_hresult(file->GetDisplayName(SIGDN_FILESYSPATH, &chosen));
+            path = chosen;
+            CoTaskMemFree(chosen);
+        } catch (winrt::hresult_error const& error) {
+            UpdateStatus(L"Export could not select a destination: " + std::wstring(error.message()));
+            co_return;
+        }
+        if (m_session_active || m_export_active) { UpdateStatus(L"Finish the scan or export first."); co_return; }
+        m_export_active = true;
+        RefreshScanControls();
+        UpdateStatus(analysis == 5 ? L"Exporting detailed JSON; reading current owner and physical identity where accessible..." : analysis == 3 ? L"Exporting raw MFT (administrator access required)..." : analysis == 4 ? L"Exporting complete catalog to TSV..." : analysis == 1 ? L"Comparing file contents for duplicate report..." : analysis == 2 ? L"Reading owner, group and discretionary ACLs..." : json ? L"Exporting complete catalog to JSON..." : (filtered ? L"Exporting matching files to CSV..." : L"Exporting complete catalog to CSV..."));
+        winrt::apartment_context ui_thread;
+        co_await winrt::resume_background();
+        uint32_t result = 4;
+        try {
+            result = analysis == 6 ? ::WinBlaze::UI::NativeBridge::ExportCsvDetailed(path.c_str()) : analysis == 5 ? ::WinBlaze::UI::NativeBridge::ExportJsonDetailed(path.c_str()) : analysis == 4 ? ::WinBlaze::UI::NativeBridge::ExportTsv(path.c_str()) : analysis == 3 ? ::WinBlaze::UI::NativeBridge::DumpMft(analysisRoot.c_str(),path.c_str()) : analysis ? ::WinBlaze::UI::NativeBridge::ExportAnalysis(path.c_str(),analysis) : json ? ::WinBlaze::UI::NativeBridge::ExportJson(path.c_str()) :
+                (filtered ? ::WinBlaze::UI::NativeBridge::ExportCsvFiltered(path.c_str(), extension.c_str(), filter) :
+                    ::WinBlaze::UI::NativeBridge::ExportCsv(path.c_str()));
+        }
+        catch (...) { result = 4; }
+        co_await ui_thread;
+        m_export_active = false;
+        RefreshScanControls();
+        if (result == 0) { UpdateStatus((analysis == 4 ? L"TSV exported to " : json ? L"JSON exported to " : L"CSV exported to ") + path); }
+        else if (result == 5) { UpdateStatus(L"Raw MFT export requires running WinBlaze as administrator."); }
+        else if (result == 3) { UpdateStatus(L"Export failed: check destination permissions and free disk space."); }
+        else { UpdateStatus(L"Export failed: no valid catalog or native export is unavailable."); }
+    }
+
+    winrt::fire_and_forget MainWindow::ScanPortableDevice()
+    {
+        auto lifetime = get_strong();
+        using namespace Microsoft::UI::Xaml::Controls;
+        if (m_session_active || m_export_active) { co_return; }
+        winrt::apartment_context ui;
+        m_export_active = true;
+        RefreshScanControls();
+        co_await winrt::resume_background();
+        std::vector<::WinBlaze::Portable::Device> devices;
+        std::wstring error;
+        try { devices = ::WinBlaze::Portable::Devices(); }
+        catch (std::exception const& failure) { error = std::wstring(winrt::to_hstring(failure.what())); }
+        co_await ui;
+        m_export_active = false;
+        RefreshScanControls();
+        if (!error.empty() || devices.empty()) {
+            UpdateStatus(error.empty() ? L"No portable device found. Connect and unlock a phone in USB file-transfer mode."
+                : L"Portable-device discovery failed: " + error);
+            co_return;
+        }
+        ComboBox choice;
+        for (auto const& device : devices) { choice.Items().Append(box_value(winrt::hstring(device.name))); }
+        choice.SelectedIndex(0);
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(choice, L"Portable device selection");
+        TextBlock note;
+        note.Text(L"Reads names, folders and reported logical sizes through Windows Portable Devices. "
+            L"No file contents are downloaded or changed. Physical allocation and timestamps are unavailable. "
+            L"Unlock the device and allow USB file transfer.");
+        note.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+        StackPanel panel;
+        panel.Spacing(10);
+        panel.Children().Append(note);
+        panel.Children().Append(choice);
+        ContentDialog select;
+        select.XamlRoot(Content().XamlRoot());
+        select.Title(box_value(L"Scan portable device metadata"));
+        select.Content(panel);
+        select.PrimaryButtonText(L"Read device metadata");
+        select.CloseButtonText(L"Cancel");
+        select.DefaultButton(ContentDialogButton::Close);
+        if (co_await select.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+        if (m_session_active || m_export_active || choice.SelectedIndex() < 0) { co_return; }
+        const auto selected = devices.at(static_cast<size_t>(choice.SelectedIndex()));
+        auto canceled = std::make_shared<std::atomic_bool>(false);
+        auto publishing=std::make_shared<std::atomic_bool>(false);
+        auto finished=std::make_shared<std::atomic_bool>(false);
+        ContentDialog progress;
+        progress.XamlRoot(Content().XamlRoot());
+        progress.Title(box_value(L"Reading portable-device metadata"));
+        progress.Content(box_value(L"Reading the device catalog without downloading file contents. Cancel keeps the previous catalog."));
+        progress.CloseButtonText(L"Cancel scan");
+        progress.CloseButtonClick([canceled](auto const&, auto const&) { canceled->store(true); });
+        progress.Closing([canceled,publishing,finished](auto const&,ContentDialogClosingEventArgs const& args){
+            if(publishing->load()&&!finished->load())args.Cancel(true);
+            else if(!finished->load())canceled->store(true);
+        });
+        auto closing = progress.ShowAsync();
+        m_export_active = true;
+        ++m_snapshot_load_generation;
+        RefreshScanControls();
+        co_await winrt::resume_background();
+        ::WinBlaze::Portable::Scan scan;
+        uint32_t result = 4;
+        error.clear();
+        std::filesystem::path snapshot;
+        try {
+            scan = ::WinBlaze::Portable::ScanDevice(selected, canceled.get());
+            if (canceled->load()) { throw std::runtime_error("Portable-device scan canceled"); }
+            snapshot = std::filesystem::temp_directory_path() /
+                (L"winblaze-portable-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
+                    std::to_wstring(GetTickCount64()) + L".csv");
+            auto reserved = CreateFileW(snapshot.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                FILE_ATTRIBUTE_TEMPORARY, nullptr);
+            if (reserved == INVALID_HANDLE_VALUE) { throw std::runtime_error("Cannot reserve portable snapshot"); }
+            CloseHandle(reserved);
+            ::WinBlaze::Portable::WriteCsv(scan, snapshot);
+            co_await ui;
+            if(canceled->load())throw std::runtime_error("Portable-device scan canceled");
+            publishing->store(true);
+            progress.CloseButtonText(L"");
+            progress.Content(box_value(L"Publishing the completed device catalog..."));
+            co_await winrt::resume_background();
+            result = ::WinBlaze::UI::NativeBridge::ImportCsv(snapshot.c_str());
+        } catch (std::exception const& failure) { error = std::wstring(winrt::to_hstring(failure.what())); }
+        catch (...) { error = L"Portable scan failed"; }
+        if (!snapshot.empty()) { std::error_code ignored; std::filesystem::remove(snapshot, ignored); }
+        co_await ui;
+        finished->store(true);
+        progress.Hide();
+        co_await closing;
+        m_export_active = false;
+        RefreshScanControls();
+        if (!result) {
+            m_imported_snapshot = true;
+            m_multiple_root_paths.clear();
+            if (m_watch_timer) { m_watch_timer.Stop(); }
+            m_watcher.reset();
+            m_current_root_path = scan.nodes[0].path;
+            RootPathBox().Text(m_current_root_path);
+            m_treemap_logical_size = true;
+            if (m_treemap_size_basis) { m_treemap_size_basis.SelectedIndex(1); }
+            m_last_scan_duration_text = L"Portable device: " + selected.name + L" | skipped/errors: " +
+                std::to_wstring(scan.errors) + L" | unknown sizes: " + std::to_wstring(scan.unknown_sizes);
+            LoadPersistedCatalogSnapshot();
+        } else {
+            UpdateStatus(L"Portable scan did not publish a catalog. Previous catalog kept. " + error);
+        }
+    }
+
+    winrt::fire_and_forget MainWindow::ConsolidateDuplicates()
+    {
+        auto lifetime = get_strong();
+        using namespace Microsoft::UI::Xaml::Controls;
+        if (m_session_active || m_export_active) { co_return; }
+        TextBox master, duplicate;
+        master.Header(box_value(L"Master file (keeps its metadata):"));
+        duplicate.Header(box_value(L"Duplicate file (becomes an alias):"));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(master, L"Hard-link master path");
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(duplicate, L"Hard-link duplicate path");
+        StackPanel panel;
+        panel.Spacing(10);
+        TextBlock note;
+        note.Text(L"Both paths will share one file: future edits through either path affect both. "
+            L"The master's timestamps and attributes become shared. Different contents, permissions, "
+            L"named streams, offline files and reparse points are refused.");
+        note.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+        panel.Children().Append(note);
+        panel.Children().Append(master);
+        panel.Children().Append(duplicate);
+        ContentDialog options;
+        options.XamlRoot(Content().XamlRoot());
+        options.Title(box_value(L"Verified duplicate consolidation"));
+        options.Content(panel);
+        options.PrimaryButtonText(L"Review consolidation");
+        options.CloseButtonText(L"Cancel");
+        options.DefaultButton(ContentDialogButton::Close);
+        if (co_await options.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+        const std::wstring first(master.Text()), second(duplicate.Text());
+        if (first.empty() || second.empty() || m_session_active || m_export_active) { co_return; }
+        ContentDialog confirm;
+        confirm.XamlRoot(Content().XamlRoot());
+        confirm.Title(box_value(L"Confirm shared file contents"));
+        confirm.Content(box_value(winrt::hstring(L"Master: " + first + L"\nDuplicate: " + second +
+            L"\n\nThe original duplicate allocation is removed after byte verification. "
+            L"Both paths then share the master's contents and metadata.")));
+        confirm.PrimaryButtonText(L"Create shared hard link");
+        confirm.CloseButtonText(L"Cancel");
+        confirm.DefaultButton(ContentDialogButton::Close);
+        if (co_await confirm.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+        if (m_session_active || m_export_active) { co_return; }
+        m_export_active = true;
+        RefreshScanControls();
+        UpdateStatus(L"Locking and verifying both files before hard-link consolidation...");
+        winrt::apartment_context ui;
+        co_await winrt::resume_background();
+        uint32_t status = 4;
+        try { status = ::WinBlaze::UI::NativeBridge::ConsolidateDuplicates(first.c_str(), second.c_str()); }
+        catch (...) {}
+        co_await ui;
+        m_export_active = false;
+        RefreshScanControls();
+        if (!status) {
+            if (!m_imported_snapshot && m_has_results) { BeginScanFromCurrentRoot(); }
+            UpdateStatus(L"Consolidated: both paths now share the master's contents and metadata.");
+        } else {
+            UpdateStatus(L"Consolidation did not fully complete. Verify access, equal contents and permissions. "
+                L"Any recovery original is retained as .winblaze-link-backup-* in the duplicate folder; inspect it before removing.");
+        }
+    }
+
+    winrt::fire_and_forget MainWindow::InvestigateDuplicates()
+    {
+        auto lifetime = get_strong();
+        using namespace Microsoft::UI::Xaml::Controls;
+        if (m_session_active || m_export_active || !m_has_results) {
+            UpdateStatus(L"Load a scan and finish current operations before investigating duplicates.");
+            co_return;
+        }
+        ComboBox algorithm;
+        for (auto text : { L"Byte verification only", L"SHA-256", L"MD5", L"SHA-1", L"SHA-512" }) {
+            algorithm.Items().Append(box_value(text));
+        }
+        algorithm.SelectedIndex(1);
+        algorithm.Header(box_value(L"Hashes identify candidates; results are also byte-verified."));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(algorithm, L"Duplicate hash algorithm");
+        ContentDialog options;
+        options.XamlRoot(Content().XamlRoot());
+        options.Title(box_value(L"Investigate content duplicates"));
+        options.Content(algorithm);
+        options.PrimaryButtonText(L"Find duplicates");
+        options.CloseButtonText(L"Cancel");
+        if (co_await options.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+        if (m_session_active || m_export_active) { co_return; }
+        const auto selected_algorithm = static_cast<uint32_t>(algorithm.SelectedIndex());
+        struct Row { uint64_t group, bytes; std::wstring path, digest, status; bool error; };
+        auto rows = std::make_shared<std::vector<Row>>();
+        m_export_active = true;
+        RefreshScanControls();
+        UpdateStatus(L"Comparing contents; offline/cloud placeholders are skipped...");
+        winrt::apartment_context ui;
+        co_await winrt::resume_background();
+        WbDuplicateResult result{};
+        try {
+            result = ::WinBlaze::UI::NativeBridge::DuplicateResults(selected_algorithm,
+                [rows](WbDuplicateRow const& row) {
+                    auto text = [](WbCStringView value) -> std::wstring {
+                        if (!value.ptr || !value.len) { return std::wstring{}; }
+                        return std::wstring(winrt::to_hstring(std::string_view{value.ptr, value.len}));
+                    };
+                    rows->push_back(Row{row.group, row.logical_bytes, std::wstring(text(row.path)),
+                        std::wstring(text(row.digest)), std::wstring(text(row.status)), row.is_error != 0});
+                });
+        } catch (...) { result.status = 4; }
+        co_await ui;
+        m_export_active = false;
+        RefreshScanControls();
+        if (result.status) { UpdateStatus(L"Duplicate investigation failed; no files were changed."); co_return; }
+        auto panel = StackPanel{};
+        panel.Spacing(10);
+        auto summary = TextBlock{};
+        summary.Text(winrt::hstring(L"Verified groups: " + std::to_wstring(result.groups) +
+            L" | Duplicate logical bytes: " + FormatBytes(result.reclaimable_bytes) +
+            L" | Skipped/errors: " + std::to_wstring(result.errors)));
+        summary.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+        panel.Children().Append(summary);
+        auto filter = TextBox{};
+        filter.PlaceholderText(L"Filter groups by path, hash or status");
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(filter, L"Duplicate results filter");
+        panel.Children().Append(filter);
+        auto list = ListView{};
+        list.MaxHeight(420);
+        list.SelectionMode(ListViewSelectionMode::Single);
+        auto populate = [rows, list](std::wstring const& pattern) {
+            list.Items().Clear();
+            const auto lowered = LowercaseCopy(pattern);
+            for (auto const& row : *rows) {
+                const auto caption = (row.error ? std::wstring(L"Skipped") : L"Group " + std::to_wstring(row.group)) +
+                    L" | " + row.path + L" | " + FormatBytes(row.bytes) + L" | " + row.digest + L" | " + row.status;
+                if (!lowered.empty() && LowercaseCopy(caption).find(lowered) == std::wstring::npos) { continue; }
+                auto item = ListViewItem{};
+                item.Content(box_value(winrt::hstring(caption)));
+                if (!row.error) { item.Tag(box_value(winrt::hstring(row.path))); }
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item,
+                    winrt::hstring(L"Duplicate file: " + row.path));
+                list.Items().Append(item);
+            }
+        };
+        filter.TextChanged([filter, populate](auto const&, auto const&) { populate(std::wstring(filter.Text())); });
+        populate(L"");
+        panel.Children().Append(list);
+        ContentDialog results;
+        results.XamlRoot(Content().XamlRoot());
+        results.Title(box_value(L"Duplicate groups"));
+        results.Content(panel);
+        results.PrimaryButtonText(L"Recycle selected");
+        results.SecondaryButtonText(L"Reveal selected");
+        results.CloseButtonText(L"Close");
+        results.DefaultButton(ContentDialogButton::Close);
+        results.IsPrimaryButtonEnabled(false);
+        results.IsSecondaryButtonEnabled(false);
+        list.SelectionChanged([list, results](auto const&, auto const&) {
+            const auto item = list.SelectedItem().try_as<ListViewItem>();
+            const bool selected = item && item.Tag();
+            results.IsPrimaryButtonEnabled(selected);
+            results.IsSecondaryButtonEnabled(selected);
+        });
+        const auto action = co_await results.ShowAsync();
+        const auto selected = list.SelectedItem().try_as<ListViewItem>();
+        if (!selected || !selected.Tag()) { co_return; }
+        const std::wstring path = unbox_value<winrt::hstring>(selected.Tag()).c_str();
+        if (action == ContentDialogResult::Primary) { RunFileAction(path, false); }
+        else if (action == ContentDialogResult::Secondary) {
+            ShellExecuteW(nullptr, L"open", L"explorer.exe", (L"/select,\"" + path + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
+        }
+    }
+
+    void MainWindow::ShowWindowsMenu(std::wstring const& path)
+    {
+        if (m_session_active || m_export_active) { UpdateStatus(L"Finish the current operation before opening Windows actions."); return; }
+        try {
+            HWND owner{};
+            winrt::check_hresult(get_strong().as<::IWindowNative>()->get_WindowHandle(&owner));
+            ::WinBlaze::Shell::Context menu;
+            winrt::check_hresult(menu.Build(path, owner));
+            POINT cursor{};
+            GetCursorPos(&cursor);
+            const auto result = menu.Show(cursor);
+            if (FAILED(result)) { UpdateStatus(L"Windows context menu failed: " + HresultText(result)); }
+            else if (result == S_OK) { UpdateStatus(L"Windows action invoked. Rescan after it finishes, or enable change monitoring."); }
+        } catch (winrt::hresult_error const& error) {
+            UpdateStatus(L"Could not open Windows actions: " + std::wstring(error.message()));
+        }
+    }
+
+    winrt::fire_and_forget MainWindow::ScanMultipleRoots(std::wstring paths)
+    {
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto lifetime = get_strong();
+        if (m_session_active || m_export_active) { UpdateStatus(L"Finish the current operation before scanning multiple roots."); co_return; }
+        try {
+            if (paths.empty()) {
+                StackPanel panel{}; panel.Spacing(10);
+                TextBlock explanation{};
+                explanation.Text(L"Enter 1-16 disjoint drives or folders, one per line. Overlapping roots are rejected. "
+                    L"The complete combined catalog is published after all roots finish.");
+                explanation.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+                panel.Children().Append(explanation);
+                TextBox input{};
+                input.AcceptsReturn(true); input.MinHeight(120); input.MaxHeight(260);
+                input.Text(winrt::hstring(m_multiple_root_paths.empty() ? m_current_root_path : m_multiple_root_paths));
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(input, L"Multiple scan roots");
+                panel.Children().Append(input);
+                ContentDialog dialog{};
+                dialog.XamlRoot(Content().XamlRoot()); dialog.Title(box_value(L"Choose multiple scan roots"));
+                dialog.Content(panel); dialog.PrimaryButtonText(L"Scan selected roots"); dialog.CloseButtonText(L"Cancel");
+                if (co_await dialog.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+                paths = std::wstring(input.Text());
+            }
+            if (m_session_active || m_export_active) { co_return; }
+            m_export_active = true; ++m_snapshot_load_generation; RefreshScanControls();
+            UpdateStatus(L"Scanning selected roots; the previous catalog remains available until completion...");
+            winrt::apartment_context ui; co_await winrt::resume_background();
+            WbMultiScanResult result{};
+            result.status = 4;
+            try { result = ::WinBlaze::UI::NativeBridge::ScanRoots(paths.c_str()); } catch (...) {}
+            co_await ui;
+            m_export_active = false; RefreshScanControls();
+            if (result.status != 0) {
+                UpdateStatus(L"Multiple-root scan failed. Use 1-16 existing, disjoint folders or drives. Previous catalog kept.");
+                co_return;
+            }
+            m_multiple_root_paths = paths;
+            m_multiple_root_warnings = result.warnings;
+            m_imported_snapshot = false;
+            m_monitor_enabled = false;
+            if (m_monitor_item) { m_monitor_item.IsChecked(false); }
+            RestartMonitoring();
+            m_current_root_path = L"WinBlaze:\\Multiple roots";
+            RootPathBox().Text(winrt::hstring(m_current_root_path));
+            m_last_scan_duration_text = L"Combined live scan: " + std::to_wstring(result.roots) + L" roots";
+            LoadPersistedCatalogSnapshot();
+            RefreshScanControls();
+        } catch (winrt::hresult_error const& error) {
+            m_export_active = false; RefreshScanControls();
+            UpdateStatus(L"Multiple-root scan failed: " + std::wstring(error.message()));
+        }
+    }
+
+    winrt::fire_and_forget MainWindow::RunMaintenance()
+    {
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto lifetime = get_strong();
+        if (m_session_active || m_export_active) { UpdateStatus(L"Finish the scan or export before maintenance."); co_return; }
+        try {
+            StackPanel panel{};
+            panel.Spacing(10);
+            TextBox path_box{};
+            path_box.Text(winrt::hstring(m_current_selection_path));
+            path_box.PlaceholderText(L"Full path to an ordinary local file");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(path_box, L"Maintenance file path");
+            panel.Children().Append(path_box);
+            ComboBox action{};
+            action.Items().Append(box_value(L"Enable NTFS compression"));
+            action.Items().Append(box_value(L"Disable NTFS compression"));
+            action.Items().Append(box_value(L"Reclaim verified zero ranges (sparse)"));
+            action.Items().Append(box_value(L"Compact detached VHD / VHDX zero blocks"));
+            action.SelectedIndex(0);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(action, L"Maintenance operation");
+            panel.Children().Append(action);
+            TextBlock explanation{};
+            explanation.Text(L"File content is preserved. Sparse conversion reclaims only verified zero-filled ranges. "
+                L"Cloud placeholders and reparse points are refused; close other apps using the file. "
+                L"Hard links share storage, so all aliases inherit this storage change. "
+                L"VHD compaction requires a detached dynamic disk, preserves virtual size and never mounts it.");
+            explanation.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+            panel.Children().Append(explanation);
+            ContentDialog options{};
+            options.XamlRoot(Content().XamlRoot()); options.Title(box_value(L"Choose NTFS storage maintenance"));
+            options.Content(panel); options.PrimaryButtonText(L"Review maintenance"); options.CloseButtonText(L"Cancel");
+            if (co_await options.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+            const auto path = std::wstring(path_box.Text());
+            const auto operation = static_cast<uint32_t>(action.SelectedIndex());
+            ContentDialog confirm{};
+            confirm.XamlRoot(Content().XamlRoot()); confirm.Title(box_value(L"Confirm storage change"));
+            TextBlock summary{};
+            summary.Text(winrt::hstring(path + L"\n" + std::wstring(unbox_value<winrt::hstring>(action.SelectedItem())) +
+                L"\nThis changes physical storage attributes for this file and any hard-link aliases."));
+            summary.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+            confirm.Content(summary); confirm.PrimaryButtonText(L"Apply maintenance"); confirm.CloseButtonText(L"Cancel");
+            confirm.DefaultButton(ContentDialogButton::Close);
+            if (co_await confirm.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+            if (m_session_active || m_export_active) { co_return; }
+            m_export_active = true; RefreshScanControls();
+            winrt::apartment_context ui; co_await winrt::resume_background();
+            uint32_t result = 4;
+            try {
+                result = operation == 3 ? ::WinBlaze::VirtualDisks::Compact(path)
+                    : ::WinBlaze::UI::NativeBridge::StorageMaintenance(path.c_str(), operation);
+            } catch (...) {}
+
+            co_await ui;
+            m_export_active = false; RefreshScanControls();
+            if (result == 0) {
+                UpdateStatus(operation == 3 ? L"VHD zero-block compaction completed; disk contents and virtual size preserved."
+                    : L"Storage maintenance completed; file content is preserved.");
+                if (m_has_results && !m_imported_snapshot) { BeginScanFromCurrentRoot(true); }
+            } else {
+                UpdateStatus(L"Maintenance could not complete. Check NTFS support, local availability and exclusive access. Status " + std::to_wstring(result));
+            }
+        } catch (winrt::hresult_error const& error) {
+            m_export_active = false; RefreshScanControls();
+            UpdateStatus(L"Maintenance failed: " + std::wstring(error.message()));
+        }
+    }
+
+    winrt::fire_and_forget MainWindow::ShowStorageCosts()
+    {
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto lifetime = get_strong();
+        if (!m_has_results || m_session_active || m_export_active) { UpdateStatus(L"Finish a scan before estimating tier costs."); co_return; }
+        try {
+            StackPanel panel{};
+            panel.Spacing(8);
+            TextBlock note{};
+            note.Text(L"Enter your currency per GiB per month. Tiers use UTC modification age. "
+                L"Unknown dates stay hot. This is a hypothetical estimate; files are not moved.");
+            note.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+            panel.Children().Append(note);
+            std::array<TextBox, 5> fields{};
+            const std::array<std::wstring, 5> names{L"Hot monthly price", L"Warm monthly price",
+                L"Cold monthly price", L"Warm tier age days", L"Cold tier age days"};
+            const std::array<std::wstring, 5> defaults{L"0.10", L"0.03", L"0.01", L"30", L"180"};
+            for (size_t i = 0; i < fields.size(); ++i) {
+                TextBlock label{}; label.Text(winrt::hstring(names[i] + L":")); panel.Children().Append(label);
+                fields[i] = TextBox{}; fields[i].Text(winrt::hstring(defaults[i]));
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(fields[i], winrt::hstring(names[i]));
+                panel.Children().Append(fields[i]);
+            }
+            ContentDialog dialog{};
+            dialog.XamlRoot(Content().XamlRoot());
+            dialog.Title(box_value(L"Configure storage cost model"));
+            dialog.Content(panel); dialog.PrimaryButtonText(L"Estimate costs"); dialog.CloseButtonText(L"Cancel");
+            if (co_await dialog.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+            WbStoragePolicy policy{};
+            policy.now_utc = static_cast<int64_t>(WinBlazeUnixTimeMs() / 1000);
+            auto parse = [](std::wstring const& value) {
+                std::wistringstream input(value); input.imbue(std::locale::classic());
+                double number{};
+                if (!(input >> number) || !std::isfinite(number) || number < 0) {
+                    throw std::invalid_argument("Invalid price or age");
+                }
+                input >> std::ws;
+                if (!input.eof()) { throw std::invalid_argument("Unexpected characters in price or age"); }
+                return number;
+            };
+            for (size_t i = 0; i < 3; ++i) { policy.monthly_prices[i] = parse(std::wstring(fields[i].Text())); }
+            const auto warm = parse(std::wstring(fields[3].Text())), cold = parse(std::wstring(fields[4].Text()));
+            if (warm != std::floor(warm) || cold != std::floor(cold) || cold > 3650000 || warm > cold) {
+                UpdateStatus(L"Use whole age days, with warm age no greater than cold age (maximum 3,650,000)."); co_return;
+            }
+            policy.warm_after_days = static_cast<uint64_t>(warm);
+            policy.cold_after_days = static_cast<uint64_t>(cold);
+            m_export_active = true; RefreshScanControls();
+            winrt::apartment_context ui; co_await winrt::resume_background();
+            WbStorageEstimate result{};
+            result.status = 4;
+            try { result = ::WinBlaze::UI::NativeBridge::StorageCost(policy); }
+            catch (...) {}
+            co_await ui;
+            m_export_active = false; RefreshScanControls();
+            if (result.status) { UpdateStatus(L"Tier estimate failed: check the prices and age thresholds."); co_return; }
+            StackPanel output{}; output.Spacing(12);
+            const std::array<std::wstring, 3> tiers{L"Hot", L"Warm", L"Cold"};
+            for (size_t i = 0; i < 3; ++i) {
+                TextBlock row{};
+                const auto title = tiers[i] + L" tier: " + std::to_wstring(result.files[i]) + L" files";
+                row.Text(winrt::hstring(title + L" | " + FormatBytes(result.allocated_bytes[i])));
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(row, winrt::hstring(title));
+                output.Children().Append(row);
+            }
+            std::wostringstream amount; amount.imbue(std::locale::classic());
+            amount << std::fixed << std::setprecision(8) << L"Monthly tier cost: " << result.monthly_cost
+                << L"\nAll-hot comparison: " << result.all_hot_cost
+                << L"\nUnknown modification dates: " << result.unknown_dates;
+            TextBlock total{}; total.Text(winrt::hstring(amount.str()));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(total, L"Monthly tier cost");
+            output.Children().Append(total);
+            ContentDialog results{};
+            results.XamlRoot(Content().XamlRoot()); results.Title(box_value(L"Projected monthly storage costs"));
+            results.Content(output); results.CloseButtonText(L"Close");
+            co_await results.ShowAsync();
+        } catch (std::exception const&) {
+            m_export_active = false; RefreshScanControls(); UpdateStatus(L"Enter finite, nonnegative prices and valid age days.");
+        } catch (winrt::hresult_error const& error) {
+            m_export_active = false; RefreshScanControls(); UpdateStatus(L"Cost estimate failed: " + std::wstring(error.message()));
+        }
+    }
+
+    winrt::fire_and_forget MainWindow::ManageItems()
+    {
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto lifetime = get_strong();
+        if (!m_has_results || m_session_active || m_export_active) {
+            UpdateStatus(L"Finish a scan before managing its files and folders."); co_return;
+        }
+        try {
+            StackPanel panel{};
+            panel.Spacing(10);
+            TextBlock note{};
+            note.Text(L"Select files or folders. Do not select a folder together with its children. "
+                L"Showing up to 1,000 matches; filter to find other items.");
+            note.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+            panel.Children().Append(note);
+            TextBox filter{};
+            filter.PlaceholderText(L"Filter paths");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(filter, L"Batch item filter");
+            panel.Children().Append(filter);
+            ListView list{};
+            list.SelectionMode(ListViewSelectionMode::Multiple);
+            list.MaxHeight(420);
+            auto populate = [this, list](std::wstring const& pattern) {
+                list.Items().Clear();
+                WbSearchFilter options{};
+                options.flags = 64 | 128;
+                options.limit = 1000;
+                ::WinBlaze::UI::NativeBridge::Search(pattern.c_str(), L"", options,
+                    [this, list](WbTreeNode const& node) {
+                        const auto path = Utf8ToWide(std::string_view{node.name.ptr, node.name.len});
+                        if (path == m_current_root_path) { return; }
+                        ListViewItem item{};
+                        item.Content(box_value(winrt::hstring(path)));
+                        item.Tag(box_value(winrt::hstring(path)));
+                        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                            item, winrt::hstring(L"Batch item: " + path));
+                        list.Items().Append(item);
+                    });
+            };
+            populate(L"");
+            filter.TextChanged([filter, populate](auto const&, auto const&) { populate(std::wstring(filter.Text())); });
+            panel.Children().Append(list);
+            ContentDialog dialog{};
+            dialog.XamlRoot(Content().XamlRoot());
+            dialog.Title(box_value(L"Manage scan items"));
+            dialog.Content(panel);
+            dialog.PrimaryButtonText(L"Move selected");
+            dialog.SecondaryButtonText(L"Recycle selected");
+            dialog.CloseButtonText(L"Close");
+            dialog.IsPrimaryButtonEnabled(false);
+            dialog.IsSecondaryButtonEnabled(false);
+            list.SelectionChanged([list, dialog](auto const&, auto const&) {
+                dialog.IsPrimaryButtonEnabled(list.SelectedItems().Size() != 0);
+                dialog.IsSecondaryButtonEnabled(list.SelectedItems().Size() != 0);
+            });
+            const auto choice = co_await dialog.ShowAsync();
+            if (choice == ContentDialogResult::None) { co_return; }
+            std::vector<std::wstring> paths;
+            for (auto const& selected : list.SelectedItems()) {
+                paths.emplace_back(unbox_value<winrt::hstring>(selected.as<ListViewItem>().Tag()));
+            }
+            if (paths.empty()) { co_return; }
+            const bool move = choice == ContentDialogResult::Primary;
+            std::wstring destination;
+            if (move) {
+                auto picker = winrt::create_instance<IFileOpenDialog>(CLSID_FileOpenDialog);
+                FILEOPENDIALOGOPTIONS flags{};
+                winrt::check_hresult(picker->GetOptions(&flags));
+                winrt::check_hresult(picker->SetOptions(flags | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST));
+                picker->SetTitle(L"Move selected items to this folder");
+                HWND owner{};
+                winrt::check_hresult(lifetime.as<::IWindowNative>()->get_WindowHandle(&owner));
+                const auto shown = picker->Show(owner);
+                if (shown == HRESULT_FROM_WIN32(ERROR_CANCELLED)) { co_return; }
+                winrt::check_hresult(shown);
+                winrt::com_ptr<IShellItem> item;
+                winrt::check_hresult(picker->GetResult(item.put()));
+                PWSTR text{};
+                winrt::check_hresult(item->GetDisplayName(SIGDN_FILESYSPATH, &text));
+                destination = text; CoTaskMemFree(text);
+            }
+            ContentDialog confirm{};
+            confirm.XamlRoot(Content().XamlRoot());
+            confirm.Title(box_value(move ? L"Confirm batch move" : L"Confirm batch recycle"));
+            std::wstring caption = std::to_wstring(paths.size()) + L" selected items:\n";
+            for (auto const& path : paths) { caption += path + L"\n"; }
+            caption += move ? L"Destination: " + destination + L"\nExisting items are never overwritten."
+                : L"Folders include their contents. Windows will warn if recycling is unavailable.";
+            TextBlock summary{};
+            summary.Text(winrt::hstring(caption));
+            summary.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+            ScrollViewer scroll{};
+            scroll.MaxHeight(400); scroll.Content(summary);
+            confirm.Content(scroll);
+            confirm.PrimaryButtonText(move ? L"Move items" : L"Recycle items");
+            confirm.CloseButtonText(L"Cancel");
+            confirm.DefaultButton(ContentDialogButton::Close);
+            if (co_await confirm.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+            if (m_session_active || m_export_active) { co_return; }
+            m_export_active = true; RefreshScanControls();
+            winrt::apartment_context ui;
+            co_await winrt::resume_background();
+            auto result = move ? ::WinBlaze::Actions::MoveItems(paths, destination)
+                : ::WinBlaze::Actions::RecycleItems(paths);
+            co_await ui;
+            m_export_active = false; RefreshScanControls();
+            if (result == 0) { UpdateStatus(L"Selected items processed; refreshing the catalog."); }
+            else { UpdateStatus(L"Batch canceled or stopped. Some items may already be processed. Windows error " + std::to_wstring(result)); }
+            BeginScanFromCurrentRoot(true);
+        } catch (winrt::hresult_error const& error) {
+            m_export_active = false; RefreshScanControls();
+            UpdateStatus(L"Item management failed: " + std::wstring(error.message()));
+        }
+    }
+
+    void MainWindow::AddInlineRename(Microsoft::UI::Xaml::Controls::StackPanel const& row,
+        Microsoft::UI::Xaml::Controls::TextBlock const& label, std::wstring const& path, bool folder)
+    {
+        using namespace Microsoft::UI::Xaml;
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto editor=TextBox{};
+        editor.Width(240);
+        editor.Visibility(Visibility::Collapsed);
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(editor,L"Inline item name");
+        auto save=Button{};save.Content(box_value(L"Save"));save.Visibility(Visibility::Collapsed);
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(save,L"Save inline rename");
+        auto cancel=Button{};cancel.Content(box_value(L"Cancel"));cancel.Visibility(Visibility::Collapsed);
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(cancel,L"Cancel inline rename");
+        auto begin=Button{};begin.Content(box_value(L"Edit name"));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(begin,winrt::hstring((folder?L"Inline rename folder: ":L"Inline rename file: ")+path));
+        auto close=[label,editor,save,cancel,begin](){label.Visibility(Visibility::Visible);editor.Visibility(Visibility::Collapsed);save.Visibility(Visibility::Collapsed);cancel.Visibility(Visibility::Collapsed);begin.IsEnabled(true);};
+        begin.Click([this,path,label,editor,save,cancel,begin](auto const&,auto const&){
+            if(m_session_active||m_export_active)return;
+            editor.Text(winrt::hstring(std::filesystem::path(path).filename().wstring()));
+            label.Visibility(Visibility::Collapsed);editor.Visibility(Visibility::Visible);save.Visibility(Visibility::Visible);cancel.Visibility(Visibility::Visible);begin.IsEnabled(false);
+            editor.Focus(FocusState::Programmatic);editor.SelectAll();
+        });
+        cancel.Click([close](auto const&,auto const&){close();});
+        auto commit=[this,path,editor](){CommitInlineRename(path,std::wstring(editor.Text()),editor);};
+        save.Click([commit](auto const&,auto const&){commit();});
+        editor.KeyDown([close,commit](auto const&,Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args){
+            if(args.Key()==winrt::Windows::System::VirtualKey::Escape){args.Handled(true);close();}
+            else if(args.Key()==winrt::Windows::System::VirtualKey::Enter){args.Handled(true);commit();}
+        });
+        row.Children().Append(editor);row.Children().Append(begin);row.Children().Append(save);row.Children().Append(cancel);
+    }
+
+    winrt::fire_and_forget MainWindow::CommitInlineRename(std::wstring path, std::wstring new_name,
+        Microsoft::UI::Xaml::Controls::TextBox editor)
+    {
+        auto lifetime=get_strong();
+        if(m_session_active||m_export_active)co_return;
+        m_export_active=true;editor.IsEnabled(false);RefreshScanControls();
+        winrt::apartment_context ui;
+        uint32_t result=4;
+        co_await winrt::resume_background();
+        try {result=::WinBlaze::Actions::Rename(path,new_name);}catch(...){}
+        co_await ui;
+        m_export_active=false;editor.IsEnabled(true);RefreshScanControls();
+        if(result==0){UpdateStatus(L"Item renamed; refreshing the catalog.");BeginScanFromCurrentRoot(true);}
+        else {UpdateStatus(L"Rename failed. Check the name, access rights and existing destination. The original is preserved.");editor.Focus(Microsoft::UI::Xaml::FocusState::Programmatic);}
+    }
+
+    winrt::fire_and_forget MainWindow::RenameItem(std::wstring path)
+    {
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto lifetime = get_strong();
+        if (m_session_active || m_export_active) { co_return; }
+        try {
+            auto name = TextBox{};
+            name.Text(winrt::hstring(std::filesystem::path(path).filename().wstring()));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(name, L"New item name");
+            ContentDialog dialog{};
+            dialog.XamlRoot(Content().XamlRoot());
+            dialog.Title(box_value(L"Rename selected item"));
+            dialog.Content(name);
+            dialog.PrimaryButtonText(L"Rename item");
+            dialog.CloseButtonText(L"Cancel");
+            dialog.DefaultButton(ContentDialogButton::Close);
+            if (co_await dialog.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+            auto new_name = std::wstring(name.Text());
+            if (m_session_active || m_export_active) { co_return; }
+            m_export_active = true;
+            RefreshScanControls();
+            winrt::apartment_context ui;
+            co_await winrt::resume_background();
+            auto result = ::WinBlaze::Actions::Rename(path, new_name);
+            co_await ui;
+            m_export_active = false;
+            RefreshScanControls();
+            if (result == 0) {
+                UpdateStatus(L"Item renamed; refreshing the catalog.");
+                BeginScanFromCurrentRoot(true);
+            } else {
+                UpdateStatus(L"Rename failed. Windows error " + std::to_wstring(result) +
+                    L"; choose a valid name that does not already exist.");
+            }
+        } catch (winrt::hresult_error const& error) {
+            m_export_active = false;
+            RefreshScanControls();
+            UpdateStatus(L"Rename failed: " + std::wstring(error.message()));
+        }
+    }
+
+    winrt::fire_and_forget MainWindow::RunFileAction(std::wstring path, bool move)
+    {
+        auto lifetime=get_strong();
+        if(m_session_active||m_export_active){UpdateStatus(L"Finish the scan or export before changing files.");co_return;}
+        std::wstring destination;
+        try {
+            if(move){
+                auto picker=winrt::create_instance<IFileSaveDialog>(CLSID_FileSaveDialog);
+                picker->SetTitle(L"Move file to a new path (existing files are never overwritten)");
+                picker->SetFileName(std::filesystem::path(path).filename().c_str());
+                HWND owner{};winrt::check_hresult(lifetime.as<::IWindowNative>()->get_WindowHandle(&owner));
+                auto shown=picker->Show(owner);if(shown==HRESULT_FROM_WIN32(ERROR_CANCELLED))co_return;winrt::check_hresult(shown);
+                winrt::com_ptr<IShellItem> item;winrt::check_hresult(picker->GetResult(item.put()));PWSTR chosen{};
+                winrt::check_hresult(item->GetDisplayName(SIGDN_FILESYSPATH,&chosen));destination=chosen;CoTaskMemFree(chosen);
+            }
+            Microsoft::UI::Xaml::Controls::ContentDialog confirm{};confirm.XamlRoot(Content().XamlRoot());
+            confirm.Title(box_value(move?L"Move this file?":L"Recycle this file?"));
+            confirm.Content(box_value(winrt::hstring(path+(move?L"\nDestination: "+destination:L"\nWindows will warn if this file cannot be recycled."))));
+            confirm.PrimaryButtonText(move?L"Move file":L"Recycle file");confirm.CloseButtonText(L"Cancel");
+            confirm.DefaultButton(Microsoft::UI::Xaml::Controls::ContentDialogButton::Close);
+            if(co_await confirm.ShowAsync()!=Microsoft::UI::Xaml::Controls::ContentDialogResult::Primary)co_return;
+            if(m_session_active||m_export_active)co_return;
+            m_export_active=true;RefreshScanControls();UpdateStatus(move?L"Moving file...":L"Recycling file...");
+            winrt::apartment_context ui;co_await winrt::resume_background();
+            const auto result=move?::WinBlaze::Actions::Move(path,destination) : ::WinBlaze::Actions::Recycle(path);
+            co_await ui;m_export_active=false;RefreshScanControls();
+            if(result==0){UpdateStatus(L"File action completed; refreshing the catalog.");BeginScanFromCurrentRoot(true);}
+            else UpdateStatus(L"File action canceled or failed. Windows error "+std::to_wstring(result)+L"; existing destinations are never overwritten.");
+        }catch(winrt::hresult_error const& error){m_export_active=false;RefreshScanControls();UpdateStatus(L"File action failed: "+std::wstring(error.message()));}
+    }
+
+    winrt::fire_and_forget MainWindow::ExplorePermissions()
+    {
+        auto lifetime = get_strong();
+        using namespace Microsoft::UI::Xaml::Controls;
+        if (m_session_active || m_export_active) { UpdateStatus(L"Finish current operations first."); co_return; }
+        TextBox path_input;
+        path_input.Text(winrt::hstring(m_current_selection_path));
+        path_input.Header(box_value(L"File or folder to inspect (read-only)"));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(path_input, L"Permission path");
+        ContentDialog options;
+        options.XamlRoot(Content().XamlRoot());
+        options.Title(box_value(L"Explore permissions"));
+        options.Content(path_input);
+        options.PrimaryButtonText(L"Read permissions");
+        options.CloseButtonText(L"Cancel");
+        if (co_await options.ShowAsync() != ContentDialogResult::Primary) { co_return; }
+        if (m_session_active || m_export_active) { co_return; }
+        const std::wstring path = path_input.Text().c_str();
+        using Row = ::WinBlaze::UI::Permissions::Row;
+        auto rows = std::make_shared<std::vector<Row>>();
+        m_export_active = true;
+        RefreshScanControls();
+        winrt::apartment_context ui;
+        co_await winrt::resume_background();
+        uint32_t result = 4;
+        try {
+            result = ::WinBlaze::UI::NativeBridge::PermissionRows(path.c_str(),
+                [rows](WbPermissionRow const& row) {
+                    auto text = [](WbCStringView value) -> std::wstring {
+                        if (!value.ptr || !value.len) { return {}; }
+                        return std::wstring(winrt::to_hstring(std::string_view{ value.ptr, value.len }));
+                    };
+                    rows->push_back({text(row.kind), text(row.account), text(row.sid),
+                        text(row.rights), row.inherited != 0, row.mask});
+                });
+        } catch (...) {}
+        co_await ui;
+        m_export_active = false;
+        RefreshScanControls();
+        if (result) { UpdateStatus(L"Permissions could not be read. Check the path and access rights."); co_return; }
+        StackPanel panel;
+        panel.Spacing(12);
+        TextBlock note;
+        note.Text(winrt::hstring(path + L"\nOwner, group and individual access-control entries. "
+            L"This lists ACEs; it does not calculate effective access. No permissions are changed."));
+        note.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+        panel.Children().Append(note);
+        TextBox filter;
+        filter.PlaceholderText(L"Filter by account, SID, allow/deny or rights");
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(filter, L"Permission filter");
+        panel.Children().Append(filter);
+        ListView list;
+        list.MaxHeight(420);
+        TextBox excluded;
+        excluded.Header(box_value(L"Exclude accounts / SIDs (regular expression)"));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(excluded,L"Excluded permission accounts");
+        panel.Children().Append(excluded);
+        std::vector<TextBox> accounts;
+        std::vector<ComboBox> levels,colors;
+        const uint32_t masks[]={0,0x1f01ff,0x1301bf,0x1200a9,0x120089,0x120116};
+        for(size_t i=0;i<5;++i) {
+            StackPanel rule;rule.Orientation(Orientation::Horizontal);rule.Spacing(8);
+            TextBox account;account.Width(220);account.PlaceholderText(L"Account / SID regex");
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(account,winrt::hstring(i?L"Highlighted permission accounts "+std::to_wstring(i+1):L"Highlighted permission accounts"));
+            ComboBox level;for(auto text:{L"Any rights",L"Full control",L"Modify",L"Read / execute",L"Read",L"Write"})level.Items().Append(box_value(text));level.SelectedIndex(0);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(level,winrt::hstring(L"Permission highlight rights "+std::to_wstring(i+1)));
+            ComboBox color;for(auto text:{L"Green",L"Blue",L"Amber",L"Red",L"Purple"})color.Items().Append(box_value(text));color.SelectedIndex(static_cast<int32_t>(i));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(color,winrt::hstring(L"Permission highlight color "+std::to_wstring(i+1)));
+            accounts.push_back(account);levels.push_back(level);colors.push_back(color);
+            rule.Children().Append(account);rule.Children().Append(level);rule.Children().Append(color);panel.Children().Append(rule);
+        }
+        TextBlock validation;validation.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);panel.Children().Append(validation);
+        auto populate=[rows,list,excluded,accounts,levels,colors,validation,masks](std::wstring const& pattern) {
+            std::vector<::WinBlaze::UI::Permissions::Rule> rules;
+            for(size_t i=0;i<accounts.size();++i)rules.push_back({std::wstring(accounts[i].Text()),masks[levels[i].SelectedIndex()],static_cast<size_t>(colors[i].SelectedIndex())});
+            const ::WinBlaze::UI::Permissions::Policy policy{std::wstring(excluded.Text()),rules};
+            validation.Text(policy.Valid()?L"First matching highlight rule wins; rights test each ACE, not effective access.":L"Invalid regular expression. Correct it to apply exclusions and highlighting.");
+            list.Items().Clear();
+            const winrt::Windows::UI::Color palette[]={{255,32,96,64},{255,30,64,120},{255,120,88,12},{255,128,36,36},{255,88,44,116}};
+            for(const auto& row:*rows) {
+                const auto match=policy.Apply(row,pattern);
+                if(!match.visible)continue;
+                const auto caption=row.kind+L" | "+row.account+L" | "+row.sid+L" | "+row.rights+(row.inherited?L" | Inherited":L" | Explicit");
+                ListViewItem item;item.Content(box_value(winrt::hstring(caption)));
+                if(match.highlighted)item.Background(Microsoft::UI::Xaml::Media::SolidColorBrush(palette[match.color%ARRAYSIZE(palette)]));
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item,winrt::hstring(L"Permission row: "+row.kind));
+                list.Items().Append(item);
+            }
+        };
+        auto refresh=[filter,populate](auto const&,auto const&){populate(std::wstring(filter.Text()));};
+        filter.TextChanged(refresh);excluded.TextChanged(refresh);
+        for(auto const& account:accounts)account.TextChanged(refresh);
+        for(auto const& level:levels)level.SelectionChanged(refresh);
+        for(auto const& color:colors)color.SelectionChanged(refresh);
+        populate(L"");panel.Children().Append(list);
+        ContentDialog dialog;
+        dialog.XamlRoot(Content().XamlRoot());
+        dialog.Title(box_value(L"Account permissions"));
+        ScrollViewer scroll;scroll.Content(panel);scroll.MaxHeight(620);
+        dialog.Content(scroll);
+        dialog.CloseButtonText(L"Close");
+        co_await dialog.ShowAsync();
+    }
+
+    winrt::fire_and_forget MainWindow::ShowChangeHistory()
+    {
+        auto lifetime = get_strong();
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto events = std::make_shared<std::vector<::WinBlaze::ChangeEvent>>(m_change_history.begin(), m_change_history.end());
+        auto panel = StackPanel{};
+        panel.Spacing(12);
+        auto note = TextBlock{};
+        note.Text(winrt::hstring(L"Observed UTC times from Windows notifications. Enable monitoring to collect events. "
+            L"Showing the latest " + std::to_wstring(events->size()) + L" events; older events removed: " +
+            std::to_wstring(m_change_history_dropped) + L". Overflow markers mean a rescan was required."));
+        note.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+        panel.Children().Append(note);
+        auto filter = TextBox{};
+        filter.PlaceholderText(L"Filter history by action or path");
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(filter, L"Change history filter");
+        panel.Children().Append(filter);
+        auto list = ListView{};
+        list.MaxHeight(420);
+        auto populate = [events, list](std::wstring const& pattern) {
+            list.Items().Clear();
+            const auto lowered = LowercaseCopy(pattern);
+            for (auto it = events->rbegin(); it != events->rend(); ++it) {
+                const wchar_t* action = it->action == FILE_ACTION_ADDED ? L"Created" :
+                    it->action == FILE_ACTION_REMOVED ? L"Deleted" :
+                    it->action == FILE_ACTION_MODIFIED ? L"Modified" :
+                    it->action == FILE_ACTION_RENAMED_OLD_NAME ? L"Renamed from" :
+                    it->action == FILE_ACTION_RENAMED_NEW_NAME ? L"Renamed to" : L"Notification overflow";
+                const auto caption = FormatFileTimeUtc(static_cast<int64_t>(it->observed_utc)) +
+                    L" | " + action + L" | " + it->path;
+                if (!lowered.empty() && LowercaseCopy(caption).find(lowered) == std::wstring::npos) { continue; }
+                auto item = ListViewItem{};
+                item.Content(box_value(winrt::hstring(caption)));
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item,
+                    winrt::hstring(L"Change event: " + it->path));
+                list.Items().Append(item);
+            }
+        };
+        filter.TextChanged([filter, populate](auto const&, auto const&) { populate(std::wstring(filter.Text())); });
+        populate(L"");
+        panel.Children().Append(list);
+        ContentDialog dialog;
+        dialog.XamlRoot(Content().XamlRoot());
+        dialog.Title(box_value(L"Filesystem change history"));
+        dialog.Content(panel);
+        dialog.CloseButtonText(L"Close");
+        co_await dialog.ShowAsync();
+    }
+
+    void MainWindow::RestartMonitoring()
+    {
+        if(!m_monitor_enabled||m_imported_snapshot||!m_multiple_root_paths.empty()){
+            if(m_watch_timer)m_watch_timer.Stop();m_watcher.reset();m_watch_root.clear();m_watch_dirty=false;
+            if(m_imported_snapshot){m_monitor_enabled=false;if(m_monitor_item)m_monitor_item.IsChecked(false);}return;
+        }
+        if(!m_has_results||m_session_active){UpdateStatus(L"Monitoring will start after this folder is scanned.");return;}
+        try {
+            if(!m_watcher||m_watch_root!=m_current_root_path){
+                WCHAR local[32768]{};GetEnvironmentVariableW(L"LOCALAPPDATA",local,32768);
+                m_watcher=std::make_unique<::WinBlaze::DirectoryWatcher>(m_current_root_path,std::wstring(local)+L"\\WinBlaze");
+                m_watch_root=m_current_root_path;m_watch_dirty=false;
+            }
+            if(!m_watch_timer){
+                m_watch_timer=DispatcherQueue().CreateTimer();m_watch_timer.Interval(std::chrono::milliseconds{100});m_watch_timer.IsRepeating(true);
+                m_watch_timer.Tick([this](auto const&,auto const&){
+                    try {
+                        if(!m_watcher)return;
+                        if(RootPathBox()&&RootPathBox().Text()!=m_watch_root){m_monitor_enabled=false;m_monitor_item.IsChecked(false);RestartMonitoring();UpdateStatus(L"Monitoring stopped because the selected path changed.");return;}
+                        if(m_watcher->Poll()){m_watch_dirty=true;m_watch_due=std::chrono::steady_clock::now()+std::chrono::milliseconds{500};}
+                        for (auto& event : m_watcher->TakeEvents()) {
+                            if (m_change_history.size() == 1000) { m_change_history.pop_front(); ++m_change_history_dropped; }
+                            m_change_history.push_back(std::move(event));
+                        }
+                        if(m_watch_dirty&&!m_session_active&&!m_export_active&&std::chrono::steady_clock::now()>=m_watch_due){m_watch_dirty=false;BeginScanFromCurrentRoot(true);}
+                    }catch(...){m_monitor_enabled=false;m_monitor_item.IsChecked(false);RestartMonitoring();UpdateStatus(L"Monitoring stopped after a Windows notification error; enable it again to retry.");}
+                });
+            }
+            m_watch_timer.Start();UpdateStatus(L"Automatic monitoring enabled for "+m_watch_root+L"; changes trigger a debounced incremental rescan.");
+        }catch(...){m_monitor_enabled=false;m_monitor_item.IsChecked(false);if(m_watch_timer)m_watch_timer.Stop();m_watcher.reset();UpdateStatus(L"Monitoring could not open this folder. Check access permissions.");}
+    }
+
+    void MainWindow::BrowseForFolder()
+    {
+        if (m_session_active || m_export_active) { return; }
+        auto lifetime = get_strong();
+        try {
+            auto dialog = winrt::create_instance<IFileOpenDialog>(CLSID_FileOpenDialog);
+            FILEOPENDIALOGOPTIONS options{};
+            winrt::check_hresult(dialog->GetOptions(&options));
+            winrt::check_hresult(dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_NOCHANGEDIR));
+            winrt::check_hresult(dialog->SetTitle(L"Choose a folder to scan"));
+            HWND owner{};
+            winrt::check_hresult(lifetime.as<::IWindowNative>()->get_WindowHandle(&owner));
+            const auto shown = dialog->Show(owner);
+            if (shown == HRESULT_FROM_WIN32(ERROR_CANCELLED)) { return; }
+            winrt::check_hresult(shown);
+            winrt::com_ptr<IShellItem> folder;
+            winrt::check_hresult(dialog->GetResult(folder.put()));
+            PWSTR chosen{};
+            winrt::check_hresult(folder->GetDisplayName(SIGDN_FILESYSPATH, &chosen));
+            const winrt::hstring path(chosen);
+            CoTaskMemFree(chosen);
+            m_root_path_box.Text(path);
+            FocusRootPathBox();
+        } catch (winrt::hresult_error const&) {
+            UpdateStatus(L"Could not open the folder picker. Enter a folder path instead.");
+        }
+    }
+
+    void MainWindow::RefreshScanControls()
+    {
+        const std::wstring path = RootPathBox() ? RootPathBox().Text().c_str() : m_current_root_path;
+        const bool has_path = path.find_first_not_of(L" \t\r\n\"") != std::wstring::npos;
+        const bool busy = m_session_active || m_export_active;
+        if (m_root_path_box) { m_root_path_box.IsEnabled(!busy); }
+        if (m_browse_folder_button) { m_browse_folder_button.IsEnabled(!busy); }
+        if (m_drive_box) { m_drive_box.IsEnabled(!busy); }
+        if (StartScanButton()) { StartScanButton().IsEnabled(has_path && !busy); }
+        if (IncrementalScanButton()) { IncrementalScanButton().IsEnabled(has_path && !busy); }
+        if (CancelScanButton()) { CancelScanButton().IsEnabled(m_session_active); }
+    }
+
     void MainWindow::BeginScanFromCurrentRoot(bool incremental)
     {
+        if (m_export_active) {
+            UpdateStatus(L"Wait for the CSV export to finish before scanning.");
+            return;
+        }
         if (m_session_active) {
             UpdateStatus(L"Scan already running.");
             return;
         }
-        const std::wstring root_path = RootPathBox() ? RootPathBox().Text().c_str() : m_current_root_path;
+        std::wstring root_path = RootPathBox() ? RootPathBox().Text().c_str() : m_current_root_path;
+        if (!m_multiple_root_paths.empty() && root_path == L"WinBlaze:\\Multiple roots") {
+            ScanMultipleRoots(m_multiple_root_paths);
+            return;
+        }
+        const auto first = root_path.find_first_not_of(L" \t\r\n");
+        root_path = first == std::wstring::npos ? L"" : root_path.substr(first, root_path.find_last_not_of(L" \t\r\n") - first + 1);
+        if (root_path.size() >= 2 && root_path.front() == L'"' && root_path.back() == L'"') {
+            root_path = root_path.substr(1, root_path.size() - 2);
+        }
+        std::replace(root_path.begin(), root_path.end(), L'/', L'\\');
+        if (root_path.size() == 2 && root_path[1] == L':') { root_path += L"\\"; }
+        const DWORD attributes = ::GetFileAttributesW(root_path.c_str());
+        if (root_path.empty() || attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+            if (m_root_validation_text) {
+                m_root_validation_text.Text(attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY)
+                    ? L"That path is a file. Choose a folder or drive."
+                    : L"Choose an existing folder or drive, or use Browse.");
+                m_root_validation_text.Foreground(MakeBrush(Windows::UI::Colors::Salmon()));
+            }
+            UpdateStatus(L"Check the scan folder.");
+            FocusRootPathBox();
+            return;
+        }
+        const auto excluded = m_scan_excludes ? std::wstring(m_scan_excludes.Text()) : std::wstring{};
+        const auto included = m_scan_includes ? std::wstring(m_scan_includes.Text()) : std::wstring{};
+        if (!excluded.empty() || !included.empty()) {
+            bool valid = false;
+            try { valid = ::WinBlaze::UI::NativeBridge::ValidateScanRules(excluded.c_str(), included.c_str()); }
+            catch (...) {}
+            if (!valid) {
+                UpdateStatus(L"Scan rules are invalid. Use relative paths without parent traversal or drive letters.");
+                return;
+            }
+        }
+        if (RootPathBox() && RootPathBox().Text() != root_path) { RootPathBox().Text(root_path); }
         TraceStartup(std::wstring(incremental ? L"BeginIncrementalScan root=" : L"BeginScanFromCurrentRoot root=") + root_path);
+        if (m_imported_snapshot) { incremental = false; }
+        m_imported_snapshot = false;
         m_current_root_path = root_path;
+        m_multiple_root_paths.clear();
+        m_volume_space_cache_root.clear();
         m_has_results = false;
         m_has_error = false;
         // Drop the previous scan's tree; the live tree rebuilds from
@@ -2218,9 +3723,14 @@ namespace winrt::WinBlaze::UI::implementation
         auto handler = [this](WbEvent const& event) {
             HandleNativeEvent(event);
         };
-        m_session = incremental
-            ? ::WinBlaze::UI::NativeBridge::StartIncrementalScan(root_path.c_str(), handler)
-            : ::WinBlaze::UI::NativeBridge::StartScan(root_path.c_str(), handler);
+        if (!excluded.empty() || !included.empty()) {
+            m_session = ::WinBlaze::UI::NativeBridge::StartScanRules(root_path.c_str(),
+                excluded.c_str(), included.c_str(), handler);
+        } else {
+            m_session = incremental
+                ? ::WinBlaze::UI::NativeBridge::StartIncrementalScan(root_path.c_str(), handler)
+                : ::WinBlaze::UI::NativeBridge::StartScan(root_path.c_str(), handler);
+        }
         m_session_active = true;
         UpdateStatus(incremental ? L"Incremental rescan..." : L"Scanning...");
         UpdateEventText(incremental ? L"Incremental rescan started." : L"Scan started.");
@@ -2254,7 +3764,9 @@ namespace winrt::WinBlaze::UI::implementation
 
     void MainWindow::OnSearchClicked(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
+        m_search_offset = 0;
         m_tree_window_offset = 0;
+        m_largest_files_offset = 0;
         RefreshInstantSearch();
         UpdateStatus(L"Search results updated.");
         NavigateToSection(ShellSection::Search);
@@ -2264,7 +3776,9 @@ namespace winrt::WinBlaze::UI::implementation
         winrt::Windows::Foundation::IInspectable const&,
         Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&)
     {
+        m_search_offset = 0;
         m_tree_window_offset = 0;
+        m_largest_files_offset = 0;
         RefreshInstantSearch();
     }
 
@@ -2272,7 +3786,9 @@ namespace winrt::WinBlaze::UI::implementation
         winrt::Windows::Foundation::IInspectable const&,
         Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&)
     {
+        m_search_offset = 0;
         m_tree_window_offset = 0;
+        m_largest_files_offset = 0;
         RefreshInstantSearch();
     }
 
@@ -2372,6 +3888,7 @@ namespace winrt::WinBlaze::UI::implementation
             m_tree_window_offset -= kTreeListVirtualizedWindowLimit;
         } else {
             m_tree_window_offset = 0;
+        m_largest_files_offset = 0;
         }
 
         if (TreeArenaActive()) {
@@ -2733,6 +4250,7 @@ namespace winrt::WinBlaze::UI::implementation
                 D2D1_COLOR_F color;
                 std::wstring label;
                 bool frame{ false };
+                ::WinBlaze::UI::Treemap::HierarchyTile shape{};
             };
 
             const float surface_width = static_cast<float>(width);
@@ -2743,14 +4261,44 @@ namespace winrt::WinBlaze::UI::implementation
             size_t directories_recursed = 0;
             bool needs_deepening = false;
 
-            if (TreeArenaActive()) {
+            if (TreeArenaActive() && m_visualization_layout >= 2) {
+                using namespace ::WinBlaze::UI::Treemap;
+                const bool radial = m_visualization_layout == 3;
+                layout_name = radial ? L"Sunburst" : L"Flame graph";
+                std::vector<HierarchyNode> inputs{{0,SIZE_MAX,static_cast<double>(m_treemap_logical_size?m_tree_nodes[0].logical_bytes:m_tree_nodes[0].physical_bytes)}};
+                const auto budget = m_tree_nodes.size()+2500;
+                for(size_t i=0;i<inputs.size() && inputs.size()<20000;++i) {
+                    const size_t node=inputs[i].id;
+                    if(!m_tree_nodes[node].is_directory || inputs[i].weight<=0)continue;
+                    if(!m_tree_nodes[node].children_loaded) {
+                        if(m_tree_nodes.size()>=budget){needs_deepening=true;continue;}
+                        EnsureTreeChildrenLoaded(node);
+                    }
+                    for(size_t child:m_tree_nodes[node].children) {
+                        const auto bytes=m_treemap_logical_size?m_tree_nodes[child].logical_bytes:m_tree_nodes[child].physical_bytes;
+                        if(bytes && inputs.size()<20000) inputs.push_back({child,i,static_cast<double>(bytes)});
+                    }
+                }
+                for(const auto& shape:Hierarchy(inputs,surface_width,surface_height,radial)) {
+                    if(shape.end<=shape.start)continue;
+                    const auto& node=m_tree_nodes[shape.id];
+                    const D2D1_COLOR_F colors[]={D2D1::ColorF(0.10f,0.36f,0.67f),D2D1::ColorF(0.13f,0.50f,0.35f),D2D1::ColorF(0.43f,0.25f,0.62f),D2D1::ColorF(0.70f,0.36f,0.11f),D2D1::ColorF(0.60f,0.12f,0.16f),D2D1::ColorF(0.28f,0.46f,0.52f)};
+                    const auto color=colors[shape.id%ARRAYSIZE(colors)];
+                    const auto bounds=shape.bounds;
+                    tiles.push_back({bounds.left,bounds.top,bounds.right,bounds.bottom,color,node.name,false,shape});
+                    layout.push_back({bounds.left,bounds.top,bounds.right,bounds.bottom,node.name,TreeNodePath(shape.id),node.is_directory?L"Folder":L"File",FormatBytes(static_cast<uint64_t>(inputs[0].weight)),shape});
+                    layout.back().size_text=FormatBytes(m_treemap_logical_size?node.logical_bytes:node.physical_bytes);
+                }
+            } else if (TreeArenaActive()) {
                 // Hierarchical squarified layout over the display-tree arena:
                 // recurse into directories while their tile stays legible,
                 // color files by extension (matching the legend swatches),
                 // draw directories as thin frames around their children.
-                layout_name = L"squarified";
+                layout_name = m_treemap_logical_size ? L"weighted hierarchical (logical)" : L"weighted hierarchical (allocated)";
+                auto weight = [this](auto const& node) {
+                    return m_treemap_logical_size ? node.logical_bytes : node.physical_bytes;
+                };
                 constexpr size_t kTileBudget = 20000;
-                constexpr float kMinTileDim = 6.0f;
                 constexpr float kRecurseMinDim = 28.0f;
                 // Budget measured in nodes created, not fetch calls: one
                 // directory fetch can populate up to 4096 nodes, so a
@@ -2790,7 +4338,7 @@ namespace winrt::WinBlaze::UI::implementation
                         node.name,
                         TreeNodePath(node_index),
                         node.is_directory ? std::wstring(L"Folder") : std::wstring(L"File"),
-                        FormatBytes(node.physical_bytes),
+                        FormatBytes(weight(node)),
                     });
                 };
 
@@ -2804,14 +4352,56 @@ namespace winrt::WinBlaze::UI::implementation
                     uint32_t depth;
                 };
                 std::vector<QueueItem> queue;
-                queue.push_back(QueueItem{ 0, 2.0f, 2.0f, surface_width - 2.0f, surface_height - 2.0f, 0 });
+                auto root_bounds = ::WinBlaze::UI::Treemap::Rect{2.0f, 2.0f, surface_width - 2.0f, surface_height - 2.0f};
+                std::wstring space_summary = L"Volume space hidden";
+                const auto selected_path = std::filesystem::path(m_current_root_path).lexically_normal();
+                if (m_treemap_volume_space && !m_treemap_logical_size && !m_imported_snapshot &&
+                    !m_session_active && selected_path == selected_path.root_path()) {
+                    if (m_volume_space_cache_root != m_current_root_path) {
+                        ULARGE_INTEGER available{}, total{}, free{};
+                        m_volume_space_total = 0; m_volume_space_free = 0;
+                        if (GetDiskFreeSpaceExW(m_current_root_path.c_str(), &available, &total, &free)) {
+                            m_volume_space_total = total.QuadPart; m_volume_space_free = free.QuadPart;
+                        }
+                        m_volume_space_cache_root = m_current_root_path;
+                    }
+                    const auto space = ::WinBlaze::UI::Treemap::VolumeSpace(m_volume_space_total,
+                        m_volume_space_free, weight(m_tree_nodes[0]));
+                    if (space.valid) {
+                        const auto occupied = ::WinBlaze::UI::Treemap::Split(root_bounds,
+                            static_cast<double>(space.scanned), static_cast<double>(m_volume_space_total));
+                        root_bounds = occupied.first;
+                        const auto remainder = ::WinBlaze::UI::Treemap::Split(occupied.second,
+                            static_cast<double>(space.unaccounted),
+                            static_cast<double>(m_volume_space_total - space.scanned));
+                        auto space_tile = [&](auto bounds, std::wstring const& label, uint64_t bytes, D2D1_COLOR_F color) {
+                            if (!bytes || !::WinBlaze::UI::Treemap::Visible(bounds)) { return; }
+                            tiles.push_back(DrawTile{bounds.left, bounds.top, bounds.right, bounds.bottom, color, label, false});
+                            layout.push_back(TreemapTileLayout{bounds.left, bounds.top, bounds.right, bounds.bottom,
+                                label, m_current_root_path, L"Volume space", FormatBytes(bytes)});
+                        };
+                        space_tile(remainder.first, L"Unaccounted allocated space", space.unaccounted, D2D1::ColorF(0.35f, 0.35f, 0.39f));
+                        space_tile(remainder.second, L"Free space", space.free, D2D1::ColorF(0.68f, 0.72f, 0.76f));
+                        space_summary = L"Free space: " + FormatBytes(space.free) + L" | Unaccounted allocation: " +
+                            FormatBytes(space.unaccounted) + L" (excluded, inaccessible files and NTFS overhead)";
+                    } else {
+                        space_summary = L"Volume totals unavailable or inconsistent; no free-space areas are drawn.";
+                    }
+                } else if (m_treemap_volume_space) {
+                    space_summary = L"Free-space areas require a live volume-root scan with allocated-size rendering.";
+                }
+                if (m_volume_space_summary) {
+                    m_volume_space_summary.Text(winrt::hstring(space_summary));
+                    Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(m_volume_space_summary, winrt::hstring(space_summary));
+                }
+                queue.push_back(QueueItem{0, root_bounds.left, root_bounds.top, root_bounds.right, root_bounds.bottom, 0});
 
                 while (!queue.empty() && tiles.size() < kTileBudget) {
                     const QueueItem item = queue.back();
                     queue.pop_back();
                     const float item_width = item.right - item.left;
                     const float item_height = item.bottom - item.top;
-                    if (item_width < kMinTileDim || item_height < kMinTileDim) {
+                    if (!::WinBlaze::UI::Treemap::Visible({item.left,item.top,item.right,item.bottom})) {
                         continue;
                     }
 
@@ -2840,13 +4430,13 @@ namespace winrt::WinBlaze::UI::implementation
                     double child_total = 0.0;
                     for (size_t child : m_tree_nodes[item.node].children) {
                         auto const& child_node = m_tree_nodes[child];
-                        if (child_node.is_more_row || child_node.physical_bytes == 0) {
+                        if (weight(child_node) == 0) {
                             continue;
                         }
                         children.push_back(child);
-                        child_total += static_cast<double>(child_node.physical_bytes);
+                        child_total += static_cast<double>(weight(child_node));
                     }
-                    if (children.empty() || child_total <= 0.0) {
+                    if (children.empty() || child_total <= 0.0 || tiles.size() + queue.size() + children.size() + 1 >= kTileBudget) {
                         emit_tile(item.node, item.left, item.top, item.right, item.bottom, false, item.depth <= 1);
                         continue;
                     }
@@ -2877,7 +4467,7 @@ namespace winrt::WinBlaze::UI::implementation
                     auto slice_weight = [&](size_t begin, size_t end) {
                         double total = 0.0;
                         for (size_t index = begin; index < end; ++index) {
-                            total += static_cast<double>(m_tree_nodes[children[index]].physical_bytes);
+                            total += static_cast<double>(weight(m_tree_nodes[children[index]]));
                         }
                         return total;
                     };
@@ -2900,9 +4490,7 @@ namespace winrt::WinBlaze::UI::implementation
                         if (slice.begin >= slice.end) {
                             continue;
                         }
-                        const float slice_width = slice.right - slice.left;
-                        const float slice_height = slice.bottom - slice.top;
-                        if (slice_width < kMinTileDim || slice_height < kMinTileDim) {
+                        if (!::WinBlaze::UI::Treemap::Visible({slice.left,slice.top,slice.right,slice.bottom})) {
                             continue;
                         }
                         if (slice.end - slice.begin == 1) {
@@ -2921,28 +4509,20 @@ namespace winrt::WinBlaze::UI::implementation
                         double prefix = 0.0;
                         size_t split = slice.begin + 1;
                         for (; split + 1 < slice.end; ++split) {
-                            prefix += static_cast<double>(m_tree_nodes[children[split - 1]].physical_bytes);
+                            prefix += static_cast<double>(weight(m_tree_nodes[children[split - 1]]));
                             if (prefix >= total * 0.5) {
                                 break;
                             }
                         }
                         const double leading = slice_weight(slice.begin, split);
-                        const float ratio = static_cast<float>(leading / total);
-                        if (slice_width >= slice_height) {
-                            const float split_x = std::clamp(
-                                slice.left + (slice_width * ratio),
-                                slice.left + 1.0f,
-                                slice.right - 1.0f);
-                            slices.push_back(Slice{ split, slice.end, split_x, slice.top, slice.right, slice.bottom });
-                            slices.push_back(Slice{ slice.begin, split, slice.left, slice.top, split_x, slice.bottom });
-                        } else {
-                            const float split_y = std::clamp(
-                                slice.top + (slice_height * ratio),
-                                slice.top + 1.0f,
-                                slice.bottom - 1.0f);
-                            slices.push_back(Slice{ split, slice.end, slice.left, split_y, slice.right, slice.bottom });
-                            slices.push_back(Slice{ slice.begin, split, slice.left, slice.top, slice.right, split_y });
-                        }
+                        const auto bounds = ::WinBlaze::UI::Treemap::Rect{slice.left,slice.top,slice.right,slice.bottom};
+                        const auto parts = m_treemap_strips
+                            ? ::WinBlaze::UI::Treemap::SplitHorizontal(bounds, leading, total)
+                            : ::WinBlaze::UI::Treemap::Split(bounds, leading, total);
+                        auto const& first = parts.first;
+                        auto const& second = parts.second;
+                        slices.push_back(Slice{split,slice.end,second.left,second.top,second.right,second.bottom});
+                        slices.push_back(Slice{slice.begin,split,first.left,first.top,first.right,first.bottom});
                     }
                 }
             } else {
@@ -3074,7 +4654,25 @@ namespace winrt::WinBlaze::UI::implementation
             for (auto const& tile : tiles) {
                 tile_brush->SetColor(tile.color);
                 const auto rect = D2D1::RectF(tile.left, tile.top, tile.right, tile.bottom);
-                if (tile.frame) {
+                if(tile.shape.radial) {
+                    winrt::com_ptr<ID2D1Factory> factory;
+                    d2d_context->GetFactory(factory.put());
+                    winrt::com_ptr<ID2D1PathGeometry> geometry;
+                    winrt::check_hresult(factory->CreatePathGeometry(geometry.put()));
+                    winrt::com_ptr<ID2D1GeometrySink> sink;
+                    winrt::check_hresult(geometry->Open(sink.put()));
+                    const auto& shape=tile.shape;
+                    const int steps=(std::max)(2,static_cast<int>(std::ceil((shape.end-shape.start)*shape.outer/2.0)));
+                    auto point=[&](double angle,double radius){return D2D1::Point2F(static_cast<float>(shape.cx+std::cos(angle)*radius),static_cast<float>(shape.cy+std::sin(angle)*radius));};
+                    sink->BeginFigure(point(shape.start,shape.outer),D2D1_FIGURE_BEGIN_FILLED);
+                    for(int step=1;step<=steps;++step)sink->AddLine(point(shape.start+(shape.end-shape.start)*step/steps,shape.outer));
+                    for(int step=steps;step>=0;--step)sink->AddLine(point(shape.start+(shape.end-shape.start)*step/steps,shape.inner));
+                    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+                    winrt::check_hresult(sink->Close());
+                    d2d_context->FillGeometry(geometry.get(),tile_brush.get());
+                    tile_brush->SetColor(D2D1::ColorF(0.03f,0.05f,0.05f));
+                    d2d_context->DrawGeometry(geometry.get(),tile_brush.get(),1.0f);
+                } else if (tile.frame) {
                     d2d_context->DrawRectangle(rect, tile_brush.get(), 1.0f);
                 } else {
                     d2d_context->FillRectangle(rect, tile_brush.get());
@@ -3092,7 +4690,7 @@ namespace winrt::WinBlaze::UI::implementation
             for (auto const& tile : tiles) {
                 const float tile_width = tile.right - tile.left;
                 const float tile_height = tile.bottom - tile.top;
-                if (tile_width < 64.0f || tile_height < 24.0f || tile.label.empty()) {
+                if (tile.shape.radial || tile_width < 64.0f || tile_height < 24.0f || tile.label.empty()) {
                     continue;
                 }
 
@@ -3111,6 +4709,24 @@ namespace winrt::WinBlaze::UI::implementation
                 m_treemap_render_status = L"Treemap probe frame D2D draw failed: " + HresultText(result);
                 ResetTreemapRenderStack();
                 return;
+            }
+
+            if (!m_png_export_path.empty()) {
+                winrt::com_ptr<ID2D1Bitmap1> readable;
+                const auto properties = D2D1::BitmapProperties1(
+                    D2D1_BITMAP_OPTIONS_CPU_READ | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+                    D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_IGNORE),96.0f,96.0f);
+                auto pngResult = d2d_context->CreateBitmap(D2D1::SizeU(width,height),nullptr,0,properties,readable.put());
+                d2d_context->SetTarget(nullptr);
+                if (SUCCEEDED(pngResult)) { pngResult = readable->CopyFromBitmap(nullptr,m_render_target_bitmap.get(),nullptr); }
+                D2D1_MAPPED_RECT mapped{};
+                if (SUCCEEDED(pngResult)) { pngResult = readable->Map(D2D1_MAP_OPTIONS_READ,&mapped); }
+                if (SUCCEEDED(pngResult)) {
+                    pngResult = ::WinBlaze::UI::Treemap::SavePng(m_png_export_path.c_str(),width,height,mapped.pitch,mapped.bits,static_cast<size_t>(mapped.pitch)*height,m_png_export_grayscale);
+                    readable->Unmap();
+                }
+                d2d_context->SetTarget(m_render_target_bitmap.get());
+                m_png_export_result = pngResult;
             }
 
             result = swap_chain->Present(1, 0);
@@ -3171,8 +4787,8 @@ namespace winrt::WinBlaze::UI::implementation
         // directory frames, so the innermost tile under the cursor wins.
         for (auto it = m_treemap_tile_layout.rbegin(); it != m_treemap_tile_layout.rend(); ++it) {
             auto const& tile = *it;
-            if (point.X >= tile.left && point.X <= tile.right &&
-                point.Y >= tile.top && point.Y <= tile.bottom) {
+            if (tile.shape.radial ? ::WinBlaze::UI::Treemap::Contains(tile.shape, point.X, point.Y) :
+                (point.X >= tile.left && point.X <= tile.right && point.Y >= tile.top && point.Y <= tile.bottom)) {
                 m_hovered_treemap_name = tile.name;
                 m_hovered_treemap_path = tile.path;
                 m_hovered_treemap_kind = tile.kind;
@@ -3215,8 +4831,8 @@ namespace winrt::WinBlaze::UI::implementation
         // are laid out after their ancestors' frames).
         for (auto it = m_treemap_tile_layout.rbegin(); it != m_treemap_tile_layout.rend(); ++it) {
             auto const& tile = *it;
-            if (point.X >= tile.left && point.X <= tile.right &&
-                point.Y >= tile.top && point.Y <= tile.bottom) {
+            if (tile.shape.radial ? ::WinBlaze::UI::Treemap::Contains(tile.shape, point.X, point.Y) :
+                (point.X >= tile.left && point.X <= tile.right && point.Y >= tile.top && point.Y <= tile.bottom)) {
                 SelectVisualizationTarget(tile.name, tile.path, tile.kind, tile.size_text);
                 UpdateEventText(L"Selected GPU tile: " + tile.name);
                 return;
@@ -3255,9 +4871,11 @@ namespace winrt::WinBlaze::UI::implementation
 
     Microsoft::UI::Xaml::Media::SolidColorBrush MainWindow::MakeBrush(Windows::UI::Color const& color) const
     {
-        Microsoft::UI::Xaml::Media::SolidColorBrush brush;
-        brush.Color(color);
-        return brush;
+        const uint32_t key = (uint32_t(color.A) << 24) | (uint32_t(color.R) << 16) |
+            (uint32_t(color.G) << 8) | uint32_t(color.B);
+        return m_color_resources.Get(key, [&color](uint32_t) {
+            return Microsoft::UI::Xaml::Media::SolidColorBrush(color);
+        });
     }
 
     void MainWindow::ApplyCardStyle(Microsoft::UI::Xaml::Controls::Border const& card) const
@@ -3299,17 +4917,12 @@ namespace winrt::WinBlaze::UI::implementation
     Microsoft::UI::Xaml::Controls::TextBlock MainWindow::MakeCardTitle(std::wstring_view text) const
     {
         auto const& theme = ActiveShellTheme();
-        std::wstring upper(text);
-        for (auto& ch : upper) {
-            ch = static_cast<wchar_t>(std::towupper(ch));
-        }
         auto title = Microsoft::UI::Xaml::Controls::TextBlock{};
-        title.Text(winrt::hstring(upper));
-        title.FontSize(11.0);
-        title.FontWeight({ 700 });
-        title.CharacterSpacing(180);
-        title.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Cascadia Mono, Consolas"));
-        title.Foreground(MakeBrush(theme.text_secondary));
+        title.Text(winrt::hstring(text));
+        title.FontSize(18.0);
+        title.FontWeight({ 600 });
+        title.FontFamily(Microsoft::UI::Xaml::Media::FontFamily(L"Segoe UI"));
+        title.Foreground(MakeBrush(theme.text_primary));
         return title;
     }
 
@@ -3317,12 +4930,13 @@ namespace winrt::WinBlaze::UI::implementation
     {
         TraceStartup(L"ApplyShellState begin");
         const bool loading = !m_shell_ready;
+        RefreshScanControls();
         SetControlVisibility(LoadingBanner(), loading);
         SetControlVisibility(EmptyBanner(), m_shell_ready && !m_session_active && !m_has_results && !m_has_error);
         SetControlVisibility(ScanningBanner(), m_session_active);
         SetControlVisibility(ErrorBanner(), m_has_error);
         if (!m_session_active) {
-            SetSection(m_active_section);
+            ApplyViewVisibility();
         }
         UpdateSummaryText();
         UpdateRuntimeSnapshot();
@@ -3672,6 +5286,7 @@ namespace winrt::WinBlaze::UI::implementation
 
     void MainWindow::UpdateSummaryText()
     {
+        if (m_initializing_shell) return;
         if (!SummaryText()) {
             return;
         }
@@ -3698,6 +5313,7 @@ namespace winrt::WinBlaze::UI::implementation
 
     void MainWindow::UpdateRuntimeSnapshot()
     {
+        if (m_initializing_shell) return;
         if (!RuntimeSnapshotText()) {
             return;
         }
@@ -3747,7 +5363,7 @@ namespace winrt::WinBlaze::UI::implementation
             L", " + m_last_cache_load_text +
             L", " + scan_duration_text;
 
-        RuntimeSnapshotText().Text(winrt::hstring(text));
+        if (RuntimeSnapshotText().Text() != text) RuntimeSnapshotText().Text(winrt::hstring(text));
         UpdateCorrectnessDiagnostics();
         UpdateRecentIssueDiagnostics();
     }
@@ -4168,7 +5784,7 @@ namespace winrt::WinBlaze::UI::implementation
         }
         StatusText().Text(winrt::hstring(text));
         if (m_sidebar_status_text) {
-            m_sidebar_status_text.Text(winrt::hstring(L"ENGINE: " + text));
+            m_sidebar_status_text.Text(winrt::hstring(text));
         }
         UpdateSummaryText();
     }
@@ -4202,6 +5818,32 @@ namespace winrt::WinBlaze::UI::implementation
 
         SearchResultsPanel().Children().Clear();
 
+        auto page_info = TextBlock{};
+        page_info.Text(m_search_status ? L"Invalid search pattern or bounds." :
+            winrt::hstring(L"Matches: " + std::to_wstring(m_search_total) +
+                L" | Showing " + std::to_wstring(hits.empty() ? 0 : m_search_offset + 1) +
+                L"-" + std::to_wstring(m_search_offset + hits.size())));
+        SearchResultsPanel().Children().Append(page_info);
+        auto paging = StackPanel{};
+        paging.Orientation(Orientation::Horizontal);
+        paging.Spacing(12);
+        auto previous = Button{};
+        previous.Content(box_value(L"Previous results"));
+        previous.IsEnabled(m_search_offset > 0);
+        previous.Click([this](auto const&, auto const&) {
+            m_search_offset = m_search_offset >= 50 ? m_search_offset - 50 : 0;
+            RefreshInstantSearch();
+        });
+        paging.Children().Append(previous);
+        auto next = Button{};
+        next.Content(box_value(L"Next results"));
+        next.IsEnabled(m_search_offset + hits.size() < m_search_total);
+        next.Click([this](auto const&, auto const&) {
+            m_search_offset += 50;
+            RefreshInstantSearch();
+        });
+        paging.Children().Append(next);
+        SearchResultsPanel().Children().Append(paging);
         if (hits.empty()) {
             auto empty = TextBlock{};
             empty.Text(L"No matches yet.");
@@ -4210,7 +5852,7 @@ namespace winrt::WinBlaze::UI::implementation
             return;
         }
 
-        const size_t limit = std::min<size_t>(hits.size(), 5);
+        const size_t limit = std::min<size_t>(hits.size(), 50);
         for (size_t index = 0; index < limit; ++index) {
             auto const& entry = hits[index];
             auto row_button = Button{};
@@ -4258,7 +5900,7 @@ namespace winrt::WinBlaze::UI::implementation
         TraceStartup(L"RefreshInstantSearch after selection");
 
         std::wstring preview = FormatSearchQuery();
-        preview += L", results=" + std::to_wstring(hits.size());
+        preview += L", results=" + std::to_wstring(m_search_total);
         if (hits.empty()) {
             preview += L", no matches";
         } else {
@@ -4323,6 +5965,7 @@ namespace winrt::WinBlaze::UI::implementation
         m_tree_catalog_keys.clear();
         m_instant_search_hits.clear();
         m_tree_window_offset = 0;
+        m_largest_files_offset = 0;
 
         if (stats.files + stats.directories > 0) {
             std::lock_guard guard(m_pending_ui_mutex);
@@ -4373,8 +6016,14 @@ namespace winrt::WinBlaze::UI::implementation
         DispatcherQueue().TryEnqueue([this]() {
             LoadExtensionStatsSnapshot();
         });
-        UpdateStatus(L"Catalog snapshot loaded.");
+        UpdateStatus(!m_multiple_root_paths.empty()
+            ? L"Combined live catalog loaded. Warnings: " + std::to_wstring(m_multiple_root_warnings)
+            : m_imported_snapshot ? L"Imported scan loaded. Original files were not accessed." : L"Catalog snapshot loaded.");
+        RestartMonitoring();
         TraceStartup(L"ApplyPersistedCatalogSnapshot end");
+        if (!m_benchmark_png_path.empty()) {
+            DispatcherQueue().TryEnqueue([this]() { SaveTreemapPng(m_benchmark_png_path); Close(); });
+        }
     }
 
     void MainWindow::UpdateProgress(double percent, std::wstring const& text)
@@ -4948,6 +6597,7 @@ namespace winrt::WinBlaze::UI::implementation
 
         if (entries.empty()) {
             m_tree_window_offset = 0;
+        m_largest_files_offset = 0;
         } else if (m_tree_window_offset >= entries.size()) {
             m_tree_window_offset = ((entries.size() - 1) / kTreeListVirtualizedWindowLimit) * kTreeListVirtualizedWindowLimit;
         }
@@ -4986,12 +6636,12 @@ namespace winrt::WinBlaze::UI::implementation
 
             std::wstring status;
             if (entries.empty()) {
-                status = L"Showing 0 of 0 matching catalog rows with virtualized ListView containers.";
+                status = L"No entries match the current filter.";
             } else {
                 status = L"Showing rows " + std::to_wstring(window_start + 1) +
                     L"-" + std::to_wstring(window_end) +
                     L" of " + std::to_wstring(entries.size()) +
-                    L" matching catalog rows with virtualized ListView containers, path-depth indentation, and " +
+                    L" matching entries. Showing " +
                     std::to_wstring(all_groups.size()) + L" top-level groups";
                 if (all_groups.size() != window_groups.size()) {
                     status += L" (" + std::to_wstring(window_groups.size()) + L" in this window)";
@@ -5018,6 +6668,7 @@ namespace winrt::WinBlaze::UI::implementation
         m_live_directory_backlog.clear();
         m_live_backlog_cursor = 0;
         m_tree_window_offset = 0;
+        m_largest_files_offset = 0;
 
         ::WinBlaze::UI::NativeBridge::Initialize();
         const bool has_root = ::WinBlaze::UI::NativeBridge::TreeRoot([this](WbTreeNode const& node) {
@@ -5221,6 +6872,11 @@ namespace winrt::WinBlaze::UI::implementation
             more.is_more_row = true;
             more.name = L"+ " + std::to_wstring(result.total - result.emitted) +
                 L" more items (largest are shown)";
+            std::vector<uint64_t> physical, logical;
+            for (size_t child : children) { physical.push_back(m_tree_nodes[child].physical_bytes); logical.push_back(m_tree_nodes[child].logical_bytes); }
+            more.physical_bytes = ::WinBlaze::UI::Treemap::RemainingBytes(m_tree_nodes[node_index].physical_bytes, physical);
+            more.logical_bytes = ::WinBlaze::UI::Treemap::RemainingBytes(m_tree_nodes[node_index].logical_bytes, logical);
+            more.is_directory = true;
             more.depth = child_depth;
             more.parent = node_index;
             children.push_back(m_tree_nodes.size());
@@ -5347,7 +7003,7 @@ namespace winrt::WinBlaze::UI::implementation
         std::wstring path;
         for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
             auto const& segment = m_tree_nodes[*it].name;
-            if (path.empty()) {
+            if (path.empty() || std::filesystem::path(segment).is_absolute()) {
                 path = segment;
             } else {
                 if (!path.empty() && path.back() != L'\\') {
@@ -5368,6 +7024,7 @@ namespace winrt::WinBlaze::UI::implementation
         auto const& rows = m_tree_visible_rows;
         if (rows.empty()) {
             m_tree_window_offset = 0;
+        m_largest_files_offset = 0;
         } else if (m_tree_window_offset >= rows.size()) {
             m_tree_window_offset =
                 ((rows.size() - 1) / kTreeListVirtualizedWindowLimit) * kTreeListVirtualizedWindowLimit;
@@ -5396,16 +7053,16 @@ namespace winrt::WinBlaze::UI::implementation
         if (TreeListStatusText()) {
             std::wstring status;
             if (rows.empty()) {
-                status = L"Showing 0 of 0 folder tree rows with virtualized ListView containers.";
+                status = L"No entries to show. Choose a folder above and start a scan.";
             } else {
                 status = L"Showing rows " + std::to_wstring(window_start + 1) +
                     L"-" + std::to_wstring(window_end) +
                     L" of " + std::to_wstring(rows.size()) +
-                    L" folder tree rows with virtualized ListView containers; expand folders to load more";
+                    L" entries. Expand a folder to see its contents";
                 if (rows.size() > kTreeListVirtualizedWindowLimit) {
-                    status += L"; page size is " +
+                    status += L"; use Previous / Next to browse groups of " +
                         std::to_wstring(kTreeListVirtualizedWindowLimit) +
-                        L" rows to keep redraws responsive";
+                        L" entries";
                 }
                 status += L".";
             }
@@ -5449,19 +7106,35 @@ namespace winrt::WinBlaze::UI::implementation
 
         // Indent + expander glyph + name.
         const double indent_width = (std::min)(240.0, static_cast<double>(node.depth) * 16.0);
-        auto glyph = TextBlock{};
-        glyph.Text(winrt::hstring(
-            node.is_directory && !node.is_more_row ? (node.expanded ? L"\u25BE" : L"\u25B8") : L" "));
-        glyph.Width(14.0);
-        glyph.Margin(Thickness{ indent_width, 0.0, 0.0, 0.0 });
-        glyph.VerticalAlignment(VerticalAlignment::Center);
-        row.Children().Append(glyph);
+        if (node.is_directory && !node.is_more_row) {
+            auto expander = Button{};
+            expander.Content(box_value(node.expanded ? L"\u25BE" : L"\u25B8"));
+            expander.Width(24.0);
+            expander.Height(28.0);
+            expander.Padding(Thickness{ 0.0, 0.0, 0.0, 0.0 });
+            expander.Margin(Thickness{ indent_width, 0.0, 0.0, 0.0 });
+            expander.Background(MakeBrush(Windows::UI::Colors::Transparent()));
+            expander.BorderThickness(Thickness{ 0.0, 0.0, 0.0, 0.0 });
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                expander, winrt::hstring((node.expanded ? L"Collapse " : L"Expand ") + node.name));
+            expander.Click([this, node_index](auto const&, auto const&) {
+                DispatcherQueue().TryEnqueue([this, node_index]() { ToggleTreeNodeExpansion(node_index); });
+            });
+            row.Children().Append(expander);
+        } else {
+            auto spacer = Border{};
+            spacer.Width(24.0);
+            spacer.Margin(Thickness{ indent_width, 0.0, 0.0, 0.0 });
+            row.Children().Append(spacer);
+        }
 
         auto label = TextBlock{};
         label.Text(winrt::hstring(node.name));
-        label.Width((std::max)(80.0, 300.0 - indent_width));
+        label.Width((std::max)(80.0, 290.0 - indent_width));
         label.TextTrimming(TextTrimming::CharacterEllipsis);
         label.VerticalAlignment(VerticalAlignment::Center);
+        label.Foreground(MakeBrush(node.is_directory ? ActiveShellTheme().folder_accent : ActiveShellTheme().text_primary));
+        ToolTipService::SetToolTip(label, box_value(winrt::hstring(TreeNodePath(node_index))));
         row.Children().Append(label);
 
         if (node.is_more_row) {
@@ -5530,6 +7203,30 @@ namespace winrt::WinBlaze::UI::implementation
                 node.name + L", " + (node.is_directory ? L"Folder" : L"File") +
                 L", " + (totals_pending ? std::wstring(L"scanning") : FormatBytes(node.physical_bytes))));
 
+        if (node.is_directory && node.parent != SIZE_MAX) {
+            const auto path = TreeNodePath(node_index);
+            auto rename = Button{};
+            rename.Content(box_value(L"Rename..."));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                rename, winrt::hstring(L"Rename folder: " + path));
+            AddInlineRename(row,label,path,true);
+            rename.Click([this, path](auto const&, auto const&) { RenameItem(path); });
+            row.Children().Append(rename);
+        }
+
+        const auto shell_path = TreeNodePath(node_index);
+        auto windows_menu = Button{};
+        windows_menu.Content(box_value(L"..."));
+        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+            windows_menu, winrt::hstring(L"Windows menu: " + shell_path));
+        ToolTipService::SetToolTip(windows_menu, box_value(L"Windows shell actions"));
+        windows_menu.Click([this, shell_path](auto const&, auto const&) { ShowWindowsMenu(shell_path); });
+        row.Children().Append(windows_menu);
+        item.RightTapped([this, shell_path](auto const&, Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& args) {
+            args.Handled(true);
+            ShowWindowsMenu(shell_path);
+        });
+
         item.Content(row);
         return item;
     }
@@ -5544,6 +7241,15 @@ namespace winrt::WinBlaze::UI::implementation
     void MainWindow::ApplyViewVisibility()
     {
         const bool explorer = m_active_view == AppView::Explorer;
+        auto construct = [](std::function<void()>& factory) {
+            if (!factory) return;
+            auto build = std::move(factory);
+            factory = {};
+            build();
+        };
+        if (explorer && m_show_search) construct(m_build_search_panel);
+        if (explorer && m_show_folder_view) construct(m_build_detail_panel);
+        if (explorer && m_show_runtime_metrics) construct(m_build_runtime_panel);
         SetControlVisibility(OverviewCard(), explorer && m_show_current_state);
         SetControlVisibility(TreeCard(), explorer && m_show_folder_tree);
         SetControlVisibility(SearchCard(), explorer && m_show_search);
@@ -5568,6 +7274,7 @@ namespace winrt::WinBlaze::UI::implementation
     void MainWindow::SwitchView(AppView view)
     {
         m_active_view = view;
+        if (m_build_view_host) m_build_view_host(view);
 
         // Restyle the sidebar rail: active item gets the red pill.
         auto const& theme = ActiveShellTheme();
@@ -5964,7 +7671,7 @@ namespace winrt::WinBlaze::UI::implementation
         content.Children().Append(MakeCardTitle(L"Cleanup center"));
 
         auto intro = TextBlock{};
-        intro.Text(L"Reclaim space by reviewing the biggest opportunities below. WinBlaze never deletes anything; use Open to inspect items in File Explorer.");
+        intro.Text(L"Review each file before acting. Move refuses overwrites; Recycle uses Windows Recycle Bin with confirmation. Directories and reparse points are excluded.");
         intro.Foreground(MakeBrush(theme.text_secondary));
         intro.TextWrapping(TextWrapping::WrapWholeWords);
         content.Children().Append(intro);
@@ -6001,8 +7708,9 @@ namespace winrt::WinBlaze::UI::implementation
         large_stack.Spacing(6.0);
         large_stack.Children().Append(MakeCardTitle(L"Largest files"));
         std::vector<std::pair<std::wstring, uint64_t>> largest;
+        WbTreeChildrenResult largestPage{};
         try {
-            ::WinBlaze::UI::NativeBridge::TreeLargestFiles(50, [&largest](WbTreeNode const& node) {
+            largestPage = ::WinBlaze::UI::NativeBridge::TreeLargestFilesPage(m_largest_files_offset, 50, [&largest](WbTreeNode const& node) {
                 const std::wstring path = node.name.ptr == nullptr
                     ? std::wstring{}
                     : Utf8ToWide(std::string_view{ node.name.ptr, node.name.len });
@@ -6043,9 +7751,33 @@ namespace winrt::WinBlaze::UI::implementation
                         (L"/select,\"" + captured_path + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
                 });
                 row.Children().Append(open_button);
+                for(bool move : {true,false}){auto action=Button{};action.Content(box_value(move?L"Move...":L"Recycle..."));
+                    Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(action,winrt::hstring((move?L"Move file: ":L"Recycle file: ")+captured_path));
+                    action.Click([this,captured_path,move](auto const&,auto const&){RunFileAction(captured_path,move);});row.Children().Append(action);}
+
+                auto rename = Button{};
+                rename.Content(box_value(L"Rename..."));
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                    rename, winrt::hstring(L"Rename file: " + captured_path));
+                AddInlineRename(row,path_text,captured_path,false);
+                rename.Click([this, captured_path](auto const&, auto const&) { RenameItem(captured_path); });
+                row.Children().Append(rename);
+
                 large_stack.Children().Append(row);
             }
         }
+        auto pager = StackPanel{};
+        pager.Orientation(Orientation::Horizontal); pager.Spacing(12);
+        auto previous = Button{}; previous.Content(box_value(L"Previous 50 files"));
+        previous.IsEnabled(m_largest_files_offset > 0);
+        previous.Click([this](auto const&, auto const&) { m_largest_files_offset = m_largest_files_offset >= 50 ? m_largest_files_offset - 50 : 0; PopulateCleanupView(); });
+        auto next = Button{}; next.Content(box_value(L"Next 50 files"));
+        next.IsEnabled(m_largest_files_offset + largestPage.emitted < largestPage.total);
+        next.Click([this](auto const&, auto const&) { m_largest_files_offset += 50; PopulateCleanupView(); });
+        auto count = TextBlock{};
+        count.Text(winrt::hstring(L"Showing " + std::to_wstring(largestPage.emitted ? m_largest_files_offset + 1 : 0) + L"-" + std::to_wstring(m_largest_files_offset + largestPage.emitted) + L" of " + std::to_wstring(largestPage.total) + L" files (allocated bytes)"));
+        pager.Children().Append(previous); pager.Children().Append(count); pager.Children().Append(next);
+        large_stack.Children().Append(pager);
         large_card.Child(large_stack);
         content.Children().Append(large_card);
     }
@@ -6325,6 +8057,67 @@ namespace winrt::WinBlaze::UI::implementation
 
     std::vector<MainWindow::TreeCatalogEntry> MainWindow::FilterTreeCatalog() const
     {
+        if (m_has_results && !m_session_active) {
+            WbSearchFilter filter{};
+            filter.flags = 64 | 128;
+            filter.limit = 50;
+            filter.offset = m_search_offset;
+            const auto pattern = SearchBox() ? std::wstring(SearchBox().Text()) : L"";
+            const auto extensions = ExtensionBox() ? std::wstring(ExtensionBox().Text()) : L"";
+            auto bytes = [&](Microsoft::UI::Xaml::Controls::TextBox const& box, uint64_t& target, uint32_t flag) {
+                if (!box || TrimCopy(box.Text().c_str()).empty()) { return true; }
+                auto parsed = ParseSizeTextBytes(box.Text().c_str());
+                if (!parsed) { return false; }
+                target = *parsed; filter.flags |= flag; return true;
+            };
+            std::vector<TreeCatalogEntry> entries;
+            if (!bytes(m_min_size_box, filter.min_logical, 1) ||
+                !bytes(m_max_size_box, filter.max_logical, 2) ||
+                !bytes(m_min_allocated_box, filter.min_allocated, 4) ||
+                !bytes(m_max_allocated_box, filter.max_allocated, 8)) {
+                m_search_status = 1; m_search_total = 0; return entries;
+            }
+            auto date = [&](Microsoft::UI::Xaml::Controls::TextBox const& box, int64_t& target, uint32_t flag) {
+                if (!box || TrimCopy(box.Text().c_str()).empty()) { return true; }
+                auto parsed = ParseUtcDateBoundary(box.Text().c_str());
+                if (!parsed) { return false; }
+                target = *parsed / kFileTimeTicksPerSecond - kUnixToFileTimeSeconds;
+                filter.flags |= flag; return true;
+            };
+            if (!date(m_modified_after_box, filter.modified_after, 16) ||
+                !date(m_modified_before_box, filter.modified_before, 32)) {
+                m_search_status = 1; m_search_total = 0; return entries;
+            }
+            const auto mode = ComboBoxSelectionText(MatchModeBox(), L"Substring");
+            filter.mode = mode == L"Exact" ? 1 : mode == L"Prefix" ? 2 : mode == L"Regex" ? 3 : 0;
+            const auto sort = ComboBoxSelectionText(SortFieldBox(), L"Name");
+            filter.sort = sort == L"Size" ? 1 : sort == L"Allocated" ? 2 : sort == L"Type" ? 3 : sort == L"Modified" ? 4 : 0;
+            if (ComboBoxSelectionText(SortDirectionBox(), L"Descending") == L"Descending") { filter.flags |= 256; }
+            const auto result = ::WinBlaze::UI::NativeBridge::Search(pattern.c_str(), extensions.c_str(), filter,
+                [this, &entries](WbTreeNode const& node) {
+                    TreeCatalogEntry item;
+                    item.path = Utf8ToWide(std::string_view{ node.name.ptr, node.name.len });
+                    item.name = std::filesystem::path(item.path).filename().wstring();
+                    if (item.name.empty()) { item.name = item.path; }
+                    item.kind = node.is_directory ? L"Directory" : L"File";
+                    item.size_bytes = node.logical_bytes;
+                    item.allocation_bytes = node.physical_bytes;
+                    item.size_text = FormatBytes(node.logical_bytes);
+                    item.total_entries = node.item_count;
+                    if (node.has_modified_utc) { item.modified_utc = node.modified_utc; }
+                    item.extension_lower = ExtensionLower(item.path);
+                    item.path_depth = PathDepth(item.path);
+                    item.parent_path = ParentPath(item.path);
+                    item.top_group = TopLevelPathGroup(item.path);
+                    item.search_text_lower = LowercaseCopy(item.name + L"\\n" + item.path);
+                    entries.push_back(std::move(item));
+                });
+            m_search_status = result.status;
+            m_search_total = result.total;
+            return entries;
+        }
+        m_search_status = 0;
+        m_search_total = m_tree_catalog.size();
         const std::wstring pattern = SearchBox() ? LowercaseCopy(SearchBox().Text().c_str()) : L"";
         const std::wstring extensions = ExtensionBox() ? LowercaseCopy(ExtensionBox().Text().c_str()) : L"";
         const std::wstring minimum_size_text = MinSizeBox() ? MinSizeBox().Text().c_str() : L"";

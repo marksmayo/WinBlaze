@@ -1,0 +1,9 @@
+{
+  "verified": true,
+  "files": 8192,
+  "logical_bytes_per_file": 256,
+  "windows_standard_allocation_bytes_per_file": 256,
+  "retrieval_pointers": "All streams report ERROR_HANDLE_EOF at VCN 0; no nonresident extents",
+  "interpretation": "WinBlaze/WinDirStat use Windows allocation bytes; WizTree exports zero cluster allocation for these resident streams. Do not compare physical totals as identical accounting.",
+  "reference": "https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_get_retrieval_pointers"
+}

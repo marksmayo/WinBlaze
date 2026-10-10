@@ -30,19 +30,31 @@ struct EventCounts {
 
 fn main() {
     let root = env::args().nth(1).map(PathBuf::from).unwrap_or_else(|| {
-        eprintln!("usage: directory_walk_benchmark <root>");
+        eprintln!("usage: directory_walk_benchmark <root> [workers: 1..64]");
         std::process::exit(2);
     });
 
+    let workers_argument = env::args().nth(2);
+    let explicit_workers =
+        worker_count_argument(workers_argument.as_deref()).unwrap_or_else(|message| {
+            eprintln!("{message}");
+            std::process::exit(2);
+        });
     let started = Instant::now();
     let (controller, rx) = ScanController::channel();
+    let mut config = ScanRuntimeConfig {
+        backend: ScanBackend::DirectoryWalk,
+        root_path: root.clone(),
+        ..ScanRuntimeConfig::default()
+    };
+    if let Some(workers) = explicit_workers {
+        config.max_parallelism = workers;
+        config.directory_walk_max_parallelism = workers;
+    }
+    let worker_count = config.directory_walk_worker_count();
     let handle = controller.start_scan(ScanRequest {
         root_path: root.clone(),
-        config: ScanRuntimeConfig {
-            backend: ScanBackend::DirectoryWalk,
-            root_path: root.clone(),
-            ..ScanRuntimeConfig::default()
-        },
+        config,
     });
 
     let mut counts = EventCounts::default();
@@ -85,7 +97,7 @@ fn main() {
 
     let elapsed = started.elapsed();
     println!(
-        "{{\"root\":\"{}\",\"elapsed_ms\":{},\"first_event_ms\":{},\"summary_ms\":{},\"completed_ms\":{},\"files\":{},\"directories\":{},\"summary_files\":{},\"summary_directories\":{},\"summary_bytes\":{},\"progress_events\":{},\"issues\":{},\"issues_by_kind\":{},\"recent_issues\":{},\"completed\":{},\"cancelled\":{},\"failed\":{},\"failure_message\":\"{}\",\"files_per_second\":{}}}",
+        "{{\"workers\":{worker_count},\"root\":\"{}\",\"elapsed_ms\":{},\"first_event_ms\":{},\"summary_ms\":{},\"completed_ms\":{},\"files\":{},\"directories\":{},\"summary_files\":{},\"summary_directories\":{},\"summary_bytes\":{},\"progress_events\":{},\"issues\":{},\"issues_by_kind\":{},\"recent_issues\":{},\"completed\":{},\"cancelled\":{},\"failed\":{},\"failure_message\":\"{}\",\"files_per_second\":{}}}",
         json_escape(&root.display().to_string()),
         millis(elapsed),
         counts.first_event_ms.unwrap_or(0),
@@ -110,6 +122,31 @@ fn main() {
             counts.files.saturating_mul(1000) / elapsed.as_millis() as u64
         }
     );
+}
+
+fn worker_count_argument(value: Option<&str>) -> Result<Option<usize>, &'static str> {
+    value
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .ok()
+                .filter(|&count| (1..=64).contains(&count))
+                .ok_or("workers must be an integer in 1..64")
+        })
+        .transpose()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::worker_count_argument;
+    #[test]
+    fn explicit_worker_controls_preserve_default_and_reject_invalid_limits() {
+        assert_eq!(worker_count_argument(None), Ok(None));
+        assert_eq!(worker_count_argument(Some("8")), Ok(Some(8)));
+        for invalid in ["0", "65", "-1", "many", ""] {
+            assert!(worker_count_argument(Some(invalid)).is_err());
+        }
+    }
 }
 
 fn issue_counts_json(summary: &ScanIssueSummary) -> String {

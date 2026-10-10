@@ -1,0 +1,73 @@
+{
+  "generated_utc": "2026-10-04T07:16:03.943Z",
+  "runs": 10,
+  "source_targets": 50,
+  "shared_production_changes": 5,
+  "baseline_directory": "C:\\Users\\markm\\Github\\WinBlaze\\benchmarks\\runs\\startup-resource-baseline-20261004T064345566Z",
+  "method": "Identical protocols, separate dated batches, caches and scheduling uncontrolled. CPU is coarse process telemetry. No per-target causal attribution.",
+  "results": [
+    {
+      "scope": "First idle GUI message queue",
+      "metric": "initialization_ms",
+      "unit": "ms",
+      "before": 85.66499999999999,
+      "after": 75.11,
+      "n": 10,
+      "percent_lower": 12.321251386213731
+    },
+    {
+      "scope": "First idle GUI message queue",
+      "metric": "cpu_ms_at_idle",
+      "unit": "ms",
+      "before": 117.1875,
+      "after": 125,
+      "n": 10,
+      "percent_lower": -6.666666666666667
+    },
+    {
+      "scope": "First idle GUI message queue",
+      "metric": "working_set_bytes_at_idle",
+      "unit": "bytes",
+      "before": 35915776,
+      "after": 35338240,
+      "n": 10,
+      "percent_lower": 1.6080287392370416
+    },
+    {
+      "scope": "First idle GUI message queue",
+      "metric": "peak_working_set_bytes_at_idle",
+      "unit": "bytes",
+      "before": 35915776,
+      "after": 35338240,
+      "n": 10,
+      "percent_lower": 1.6080287392370416
+    },
+    {
+      "scope": "Fresh visible maximized window and enabled scan controls",
+      "metric": "ready_ms",
+      "unit": "ms",
+      "before": 360.03499999999997,
+      "after": 524.155,
+      "n": 10,
+      "percent_lower": -45.58445706667408
+    },
+    {
+      "scope": "Fresh visible maximized window and enabled scan controls",
+      "metric": "cpu_ms",
+      "unit": "ms",
+      "before": 406.25,
+      "after": 539.0625,
+      "n": 10,
+      "percent_lower": -32.69230769230769
+    },
+    {
+      "scope": "Fresh visible maximized window and enabled scan controls",
+      "metric": "working_set_bytes",
+      "unit": "bytes",
+      "before": 134119424,
+      "after": 152971264,
+      "n": 10,
+      "percent_lower": -14.056010261421939
+    }
+  ]
+}

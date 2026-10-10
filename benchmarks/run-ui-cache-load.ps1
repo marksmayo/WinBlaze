@@ -1,10 +1,30 @@
 param(
     [string]$AppPath = (Join-Path $PSScriptRoot "..\src\WinBlaze.UI\bin\x64\Debug\WinBlaze.UI.exe"),
     [int]$TimeoutSeconds = 15,
-    [string]$OutputPath = ""
+    [string]$OutputPath = "",
+    [string]$LocalAppData = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+function Invoke-Button {
+    param([System.Windows.Automation.AutomationElement]$Window, [string]$Name, [bool]$Required = $true)
+    $condition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::NameProperty, $Name)
+    $deadline = (Get-Date).AddSeconds(15)
+    while ((Get-Date) -lt $deadline) {
+        foreach ($element in $Window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)) {
+            $pattern = $null
+            if ($element.Current.IsEnabled -and $element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+                $pattern.Invoke()
+                return $true
+            }
+        }
+        Start-Sleep -Milliseconds 100
+    }
+    if ($Required) { throw "Button not found or enabled: $Name" }
+    return $false
+}
 
 function Assert-True {
     param([bool]$Condition, [string]$Message)
@@ -41,9 +61,9 @@ function Get-WinBlazeWindow {
     param([int]$TimeoutSeconds)
 
     $desktop = [System.Windows.Automation.AutomationElement]::RootElement
-    $condition = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::NameProperty,
-        "WinBlaze")
+    $condition = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, "WinBlaze"),
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id))
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
         $window = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
@@ -73,16 +93,19 @@ $resolvedAppPath = (Resolve-Path -LiteralPath $AppPath).Path
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 
-$old = Get-Process WinBlaze.UI -ErrorAction SilentlyContinue
-if ($old) {
-    $old | Stop-Process -Force
-}
 
 $startTime = Get-Date
-$app = Start-Process -FilePath $resolvedAppPath -PassThru
+$start = [Diagnostics.ProcessStartInfo]::new()
+$start.FileName = $resolvedAppPath
+$start.UseShellExecute = $false
+if (!$LocalAppData -and $env:WINBLAZE_BENCH_CACHE_ROOT) {
+    $LocalAppData = $env:WINBLAZE_BENCH_CACHE_ROOT
+}
+if ($LocalAppData) { $start.EnvironmentVariables['LOCALAPPDATA'] = $LocalAppData }
+$app = [Diagnostics.Process]::Start($start)
 try {
     $window = Get-WinBlazeWindow -TimeoutSeconds $TimeoutSeconds
-    $runtime = Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
+    Invoke-Button -Window $window -Name "Diagnostics" | Out-Null
     $runtime = Find-TextLike -Window $window -Pattern "*results=loaded*" -TimeoutSeconds $TimeoutSeconds
     $loadedAt = Get-Date
     $catalog = Find-TextLike -Window $window -Pattern "Catalog entries: *" -TimeoutSeconds 5
@@ -102,10 +125,13 @@ try {
     }
 
     $record = [pscustomobject]@{
+        cpu_ms_through_observation = $process.TotalProcessorTime.TotalMilliseconds
+        working_set_bytes_at_observation = $process.WorkingSet64
         elapsed_ms = [int](($loadedAt - $startTime).TotalMilliseconds)
         working_set_mb = [math]::Round($process.WorkingSet64 / 1MB, 1)
+        cache_bytes_label = [regex]::Match($cacheLoad, "read ([0-9.]+ [KMGT]?B)").Groups[1].Value
         cache_read_kb = if ($null -ne $cacheReadKbText) { [double]$cacheReadKbText } else { $null }
-        cache_read_ms = Get-StatusMetric -Text $cacheLoad -Pattern "read [0-9.]+ KB in (\d+) ms"
+        cache_read_ms = Get-StatusMetric -Text $cacheLoad -Pattern "read [0-9.]+ [KMGT]?B in (\d+) ms"
         cache_decode_ms = Get-StatusMetric -Text $cacheLoad -Pattern "decoded in (\d+) ms"
         cache_entries = Get-StatusMetric -Text $cacheLoad -Pattern "entries=(\d+)"
         cache_load_cap = Get-StatusMetric -Text $cacheLoad -Pattern "load cap=(\d+)"

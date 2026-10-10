@@ -1,0 +1,71 @@
+{
+  "validated_winblaze_observations": 450,
+  "counts": {
+    "workflow": 40,
+    "startup": 10,
+    "engine": 70,
+    "feature-performance": 160,
+    "gui": 70,
+    "cache": 10,
+    "incremental": 30,
+    "index-memory": 30,
+    "public-operation": 20,
+    "ui-ready": 10
+  },
+  "fresh_full_competitor_observations": 20,
+  "before": {
+    "elapsed_ms": 67555.515,
+    "cpu_ms_sampled_lower_bound": 411867.185,
+    "peak_working_set_bytes_sampled": 682240000.0,
+    "peak_private_bytes_sampled": 745682944.0,
+    "files": 1646853.0,
+    "folders_excluding_root": 394328.0,
+    "logical_bytes": 324473965682.5,
+    "allocated_bytes": 308757520248.0
+  },
+  "after_full_workflow": {
+    "WinBlaze": {
+      "elapsed_ms": 17606.42,
+      "cpu_ms_sampled_lower_bound": 114007.815,
+      "peak_working_set_bytes_sampled": 678582272.0,
+      "peak_private_bytes_sampled": 741091328.0,
+      "files": 1658943.0,
+      "folders_excluding_root": 395446.0,
+      "logical_bytes": 354097303394.5,
+      "allocated_bytes": 337993441960.0,
+      "n": 10,
+      "version": null,
+      "sha256": "13B4CD474D160B8C4901C3CEDF94C147C57B2EEC2BF1309C36ADF68C8AB0EBC2",
+      "first_started_utc": "2026-10-03T20:38:25.8987518Z"
+    },
+    "WinDirStat": {
+      "elapsed_ms": 26902.199999999997,
+      "cpu_ms_sampled_lower_bound": 85953.125,
+      "peak_working_set_bytes_sampled": 592623616.0,
+      "peak_private_bytes_sampled": 548360192.0,
+      "files": 1663681.0,
+      "folders_excluding_root": 396697.0,
+      "logical_bytes": 356998734018.0,
+      "allocated_bytes": 504500416176.0,
+      "n": 10,
+      "version": "2.8.0",
+      "sha256": "6D17BEE74A51B0EE1F46B01862871BC45338728DFEEC7D3BAC926C89A20E88A7",
+      "first_started_utc": "2026-10-03T21:02:27.3570495Z"
+    },
+    "WizTree": {
+      "elapsed_ms": 38104.68,
+      "cpu_ms_sampled_lower_bound": 127421.875,
+      "peak_working_set_bytes_sampled": 1002579968.0,
+      "peak_private_bytes_sampled": 975960064.0,
+      "files": 1663699.0,
+      "folders_excluding_root": 396697.0,
+      "logical_bytes": 356999200158.5,
+      "allocated_bytes": 355640406016.0,
+      "n": 10,
+      "version": "4.33",
+      "sha256": "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+      "first_started_utc": "2026-10-03T21:07:02.6326456Z"
+    }
+  },
+  "all_observations_match_current_executable_and_dll": true
+}

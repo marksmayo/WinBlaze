@@ -1,0 +1,666 @@
+{
+  "identities": [
+    {
+      "sha256": "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+      "version": "4.33",
+      "path": "C:\\Program Files\\WizTree\\WizTree64.exe"
+    },
+    {
+      "sha256": "6D17BEE74A51B0EE1F46B01862871BC45338728DFEEC7D3BAC926C89A20E88A7",
+      "version": "2.8.0",
+      "path": "C:\\Program Files\\WinDirStat\\WinDirStat.exe"
+    },
+    {
+      "sha256": "69B9021F475F30B1F324CD8B63CC22EB176B71F56E41F262A78149CDE2A13024",
+      "version": null,
+      "path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\examples\\feature_catalog.exe"
+    }
+  ],
+  "timezone": "New Zealand Standard Time",
+  "runs": 10,
+  "generated_utc": "2026-10-05T00:45:13.0442110Z",
+  "known_file_utc": "2020-01-02T03:04:05.0000000Z",
+  "records": [
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 1,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 1,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 1,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 1,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 1,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 1,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 1,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 1,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 1,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    },
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 2,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 2,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 2,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 2,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 2,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 2,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 2,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 2,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 2,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    },
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 3,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 3,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 3,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 3,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 3,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 3,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 3,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 3,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 3,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    },
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 4,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 4,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 4,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 4,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 4,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 4,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 4,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 4,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 4,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    },
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 5,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 5,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 5,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 5,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 5,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 5,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 5,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 5,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 5,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    },
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 6,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 6,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 6,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 6,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 6,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 6,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 6,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 6,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 6,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    },
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 7,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 7,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 7,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 7,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 7,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 7,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 7,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 7,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 7,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    },
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 8,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 8,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 8,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 8,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 8,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 8,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 8,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 8,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 8,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    },
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 9,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 9,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 9,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 9,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 9,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 9,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 9,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 9,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 9,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    },
+    {
+      "exit_code": 0,
+      "result": "CSV content, not JSON",
+      "run": 10,
+      "case": "WizTree .json export filename"
+    },
+    {
+      "case": "WizTree local timestamp import",
+      "expected_utc": 1577934245,
+      "run": 10,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "case": "WizTree utc timestamp import",
+      "expected_utc": 1577934245,
+      "run": 10,
+      "delta_seconds": 0,
+      "result": "preserved",
+      "actual_utc": 1577934245
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 10,
+      "owner_retained": true,
+      "case": "WinDirStat optional Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 10,
+      "owner_retained": true,
+      "case": "WinDirStat reordered Owner CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 10,
+      "owner_retained": true,
+      "case": "Localized fixed-order WinDirStat CSV"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 10,
+      "owner_retained": false,
+      "case": "WinDirStat JSON import"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 10,
+      "owner_retained": false,
+      "case": "Localized fixed-order WinDirStat JSON"
+    },
+    {
+      "exit_code": 0,
+      "result": "preserved",
+      "run": 10,
+      "owner_retained": false,
+      "case": "WinBlaze TSV roundtrip"
+    }
+  ],
+  "scope": "Functional format probes, not performance measurements"
+}

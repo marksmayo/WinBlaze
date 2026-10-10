@@ -20,7 +20,7 @@ WinBlaze combines a Rust scanning engine (raw NTFS MFT access with a parallel di
 - **Responsive by measurement**: the UI ships its own frame/flush latency counters, and scan-time work is budgeted per frame
 - **Self-updating**: checks GitHub for a newer release on launch (and on demand), then downloads, **SHA-256-verifies**, and installs the update in-app before relaunching — no manual reinstall
 
-## Performance
+## Performance (historical July 2026 snapshot)
 
 Compared against WizTree and WinDirStat on the live `C:\` system volume — **~2.3M files / ~546k directories / 464 GB** — Windows 11, NVMe, warm cache, elevated; timed 2026-07-07. GUI tools were timed launch → scan-complete-and-populated via a CPU-idle probe; WinBlaze uses its own reported scan duration plus UI-idle detection.
 
@@ -74,6 +74,26 @@ Generated-dataset budgets (tiny/fanout/fanout-large/scale) are enforced in CI an
 3. Double-click folders to expand them; children load on demand
 4. Click treemap tiles to select; colors match the extension legend
 5. Use **Incremental rescan** to refresh only what changed
+
+### Reports and file management
+
+The File menu exports complete CSV/JSON scans, filtered CSV, treemap PNG, verified duplicate reports and owner/group/DACL permission reports. **Open CSV scan** reopens WinBlaze, WinDirStat or WizTree exports without rescanning the original disk. **Export raw MFT** requires an administrator session.
+
+Cleanup lists largest files in pages, with confirmed **Move** and **Recycle** actions. Moves never overwrite an existing destination; directory/reparse-point actions are rejected. **File > Monitor file-system changes** enables recursive, debounced automatic refresh for a live scan root. Imported catalogs cannot monitor.
+
+The portable package and installer include the unattended CLI:
+
+```powershell
+.\winblaze-cli.exe C:\Data scan.csv
+.\winblaze-cli.exe --duplicates C:\Data duplicates.csv
+.\winblaze-cli.exe --permissions C:\Data permissions.csv
+# Run from an administrator session:
+.\winblaze-cli.exe --dump-mft C:\ volume.mft
+```
+
+Duplicate detection compares complete bytes and excludes hard-link aliases from reclaimable copies. ACL reports include errors for inaccessible entries and exclude privileged audit SACLs. Allocation uses actual Windows storage; logical totals retain hard-link names while physical storage is counted once.
+
+The current offline benchmark dashboard is [CURRENT_COMPARISON.html](benchmarks/CURRENT_COMPARISON.html), with ten repeats per workload, binary/version provenance, feature-support medals and explicit timing scopes. The performance snapshot above is historical.
 
 ### Keyboard Shortcuts
 

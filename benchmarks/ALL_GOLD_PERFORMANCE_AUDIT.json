@@ -1,0 +1,1011 @@
+{
+  "scope": "100 ranked engineering hypotheses, including twelve validated product changes and a thirteenth awaiting GREEN evidence; no claim of 100 independently proven wins. Estimates overlap and require controlled evidence.",
+  "ranking_method": "Prioritize full-volume CPU/memory and startup gaps, then existing reviewed candidates. Engineering estimates are hypotheses, overlap, and are not additive; controlled evidence required. No protocol or medal-definition changes.",
+  "baseline_standings": [
+    {
+      "tool": "WinBlaze",
+      "gold": 25,
+      "silver": 6,
+      "bronze": 4,
+      "place": 1
+    },
+    {
+      "tool": "WinDirStat",
+      "gold": 8,
+      "silver": 25,
+      "bronze": 2,
+      "place": 2
+    },
+    {
+      "tool": "WizTree",
+      "gold": 2,
+      "silver": 4,
+      "bronze": 29,
+      "place": 3
+    }
+  ],
+  "gaps": [
+    {
+      "name": "Startup · first idle message queue",
+      "medal": "silver",
+      "values": {
+        "WinBlaze": 87.45500000000001,
+        "WinDirStat": 84.01,
+        "WizTree": 227.185
+      },
+      "scope": "Same hidden-window first-idle protocol. Does not measure a visible usable window."
+    },
+    {
+      "name": "Startup CPU at first idle",
+      "medal": "silver",
+      "values": {
+        "WinBlaze": 0.109375,
+        "WinDirStat": 0.078125,
+        "WizTree": 0.203125
+      },
+      "scope": "Same hidden-window first-idle observation boundary; excludes later cache restoration and usable-window work."
+    },
+    {
+      "name": "Startup working set at first idle",
+      "medal": "silver",
+      "values": {
+        "WinBlaze": 33.34375,
+        "WinDirStat": 21.2109375,
+        "WizTree": 34.6171875
+      },
+      "scope": "Same hidden-window first-idle observation boundary; excludes later cache restoration and usable-window work."
+    },
+    {
+      "name": "Startup peak working set at first idle",
+      "medal": "silver",
+      "values": {
+        "WinBlaze": 33.34375,
+        "WinDirStat": 21.2109375,
+        "WizTree": 42.640625
+      },
+      "scope": "Same hidden-window first-idle observation boundary; excludes later cache restoration and usable-window work."
+    },
+    {
+      "name": "Quick folder · timing variability",
+      "medal": "bronze",
+      "values": {
+        "WinBlaze": 11.242784380305608,
+        "WinDirStat": 7.901262828583418,
+        "WizTree": 6.823890594473923
+      },
+      "scope": "Common startup + scan + CSV export. Interquartile range / median × 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread."
+    },
+    {
+      "name": "Empty-file scale · timing variability",
+      "medal": "bronze",
+      "values": {
+        "WinBlaze": 13.809681697612733,
+        "WinDirStat": 4.946593326646016,
+        "WizTree": 9.753021007062571
+      },
+      "scope": "Common startup + scan + CSV export. Interquartile range / median × 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread."
+    },
+    {
+      "name": "Nonempty dense folder · timing variability",
+      "medal": "bronze",
+      "values": {
+        "WinBlaze": 12.068667051356025,
+        "WinDirStat": 6.9448810058374635,
+        "WizTree": 2.884522715736855
+      },
+      "scope": "Common startup + scan + CSV export. Interquartile range / median × 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread."
+    },
+    {
+      "name": "Standard-user · full-drive peak memory",
+      "medal": "silver",
+      "values": {
+        "WinBlaze": 655.634765625,
+        "WinDirStat": 573.361328125,
+        "WizTree": 968.841796875
+      },
+      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins."
+    },
+    {
+      "name": "Standard-user · full-drive private memory",
+      "medal": "silver",
+      "values": {
+        "WinBlaze": 712.1484375,
+        "WinDirStat": 539.173828125,
+        "WizTree": 946.078125
+      },
+      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins."
+    },
+    {
+      "name": "Standard-user · full-drive CPU consumption",
+      "medal": "bronze",
+      "values": {
+        "WinBlaze": 102.92969,
+        "WinDirStat": 68.867185,
+        "WizTree": 86.546875
+      },
+      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins."
+    }
+  ],
+  "rows": [
+    {
+      "candidate": "Choose directory worker count from a controlled n=10 sweep",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Controlled n=10 full-drive engine: 114.0 -> 81.3984375 CPU-s (-28.6%); 60.2598 -> 52.8848 MiB (-12.2%); 17.8384 -> 22.3818 s (+25.5%). These are engine-only, not whole-workflow savings.",
+      "risk": "low, with measured speed/CPU trade-off",
+      "status": "implemented; default directory-walk cap four, explicit override retained; end-to-end remeasurement pending",
+      "rank": 1,
+      "evidence": "Worker scratch-budget RED20 -> GREEN4 with 256 files/257 directories/768 bytes retained. MFT parallelism unchanged. Explicit engine worker overrides retained. Eight-worker CPU n=9 after one missing exit-race reading; not claimed as n=10 CPU."
+    },
+    {
+      "candidate": "Consume scan maps directly into a compact catalog",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Avoid an additional file-count × size_of(FileRecord) allocation during publication; also replace record-sized hash buckets with ID-to-slot bookkeeping. Full-volume private/working-set savings require n=10 measurements.",
+      "risk": "medium",
+      "status": "implemented; red/green allocation and catalog semantics checks pass; full-volume effect pending",
+      "rank": 2,
+      "evidence": "Public consuming transaction budget RED 2,228,224 allocated bytes; GREEN zero. Sparse IDs, replacements, repeated removals and insertion-order-independent equality pass. Workspace/examples/Clippy pass; coverage 92.10%."
+    },
+    {
+      "candidate": "Treat late capacity estimates as totals, not additional records",
+      "source": "src/WinBlaze.Index/src/store.rs; src/WinBlaze.Index/src/file_records.rs",
+      "estimated_savings": "Avoid growing populated file/directory storage merely because a late progress estimate arrives. Fixture prevents 11,862,032 bytes of unnecessary allocation; full-volume effect pending.",
+      "risk": "low",
+      "status": "implemented; red/green public allocation budget and retained-record checks pass",
+      "evidence": "Public reserve budget RED 11,862,032 bytes; GREEN zero for equal and lower total estimates.",
+      "rank": 3
+    },
+    {
+      "candidate": "Skip dot records before allocating their discarded names",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "estimated_savings": "Eliminates two filename allocations/conversions per traversed directory; approximately 0.8 million discarded-name allocations on the measured 404,351-directory volume. Actual CPU/time effect awaits whole-workflow n=10.",
+      "risk": "low",
+      "status": "implemented; empty-directory public allocation budget RED2 -> GREEN0; metadata correctness checks pass",
+      "rank": 4
+    },
+    {
+      "candidate": "Pool the 64 KiB directory metadata buffer per worker",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "estimated_savings": "Avoid one 64 KiB allocation/initialization per directory; retains at most one idle buffer per worker.",
+      "risk": "low",
+      "status": "implemented; allocation savings proven; n=10 iteration-one runtime batch complete, no causal CPU/time saving established",
+      "rank": 5,
+      "evidence": "directory_buffer_budget: 24 large allocations before, at most one after. Workspace/examples and strict Clippy pass; unchanged coverage gate passes at 92.03%."
+    },
+    {
+      "candidate": "Aggregate file counters per directory before shared publication",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Replace three shared atomic increments per file with bounded aggregate publication; exact terminal totals retained.",
+      "risk": "low to medium",
+      "status": "candidate",
+      "rank": 6
+    },
+    {
+      "candidate": "Reserve file IDs in worker-local blocks",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Remove scan-wide atomic contention for most file IDs; preserve uniqueness.",
+      "risk": "medium",
+      "status": "candidate",
+      "rank": 7
+    },
+    {
+      "candidate": "Reduce directory queue wakeups to available work",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Avoid waking idle workers for single-task arrivals; no estimated percentage without profiling.",
+      "risk": "low to medium",
+      "status": "candidate",
+      "rank": 8
+    },
+    {
+      "candidate": "Use compact direct ID-to-slot lookup for dense walk file IDs",
+      "source": "src/WinBlaze.Index/src/file_records.rs",
+      "estimated_savings": "Current file-ID lookup stores u64 keys and usize positions in hash buckets. A guarded Vec<u32> slot table can use about 4 bytes per dense ID, versus approximately 17 bytes per hash bucket including control bytes. At about 1.7 million files, geometric capacities suggest roughly 26 MiB less lookup storage; this is a non-additive engineering estimate, not measured whole-process savings. Sparse/u64::MAX IDs must fall back to the current map.",
+      "risk": "provisionally low only with bounded density, sparse/overflow fallback, replacement/removal/clone/equality/persistence regressions and n10 evidence",
+      "status": "GREEN: bounded dense lookup resource budget and exact values pass; removal, dense-to-sparse transition, cloning and equality regressions pass. Broad validation and coverage 92.17% pass. Latest release rebuilt; n=10 whole-process evidence pending.",
+      "rank": 9
+    },
+    {
+      "candidate": "Defer unused UI analysis resources until first interaction",
+      "source": "src/WinBlaze.UI/src/MainWindow.cpp",
+      "estimated_savings": "Reduce initial UI object/resource construction; startup measurements determine actual savings.",
+      "risk": "low to medium",
+      "status": "Not a first-idle optimization: all10 phase traces reached first idle before MainWindow construction. May affect visible-ready latency; needs separate evidence and unchanged scopes.",
+      "rank": 10
+    },
+    {
+      "candidate": "Reduce first-launch redundant window operations",
+      "source": "src/WinBlaze.UI/src/App.cpp",
+      "estimated_savings": "Avoid repeated maximize/show/title calls while preserving first visible maximized window.",
+      "risk": "low to medium",
+      "status": "Not a first-idle optimization: all10 phase traces reached first idle before MainWindow construction. May affect visible-ready latency; needs separate evidence and unchanged scopes.",
+      "rank": 11
+    },
+    {
+      "candidate": "Avoid repeated sparse/ordinary allocation identity volume lookup",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "estimated_savings": "One stable volume lookup per worker instead of per file where safe.",
+      "risk": "low",
+      "status": "candidate",
+      "rank": 12
+    },
+    {
+      "candidate": "Use a bounded serial path for genuinely tiny scan roots",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Reduce thread creation/scheduling variation; avoid delaying or pre-enumerating large roots.",
+      "risk": "medium",
+      "status": "candidate",
+      "rank": 13
+    },
+    {
+      "candidate": "Reuse the fallback UTF-16 directory prefix",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 14
+    },
+    {
+      "candidate": "Reuse fallback file-path capacity across entries",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 15
+    },
+    {
+      "candidate": "Query compression metadata using the already-open file handle",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 16
+    },
+    {
+      "candidate": "Combine fallback link count and short identity queries",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 17
+    },
+    {
+      "candidate": "Avoid joining paths for fallback directory entries",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 18
+    },
+    {
+      "candidate": "Use a smaller first metadata buffer for tiny directories",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 19
+    },
+    {
+      "candidate": "Grow directory buffers only when the filesystem requests it",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 20
+    },
+    {
+      "candidate": "Avoid clearing metadata buffers between directory opens",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 21
+    },
+    {
+      "candidate": "Select supported metadata classes once per volume",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 22
+    },
+    {
+      "candidate": "Reserve child-directory path capacity from exact name length",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 23
+    },
+    {
+      "candidate": "Borrow ancestor paths for ordinary child checks",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 24
+    },
+    {
+      "candidate": "Avoid duplicate normalized-root conversions",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 25
+    },
+    {
+      "candidate": "Avoid duplicate volume-root discovery",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 26
+    },
+    {
+      "candidate": "Cache volume information for reparse targets",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 27
+    },
+    {
+      "candidate": "Reduce fallback error-path display conversions",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 28
+    },
+    {
+      "candidate": "Reuse canonicalization scratch space for followed reparses",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 29
+    },
+    {
+      "candidate": "Avoid converting display names twice in logs",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 30
+    },
+    {
+      "candidate": "Borrow exact file names during issue classification",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 31
+    },
+    {
+      "candidate": "Avoid constructing paths for skipped reparse files",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 32
+    },
+    {
+      "candidate": "Pre-reserve identity sets using a bounded directory estimate",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 33
+    },
+    {
+      "candidate": "Batch identity claims while holding one shard lock",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 34
+    },
+    {
+      "candidate": "Select shard count from measured worker count",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 35
+    },
+    {
+      "candidate": "Use worker-local identity prefilters without false positives",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 36
+    },
+    {
+      "candidate": "Avoid repeated volume map lookup within one directory batch",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 37
+    },
+    {
+      "candidate": "Release identity sets immediately after producer completion",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 38
+    },
+    {
+      "candidate": "Trim unused file-record arena capacity when publishing the catalog",
+      "source": "src/WinBlaze.Index/src/file_records.rs",
+      "estimated_savings": "An unestimated 20,000-file publication retained 32,768 slots before the change. Publication now shrinks spare capacity after dropping ID lookup storage. Approximately 51 MiB of slack at 1.7 million 136-byte records is an engineering upper-bound estimate; whole-process peak memory and runtime savings remain unmeasured. Allocator shrinking may move storage.",
+      "risk": "low correctness risk with exact records/IDs and reserve-contract tests; runtime trade-off must be rejected if n10 shows material slowdown",
+      "status": "RED: public publication retained 32,768 slots for 20,000 exact records; GREEN: capacity budget and every ID/value pass, along with all six catalog budget regressions. Workspace/examples, strict Clippy, rustfmt and 92.17% coverage pass. Release rebuilt; n=10 measurements pending.",
+      "rank": 39
+    },
+    {
+      "candidate": "Use a measured identity-specific hasher while retaining collision correctness",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 40
+    },
+    {
+      "candidate": "Reuse the WinUI framework metadata provider across public type queries",
+      "source": "src/WinBlaze.UI/src/XamlMetaDataProvider.cpp",
+      "estimated_savings": "At most repeated provider activation/query overhead. Both GetXamlType overloads and GetXmlnsDefinitions currently construct a provider; startup boundary and SDK internal caching must be measured.",
+      "risk": "provisionally low only after focused correctness/resource tests and n10 measurements",
+      "status": "Source-reviewed framework activation candidate; actual startup query count unknown. Opt-in diagnostic markers added in source only; build/run n=10 phase inventory after current timed batch ends. No provider cache implementation or saving claim.",
+      "rank": 41
+    },
+    {
+      "candidate": "Queue child directories in batches",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 42
+    },
+    {
+      "candidate": "Amortize queue locking across local child discoveries",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 43
+    },
+    {
+      "candidate": "Use a bounded worker-local directory queue",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 44
+    },
+    {
+      "candidate": "Reduce empty work-queue polling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 45
+    },
+    {
+      "candidate": "Move non-shared directory counters to workers",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 46
+    },
+    {
+      "candidate": "Merge worker byte totals at progress boundaries",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 47
+    },
+    {
+      "candidate": "Avoid work-stealing for shallow single-directory scans",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 48
+    },
+    {
+      "candidate": "Transfer compact directory records into the published catalog",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Avoid a second directories_count * size_of(DirectoryRecord) array at into_record_vecs; 406k directories implies roughly 40 MiB. Vector slack and ID bookkeeping can offset steady-state savings; n10 peak/private measurements required.",
+      "risk": "provisionally low only after focused correctness/resource tests and n10 measurements",
+      "status": "implemented; RED 1,703,936 -> GREEN zero large temporary bytes; sparse-ID/replacement/equality and Index regressions pass; n=10 effect pending",
+      "rank": 49,
+      "evidence": "artifacts/all-gold-directory-handoff-red.log; src/WinBlaze.Index/tests/directory_handoff_budget.rs. Session21194 runs GREEN only after measurementmutex is free."
+    },
+    {
+      "candidate": "Tune event batch size with a controlled sweep",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 50
+    },
+    {
+      "candidate": "Reuse emptied event batches via a bounded pool",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 51
+    },
+    {
+      "candidate": "Use bounded channel capacity derived from byte budgets",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 52
+    },
+    {
+      "candidate": "Coalesce superseded non-terminal progress updates",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 53
+    },
+    {
+      "candidate": "Reserve issue batches from observed issue density",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 54
+    },
+    {
+      "candidate": "Avoid calculating progress intervals until item thresholds pass",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 55
+    },
+    {
+      "candidate": "Inherit verified volume identity for ordinary child directory metadata",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "estimated_savings": "Potentially avoid one FileIdInfo query per ordinary directory. Preserve actual root/reparse/mount-boundary checks and full 128-bit identities; no CPU percentage established.",
+      "risk": "provisionally low only after focused correctness/resource tests and n10 measurements",
+      "status": "current-source candidate; not implemented or measured",
+      "rank": 56
+    },
+    {
+      "candidate": "Avoid copying progress state for unchanged values",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 57
+    },
+    {
+      "candidate": "Separate summary delivery from unused per-file CLI callbacks",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 58
+    },
+    {
+      "candidate": "Reuse log formatting scratch for bounded diagnostic events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 59
+    },
+    {
+      "candidate": "Skip record permutation when IDs are already sorted",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "risk": "low; unchanged public interfaces and unordered-input fallback",
+      "status": "implemented; public ordered-catalog budget RED262144 temporary bytes -> GREEN0 for 16384 files; exact file values/rollups and full Index suite pass; n10 effect pending",
+      "rank": 60
+    },
+    {
+      "candidate": "Compact optional timestamps inside retained catalog records",
+      "source": "src/WinBlaze.Core/src/model.rs",
+      "estimated_savings": "Potentially saves up to 24 bytes per file, depending on layout; requires public compatibility review.",
+      "risk": "medium: public record representation and persistence compatibility require review; not accepted as a zero-to-low-risk change",
+      "status": "candidate",
+      "rank": 61
+    },
+    {
+      "candidate": "Avoid allocating child-count arrays for empty catalogs",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 62
+    },
+    {
+      "candidate": "Reuse child-count storage as child-fill cursors",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 63
+    },
+    {
+      "candidate": "Avoid probing and recreating the Direct3D/Direct2D render stack during launch",
+      "source": "src/WinBlaze.UI/src/MainWindow.cpp",
+      "estimated_savings": "ProbeTreemapRenderStack creates a temporary device/factory stack before the real renderer. Savings limited to redundant initialization; verify device-loss/fallback behavior and whether it precedes first idle.",
+      "risk": "provisionally low only after focused correctness/resource tests and n10 measurements",
+      "status": "current-source candidate; not implemented or measured",
+      "rank": 64
+    },
+    {
+      "candidate": "Skip child sorting for zero/one-child ranges",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 65
+    },
+    {
+      "candidate": "Cache physical size comparison keys for large child sorts",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 66
+    },
+    {
+      "candidate": "Fuse file rollups and extension aggregation when measured useful",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 67
+    },
+    {
+      "candidate": "Reuse directory lookup results during file attachment",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 68
+    },
+    {
+      "candidate": "Avoid building display-only ordering for unattended export",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 69
+    },
+    {
+      "candidate": "Batch adjacent snapshot scalar writes",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "risk": "requires focused review before implementation",
+      "status": "Already present for dominant file/directory records: write_file_records and write_directory_records encode each record into reused scratch and emit one write_all. Only remaining small auxiliary records could be considered; do not count existing batching as a new full-volume win.",
+      "rank": 70
+    },
+    {
+      "candidate": "Reuse string-length encoding scratch",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "risk": "requires focused review before implementation",
+      "status": "Already present for dominant file/directory records: one reusable128-byte initial buffer per record kind and stack little-endian length encoding. No per-record string-length scratch allocation to remove.",
+      "rank": 71
+    },
+    {
+      "candidate": "Avoid sorting already-sorted auxiliary records",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 72
+    },
+    {
+      "candidate": "Reserve snapshot serializer vectors from exact collection sizes",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "risk": "requires focused review before implementation",
+      "status": "Main replacement-scan persistence calls persist_sorted_records with borrowed TreeIndex slices, not serializer record vectors. Any reserve improvement must target a measured incremental or auxiliary path, not claim full-volume vector savings.",
+      "rank": 73
+    },
+    {
+      "candidate": "Borrow auxiliary state when lifetimes permit",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 74
+    },
+    {
+      "candidate": "Permute dense unordered record IDs in place without sorting-key storage",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "For dense unique IDs, avoid the 16-byte-per-record key/permutation array and comparison sort. About27MiB at1.7Mfiles; actual process peak/CPU effects require n10. Existing ordered-input fast path remains separate.",
+      "risk": "provisionally low after exact sparse/overflow/duplicate/fallback and public allocation tests",
+      "status": "implemented; RED 262,144 -> GREEN zero large temporary bytes; dense/sparse/boundary-ID values and rollups pass; n=10 effect pending",
+      "rank": 75,
+      "evidence": "Native forward_events already opens replacement scans with SqliteIndexRepository::open_empty. Directory walking assigns dense file IDs; sort_records_by_id currently allocates compact keys on unordered input. Dense-ID permutation must validate range and guarantee duplicate safety, retain sparse fallback."
+    },
+    {
+      "candidate": "Release repository state before CSV output begins",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 76
+    },
+    {
+      "candidate": "Reduce redundant backup metadata queries",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 77
+    },
+    {
+      "candidate": "Size snapshot read buffers from validated header metadata",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 78
+    },
+    {
+      "candidate": "Avoid duplicate checksum passes if a compatible streaming checksum exists",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 79
+    },
+    {
+      "candidate": "Benchmark a stack decimal encoder against standard formatting",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 80
+    },
+    {
+      "candidate": "Batch one CSV row into reusable scratch space",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 81
+    },
+    {
+      "candidate": "Scan quote-free names with a measured fast byte search",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 82
+    },
+    {
+      "candidate": "Write constant CSV suffixes in fewer calls",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 83
+    },
+    {
+      "candidate": "Borrow parent-path separators consistently",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 84
+    },
+    {
+      "candidate": "Reuse parent path lookup across adjacent sibling records",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 85
+    },
+    {
+      "candidate": "Buffer large escaped path fragments in fewer writes",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 86
+    },
+    {
+      "candidate": "Avoid dynamic filter dispatch for unfiltered CSV",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 87
+    },
+    {
+      "candidate": "Avoid evaluating directory selection predicates for full exports",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 88
+    },
+    {
+      "candidate": "Estimate output size for optional file preallocation",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 89
+    },
+    {
+      "candidate": "Parse UI diagnostic command-line options only when arguments are present",
+      "source": "src/WinBlaze.UI/src/MainWindow.cpp",
+      "estimated_savings": "Normal launch currently calls CommandLineToArgvW for benchmark flags. Avoid its scratch allocation and optional shell activation on no-argument launches; expected saving is small and must be measured.",
+      "risk": "provisionally low only after focused correctness/resource tests and n10 measurements",
+      "status": "current-source candidate; not implemented or measured",
+      "rank": 90
+    },
+    {
+      "candidate": "Parse CLI arguments without collecting an intermediate vector",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "risk": "requires focused review before implementation",
+      "status": "candidate",
+      "rank": 91
+    },
+    {
+      "candidate": "Avoid allocating live UI forwarding state for a quiet CLI",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "estimated_savings": "Skip preview extension aggregation, C strings and capped live-path state in the unattended CLI. The directory-path map already stops growing after the live-file cap, so do not claim full-drive paths are all retained. Whole-workflow CPU/private savings require measurement.",
+      "risk": "requires focused review before implementation",
+      "status": "GREEN: public terminal-only callback and complete export test, shipped CLI exports/invalid commands, fresh-process persisted catalog reopen with source removed and exact names/sizes pass. Broad iteration8 validation passes coverage92.17%; iteration9 includes subsequent directory-capacity change. Release/n=10 evidence pending. One umbrella optimization also covers overlapping94 and the former95 path-materialization component.",
+      "rank": 92
+    },
+    {
+      "candidate": "Replace dense published-directory hash lookup with a checked ID range",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "estimated_savings": "Sorted contiguous directory IDs can map to their position by checked subtraction without lookup storage. About410,000 directory IDs currently imply approximately8.5MiB of hash buckets; eliminating per-file parent hashing may also reduce CPU, but savings are unmeasured and non-additive. Sparse IDs must retain the existing map.",
+      "risk": "provisionally low with checked bounds/overflow, dense uniqueness, sparse fallback and exact public directory/parent/rollup regressions",
+      "status": "RED: 2,064,396 allocated bytes for16,384 directories. GREEN: all5 public sorted-tree tests pass, including bookkeeping budget, contiguous nonzero and near-u64MAX directory IDs, sparse/hole IDs, empty lookup, exact paths and file parentage. Broad validation/release/n10 still pending; not in Release9.",
+      "rank": 93
+    },
+    {
+      "candidate": "Avoid temporary C strings for unused live directory callbacks",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "risk": "requires focused review before implementation",
+      "status": "Overlapping component of candidate92 terminal-only delivery; not a separately counted optimization or additive savings claim. Covered by candidate92 focused GREEN; Release9 n=10 batch is running.",
+      "rank": 94
+    },
+    {
+      "candidate": "Trim unused directory-record arena capacity at catalog publication",
+      "source": "src/WinBlaze.Index/src/directory_records.rs",
+      "estimated_savings": "At roughly410,000 directories with104-byte records, a524,288-slot geometric arena can retain roughly11MiB of spare record space. Public20,000-directory RED retained32,768slots; GREEN trims after dropping lookup. This is a capacity estimate, not measured process savings; allocator shrinking may move storage.",
+      "risk": "low correctness risk with exact records and allocation regressions; CPU/time and transient peak trade-offs require n=10 validation",
+      "status": "RED retained32768 slots for20000 exact directories; GREEN meets capacity budget and all3 directory-handoff regressions pass. Iteration9 workspace/examples/strict Clippy/rustfmt pass with92.32% line coverage; Release9 built and UI checks pass. Main n=10 measurements complete; supplemental batch running. Whole-process memory savings unproven.",
+      "rank": 95
+    },
+    {
+      "candidate": "Avoid repeated current-time reads on a running scan",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "risk": "requires focused review before implementation",
+      "status": "Rejected as a new win: current shipped CLI already waits on a terminal channel with recv_timeout and reads elapsed time once after export. No repeated polling/current-time loop remains; do not count this as another optimization.",
+      "rank": 96
+    },
+    {
+      "candidate": "Delay optional Shell32 imports until shell integration is requested",
+      "source": "src/WinBlaze.UI/WinBlaze.UI.vcxproj",
+      "estimated_savings": "Potential reduction in early module loading only if WinUI has not independently loaded Shell32. Test Explorer/dialog/command-line operations afterward; no promised MiB or milliseconds.",
+      "risk": "provisionally low only after focused correctness/resource tests and n10 measurements",
+      "status": "current-source candidate; not implemented or measured",
+      "rank": 97
+    },
+    {
+      "candidate": "Delay optional COMCTL32 imports until the common-control path is requested",
+      "source": "src/WinBlaze.UI/WinBlaze.UI.vcxproj",
+      "estimated_savings": "Potential reduction in first-idle module activation; current EXE imports COMCTL32 eagerly. Verify runtime dependency graph and every consuming dialog before accepting it.",
+      "risk": "provisionally low only after focused correctness/resource tests and n10 measurements",
+      "status": "current-source candidate; not implemented or measured",
+      "rank": 98
+    },
+    {
+      "candidate": "Delay optional ADVAPI32 imports until token or ACL operations need them",
+      "source": "src/WinBlaze.UI/WinBlaze.UI.vcxproj",
+      "estimated_savings": "Potential early-load CPU/memory reduction; runtime/bootstrap may still require ADVAPI32. Security-sensitive token, staging and permissions operations must retain exact behavior.",
+      "risk": "provisionally low only after focused correctness/resource tests and n10 measurements",
+      "status": "current-source candidate; not implemented or measured",
+      "rank": 99
+    },
+    {
+      "candidate": "Use stack-owned callback strings for single-name tree entries",
+      "source": "src/WinBlaze.Native/src/bridge.rs",
+      "estimated_savings": "wb_tree_children creates a Vec<CString> per emitted entry although it owns only one name. Avoid one small owner-vector allocation per entry; preserve callback string lifetimes, embedded-NUL behavior and paging.",
+      "risk": "provisionally low only after focused correctness/resource tests and n10 measurements",
+      "status": "current-source candidate; not implemented or measured",
+      "rank": 100
+    }
+  ],
+  "controls": {
+    "baseline_cli": "artifacts/all-gold-controls/iteration-0/winblaze-cli.exe",
+    "iteration_1_cli": "artifacts/all-gold-controls/iteration-1/winblaze-cli.exe"
+  },
+  "latest_validation": {
+    "product_changes": 12,
+    "workspace": "pass",
+    "examples": "pass",
+    "strict_clippy": "pass",
+    "rustfmt": "pass",
+    "coverage_percent": 92.32,
+    "release": "iteration9 built; DLL copies match; UI export/import checks pass",
+    "measurement": "iteration9 main n=10 all3 complete; supplemental24254 terminal failure at incremental add4 empty catalog. Repro89847 running; latest full completed iteration7 validates690 observations",
+    "goal": "not achieved; current administrator evidence and remaining nongold events unresolved",
+    "pending": "Iteration10 source13: focused5 tests pass; full workspace/examples/strict Clippy/fmt/coverage gates81804 running. Release9 controls explicitly incomplete."
+  },
+  "current_iteration": {
+    "iteration": 9,
+    "state": "main n=10 complete; supplemental failed initial scan setup in incremental add run4",
+    "session": 24254,
+    "release_product_changes": 12,
+    "source_only_diagnostic": "XAML metadata-provider phase markers not built",
+    "next_candidate": "dense directory lookup focused and boundary GREEN; broad validation pending after UI reproduction",
+    "completion_proven": false,
+    "main_measurements": [
+      {
+        "tool": "WinBlaze",
+        "workflow_n": 10,
+        "startup_n": 10,
+        "workflow_identity": "544D21382B7216FEC7FEA957A147CB00CC3322B93D9C4CC14844FDB4859A0AD6",
+        "startup_identity": "755612D2604B00303FBC6B95B98C540B7BC4520560D53B64E6F35FE161830D79",
+        "elapsed_ms": 23674.16,
+        "cpu_ms_sampled_lower_bound": 82132.815,
+        "peak_working_set_mib": 473.294921875,
+        "peak_private_mib": 624.166015625,
+        "startup_idle_ms": 131.52999999999997,
+        "startup_cpu_ms": 148.4375,
+        "startup_working_set_mib": 33.67578125
+      },
+      {
+        "tool": "WinDirStat",
+        "workflow_n": 10,
+        "startup_n": 10,
+        "workflow_identity": "6D17BEE74A51B0EE1F46B01862871BC45338728DFEEC7D3BAC926C89A20E88A7",
+        "startup_identity": "6D17BEE74A51B0EE1F46B01862871BC45338728DFEEC7D3BAC926C89A20E88A7",
+        "elapsed_ms": 33616.69,
+        "cpu_ms_sampled_lower_bound": 105140.62,
+        "peak_working_set_mib": 573.748046875,
+        "peak_private_mib": 539.958984375,
+        "startup_idle_ms": 124.215,
+        "startup_cpu_ms": 109.375,
+        "startup_working_set_mib": 20.376953125
+      },
+      {
+        "tool": "WizTree",
+        "workflow_n": 10,
+        "startup_n": 10,
+        "workflow_identity": "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+        "startup_identity": "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+        "elapsed_ms": 41299.15,
+        "cpu_ms_sampled_lower_bound": 157125,
+        "peak_working_set_mib": 994.8515625,
+        "peak_private_mib": 967.41796875,
+        "startup_idle_ms": 324.505,
+        "startup_cpu_ms": 296.875,
+        "startup_working_set_mib": 34.685546875
+      }
+    ],
+    "diagnostic_session": 93404,
+    "diagnostic_status": "Diagnostic reproduction93404 completed all10 initial72-file/13-directory and add73-file checks. Earlier batch empty-catalog and first-repro missing-window failures remain unresolved; no product fix claimed. Failure-only diagnostics retained.",
+    "incomplete_control": "artifacts/all-gold-controls/iteration-9-incomplete",
+    "validation_session": 81804,
+    "source_product_changes": 13
+  }
+}

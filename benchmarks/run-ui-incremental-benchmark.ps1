@@ -32,6 +32,8 @@ function Find-TextLike {
     while ((Get-Date) -lt $deadline) {
         $texts = $Window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $textCondition)
         foreach ($text in $texts) {
+            if ($text.Current.Name -like '*Correctness:*') { $script:lastCorrectness = $text.Current.Name }
+            if ($text.Current.Name -like '*session=*results=*') { $script:lastRuntime = $text.Current.Name }
             if ($text.Current.Name -like $Pattern) {
                 return $text.Current.Name
             }
@@ -39,13 +41,16 @@ function Find-TextLike {
         Start-Sleep -Milliseconds 250
     }
 
-    throw "Text not found: $Pattern"
+    $diagnosticTexts = @($Window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $textCondition) |
+        ForEach-Object { $_.Current.Name } | Select-Object -First 80) -join ' | '
+    throw "Text not found: $Pattern. Correctness: $script:lastCorrectness; runtime: $script:lastRuntime; visible text: $diagnosticTexts"
 }
 
 function Invoke-Button {
     param(
         [System.Windows.Automation.AutomationElement]$Window,
-        [string]$Name
+        [string]$Name,
+        [bool]$Required = $true
     )
 
     $buttonCondition = New-Object System.Windows.Automation.PropertyCondition(
@@ -61,16 +66,16 @@ function Invoke-Button {
         }
     }
 
-    throw "Button not found: $Name"
+    if ($Required) { throw "Button not found: $Name" }
 }
 
 function Get-WinBlazeWindow {
     param([int]$TimeoutSeconds)
 
     $desktop = [System.Windows.Automation.AutomationElement]::RootElement
-    $condition = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::NameProperty,
-        "WinBlaze")
+    $condition = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, "WinBlaze"),
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id))
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
         $window = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
@@ -79,7 +84,9 @@ function Get-WinBlazeWindow {
         }
         Start-Sleep -Milliseconds 250
     }
-    throw "WinBlaze window not found"
+    $app.Refresh()
+    $processState = if ($app.HasExited) { "exited code=$($app.ExitCode)" } else { "running pid=$($app.Id) responding=$($app.Responding) main-window=$($app.MainWindowHandle) title=$($app.MainWindowTitle)" }
+    throw "WinBlaze window not found: $processState; appdata=$($start.EnvironmentVariables['LOCALAPPDATA'])"
 }
 
 function Get-StatusMetric {
@@ -108,18 +115,18 @@ $resolvedAppPath = (Resolve-Path -LiteralPath $AppPath).Path
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 
-$old = Get-Process WinBlaze.UI -ErrorAction SilentlyContinue
-if ($old) {
-    $old | Stop-Process -Force
-}
 
 $startTime = Get-Date
-$app = Start-Process -FilePath $resolvedAppPath -PassThru
+$start = [Diagnostics.ProcessStartInfo]::new()
+$start.FileName = $resolvedAppPath
+$start.UseShellExecute = $false
+$start.EnvironmentVariables['LOCALAPPDATA'] = Join-Path $DatasetRoot ('appdata-' + [Guid]::NewGuid().ToString('N'))
+$app = [Diagnostics.Process]::Start($start)
 try {
     Start-Sleep -Seconds 3
     $window = Get-WinBlazeWindow -TimeoutSeconds 10
 
-    Invoke-Button -Window $window -Name "Overview"
+    Invoke-Button -Window $window -Name "Overview" -Required $false
     $editCondition = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
         [System.Windows.Automation.ControlType]::Edit)
@@ -128,7 +135,7 @@ try {
     $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($datasetPath)
 
     Invoke-Button -Window $window -Name "Start scan"
-    Invoke-Button -Window $window -Name "Diagnostics" -Required $false | Out-Null
+    Invoke-Button -Window $window -Name "Diagnostics" | Out-Null
     $initialPattern = "Correctness:*files=$($manifest.files)*directories=$($manifest.directories)*"
     $initialCorrectness = Find-TextLike -Window $window -Pattern $initialPattern -TimeoutSeconds $TimeoutSeconds
 
@@ -159,7 +166,7 @@ try {
     $incrementalCorrectness = Find-TextLike -Window $window -Pattern $incrementalPattern -TimeoutSeconds $TimeoutSeconds
     $incrementalEnded = Get-Date
 
-    Invoke-Button -Window $window -Name "Diagnostics"
+    # Diagnostics remain visible from the initial scan.
     $frameStatus = Find-TextLike -Window $window -Pattern "*frames=*last frame=*peak frame=*" -TimeoutSeconds 8
     $flushCount = Get-StatusMetric -Text $frameStatus -Pattern "flushes=(\d+)"
     $queuedEvents = Get-StatusMetric -Text $frameStatus -Pattern "queued events=(\d+)"

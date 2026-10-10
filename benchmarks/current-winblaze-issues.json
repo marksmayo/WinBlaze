@@ -1,0 +1,14 @@
+[
+  {
+    "Name": "FastScanUnavailable",
+    "Count": 1
+  },
+  {
+    "Name": "NotFound",
+    "Count": 3
+  },
+  {
+    "Name": "PermissionDenied",
+    "Count": 133
+  }
+]

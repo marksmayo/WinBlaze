@@ -4,6 +4,7 @@ pub mod diagnostics;
 pub mod ffi;
 pub mod hashing;
 pub mod model;
+pub mod name;
 pub mod query;
 pub mod scan;
 pub mod update;
@@ -15,8 +16,9 @@ pub use model::{
     aggregate_directory_records, derive_file_path, detect_file_lineage_change, diff_file_records,
     join_path, DirectoryAggregation, DirectoryId, DirectoryRecord, FileAttributes, FileChangeKind,
     FileChangeRecord, FileChangeSet, FileId, FileLineageRecord, FileRecord, FileSystemKind,
-    ScanSession, ScanSummary, VolumeId, VolumeRecord,
+    FileTimestamps, ScanSession, ScanSummary, VolumeId, VolumeRecord,
 };
+pub use name::FileName;
 pub use query::{
     DateFilter, MatchMode, SearchQuery, SearchScope, SizeFilter, SortDirection, SortField,
 };

@@ -3,7 +3,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         mpsc::{self, Receiver, Sender},
         Arc, Condvar, Mutex,
     },
@@ -16,7 +16,7 @@ use crate::errors::{classify_io_error, ScanErrorKind};
 use crate::filesystem::build_scan_access_plan;
 use crate::ntfs::{enumerate_ntfs_volume_parallel_streaming_summary, NtfsEnumerationError};
 use crate::performance::ScanPipelineConfig;
-use crate::pipeline::ScanEventPipeline;
+use crate::pipeline::{EventBatchSender, ScanEventPipeline};
 use crate::policy::{should_descend_into_reparse_target, ReparseTraversalPolicy};
 use crate::types::ScanRuntimeConfig;
 use crate::winfind;
@@ -57,12 +57,14 @@ impl ScanHandle {
 }
 
 pub struct ScanController {
-    event_tx: Sender<Vec<ScanEvent>>,
+    event_tx: EventBatchSender,
 }
 
 impl ScanController {
     pub fn new(event_tx: Sender<Vec<ScanEvent>>) -> Self {
-        Self { event_tx }
+        Self {
+            event_tx: EventBatchSender::Unbounded(event_tx),
+        }
     }
 
     pub fn start_scan(&self, request: ScanRequest) -> ScanHandle {
@@ -70,15 +72,18 @@ impl ScanController {
         let cancelled_thread = Arc::clone(&cancelled);
         let event_tx = self.event_tx.clone();
         let access_plan = build_scan_access_plan(&request.root_path, request.config.backend_hint());
+        let rules = request.config.rules.clone();
         let pipeline_config = request.config.pipeline;
         let worker_count = request.config.max_parallelism.max(1);
+        let directory_walk_worker_count = request.config.directory_walk_worker_count();
         let reparse_policy = request.config.reparse_policy;
         let fast_enumeration = request.config.fast_enumeration;
 
         let join = thread::spawn(move || {
-            let mut pipeline = ScanEventPipeline::new(event_tx, pipeline_config);
+            let mut pipeline = ScanEventPipeline::with_sender(event_tx, pipeline_config);
             let mut issue_keys = HashSet::new();
-            if access_plan.primary_backend == crate::types::ScanBackend::NtfsMft {
+            if access_plan.primary_backend == crate::types::ScanBackend::NtfsMft && rules.is_empty()
+            {
                 pipeline.emit_session_started(provisional_volume_record(&access_plan));
                 match enumerate_ntfs_volume_parallel_streaming_summary(
                     &access_plan.selected_root,
@@ -106,8 +111,9 @@ impl ScanController {
                             &access_plan.selected_root,
                             &mut issue_keys,
                             reparse_policy,
-                            worker_count,
+                            directory_walk_worker_count,
                             fast_enumeration,
+                            &rules,
                         );
                     }
                 }
@@ -118,8 +124,9 @@ impl ScanController {
                     &access_plan.selected_root,
                     &mut issue_keys,
                     reparse_policy,
-                    worker_count,
+                    directory_walk_worker_count,
                     fast_enumeration,
+                    &rules,
                 );
             }
         });
@@ -134,8 +141,26 @@ impl ScanController {
         let (event_tx, event_rx) = mpsc::channel();
         (Self::new(event_tx), event_rx)
     }
+
+    /// Creates a scan controller with a bounded queue of event batches.
+    pub fn bounded_channel(batch_capacity: usize) -> (Self, Receiver<Vec<ScanEvent>>) {
+        let (event_tx, event_rx) = mpsc::sync_channel(batch_capacity);
+        (
+            Self {
+                event_tx: EventBatchSender::Bounded(event_tx),
+            },
+            event_rx,
+        )
+    }
+
+    /// Creates bounded delivery whose consumer can return consumed batch storage.
+    pub fn recycling_bounded_channel(batch_capacity: usize) -> (Self, crate::ScanEventReceiver) {
+        let (event_tx, receiver) = crate::ScanEventReceiver::channel(batch_capacity);
+        (Self { event_tx }, receiver)
+    }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_fallback_scan(
     pipeline: &mut ScanEventPipeline,
     cancelled: &AtomicBool,
@@ -144,6 +169,7 @@ fn run_fallback_scan(
     reparse_policy: ReparseTraversalPolicy,
     worker_count: usize,
     fast_enumeration: bool,
+    rules: &crate::types::ScanRules,
 ) {
     pipeline.emit_session_started(winblaze_core::VolumeRecord {
         id: winblaze_core::VolumeId(0),
@@ -213,6 +239,7 @@ fn run_fallback_scan(
                 worker_count,
                 root_ancestors,
                 fast_enumeration,
+                rules,
             )
         } else {
             let mut walk_state = DirectoryWalkState::new();
@@ -227,6 +254,8 @@ fn run_fallback_scan(
                 reparse_policy,
                 &root_ancestors,
                 fast_enumeration,
+                selected_root,
+                rules,
             );
 
             (
@@ -455,6 +484,8 @@ fn walk_directory_tree(
     reparse_policy: ReparseTraversalPolicy,
     ancestors: &AncestorChain,
     fast_enumeration: bool,
+    scan_root: &std::path::Path,
+    rules: &crate::types::ScanRules,
 ) {
     let entries = match winfind::read_dir_auto(directory, fast_enumeration) {
         Ok(entries) => entries,
@@ -491,6 +522,15 @@ fn walk_directory_tree(
             }
         };
         let attributes = FileAttributes(entry.attributes);
+        if !rules.is_empty()
+            && !rules.allows(
+                scan_root,
+                &directory.join(&entry.name),
+                attributes.is_directory(),
+            )
+        {
+            continue;
+        }
 
         // Branch on the DIRECTORY attribute bit, not file-type inference:
         // directory symlinks/junctions must route through the directory
@@ -533,6 +573,8 @@ fn walk_directory_tree(
                         reparse_policy,
                         &child_ancestors,
                         fast_enumeration,
+                        scan_root,
+                        rules,
                     );
                 }
                 ReparseDecision::SkippedCycle => {
@@ -581,7 +623,11 @@ fn emit_file_record(
 ) {
     let size_bytes = entry.size_bytes;
     let attributes = winblaze_core::FileAttributes(entry.attributes);
-    let allocation_bytes = entry.allocation_bytes;
+    let allocation_bytes = entry
+        .physical_identity
+        .map_or(entry.allocation_bytes, |id| {
+            walk_state.physical_ids.claim(id, entry.allocation_bytes)
+        });
     walk_state.files_seen = walk_state.files_seen.saturating_add(1);
     walk_state.total_size_bytes = walk_state.total_size_bytes.saturating_add(size_bytes);
     walk_state.total_allocation_bytes = walk_state
@@ -591,17 +637,19 @@ fn emit_file_record(
     pipeline.emit_file(winblaze_core::FileRecord {
         id: winblaze_core::FileId(walk_state.next_file_id()),
         parent_directory_id,
-        name: display_name(entry.name),
+        name: entry.name.into_display(),
         // Derived on demand from the parent directory (see FileRecord docs);
         // materializing one String per file dominated scan-time allocation,
         // index memory, and snapshot size.
-        full_path: String::new(),
+        full_path: String::new().into(),
         size_bytes,
         allocation_bytes,
         attributes,
-        created_utc: filetime_or_none(entry.created_utc),
-        modified_utc: filetime_or_none(entry.modified_utc),
-        accessed_utc: filetime_or_none(entry.accessed_utc),
+        timestamps: winblaze_core::FileTimestamps::new(
+            filetime_or_none(entry.created_utc),
+            filetime_or_none(entry.modified_utc),
+            filetime_or_none(entry.accessed_utc),
+        ),
     });
     walk_state.maybe_emit_progress(pipeline, false);
 }
@@ -609,9 +657,8 @@ fn emit_file_record(
 /// UI/display copy of an on-disk name. Path joins must use the original
 /// `OsString` (it round-trips unpaired UTF-16 surrogates, which are legal
 /// on NTFS); this lossy copy is only for records and messages.
-fn display_name(name: std::ffi::OsString) -> String {
-    name.into_string()
-        .unwrap_or_else(|name| name.to_string_lossy().into_owned())
+fn display_name(name: crate::directory_metadata::EntryName) -> String {
+    name.into_display().to_string()
 }
 
 /// Windows metadata timestamps are FILETIME values (100ns ticks since 1601),
@@ -680,6 +727,7 @@ fn issue_key(issue: &ScanIssueRecord) -> String {
 }
 
 struct DirectoryWalkState {
+    physical_ids: crate::allocation::AllocationTracker,
     directories_seen: u64,
     files_seen: u64,
     total_size_bytes: u64,
@@ -692,6 +740,7 @@ struct DirectoryWalkState {
 impl DirectoryWalkState {
     fn new() -> Self {
         Self {
+            physical_ids: crate::allocation::AllocationTracker::default(),
             directories_seen: 0,
             files_seen: 0,
             total_size_bytes: 0,
@@ -760,10 +809,13 @@ struct FallbackQueue {
 }
 
 struct FallbackSharedState {
+    physical_ids: crate::allocation::ConcurrentAllocationTracker,
     queue: Mutex<FallbackQueue>,
     work_available: Condvar,
     reparse_policy: ReparseTraversalPolicy,
     fast_enumeration: bool,
+    scan_root: PathBuf,
+    rules: crate::types::ScanRules,
     issue_keys: Mutex<HashSet<String>>,
     next_directory_id: AtomicU64,
     next_file_id: AtomicU64,
@@ -772,6 +824,36 @@ struct FallbackSharedState {
     total_size_bytes: AtomicU64,
     total_allocation_bytes: AtomicU64,
     last_progress_reported_items: AtomicU64,
+}
+
+#[derive(Default)]
+struct FallbackTotals {
+    files: u64,
+    logical: u64,
+    physical: u64,
+    pending: Vec<winfind::FindEntry>,
+}
+
+impl FallbackTotals {
+    fn publish(&mut self, shared: &FallbackSharedState) {
+        if self.files == 0 {
+            return;
+        }
+        shared.files_seen.fetch_add(self.files, Ordering::Relaxed);
+        if self.logical != 0 {
+            shared
+                .total_size_bytes
+                .fetch_add(self.logical, Ordering::Relaxed);
+        }
+        if self.physical != 0 {
+            shared
+                .total_allocation_bytes
+                .fetch_add(self.physical, Ordering::Relaxed);
+        }
+        self.files = 0;
+        self.logical = 0;
+        self.physical = 0;
+    }
 }
 
 /// Multi-threaded counterpart to `walk_directory_tree`, used once
@@ -789,8 +871,10 @@ fn run_fallback_scan_parallel(
     worker_count: usize,
     root_ancestors: AncestorChain,
     fast_enumeration: bool,
+    rules: &crate::types::ScanRules,
 ) -> (u64, u64, u64, u64) {
-    let shared = FallbackSharedState {
+    let mut shared = FallbackSharedState {
+        physical_ids: crate::allocation::ConcurrentAllocationTracker::default(),
         queue: Mutex::new(FallbackQueue {
             tasks: VecDeque::from(vec![FallbackTask {
                 path: selected_root.to_path_buf(),
@@ -802,6 +886,8 @@ fn run_fallback_scan_parallel(
         work_available: Condvar::new(),
         reparse_policy,
         fast_enumeration,
+        scan_root: selected_root.to_path_buf(),
+        rules: rules.clone(),
         issue_keys: Mutex::new(HashSet::new()),
         next_directory_id: AtomicU64::new(6),
         next_file_id: AtomicU64::new(1),
@@ -812,18 +898,39 @@ fn run_fallback_scan_parallel(
         last_progress_reported_items: AtomicU64::new(0),
     };
 
-    let pipeline_config = pipeline.config();
-    let event_tx = pipeline.cloned_sender();
+    // A leaf or single directory chain cannot keep additional workers busy.
+    // Traverse it on the existing scan thread until actual branching appears.
+    let mut totals = FallbackTotals::default();
+    while shared.queue.get_mut().unwrap().tasks.len() == 1 {
+        let task = shared.queue.get_mut().unwrap().tasks.pop_back().unwrap();
+        let new_tasks = if cancelled.load(Ordering::SeqCst) {
+            Vec::new()
+        } else {
+            process_fallback_directory(&shared, pipeline, &task, cancelled, &mut totals)
+        };
+        let queue = shared.queue.get_mut().unwrap();
+        queue.tasks.extend(new_tasks);
+        queue.outstanding = queue.tasks.len();
+    }
 
-    thread::scope(|scope| {
-        for _ in 0..worker_count.max(1) {
-            let shared = &shared;
-            let event_tx = event_tx.clone();
-            scope.spawn(move || {
-                run_fallback_worker(shared, cancelled, event_tx, pipeline_config);
-            });
-        }
-    });
+    if !shared.queue.get_mut().unwrap().tasks.is_empty() {
+        // Publish discovered parents before other producers emit descendants.
+        pipeline.flush();
+        let pipeline_config = pipeline.config();
+        let event_tx = pipeline.event_sender();
+        let workers_started = AtomicUsize::new(1);
+        thread::scope(|scope| {
+            run_fallback_worker(
+                scope,
+                &shared,
+                cancelled,
+                event_tx,
+                pipeline_config,
+                &workers_started,
+                worker_count,
+            );
+        });
+    }
 
     (
         shared.files_seen.load(Ordering::Relaxed),
@@ -833,19 +940,57 @@ fn run_fallback_scan_parallel(
     )
 }
 
-fn run_fallback_worker(
-    shared: &FallbackSharedState,
-    cancelled: &AtomicBool,
-    event_tx: Sender<Vec<ScanEvent>>,
+fn run_fallback_worker<'scope, 'env>(
+    scope: &'scope thread::Scope<'scope, 'env>,
+    shared: &'scope FallbackSharedState,
+    cancelled: &'scope AtomicBool,
+    event_tx: EventBatchSender,
     pipeline_config: ScanPipelineConfig,
+    workers_started: &'scope AtomicUsize,
+    worker_limit: usize,
 ) {
-    let mut pipeline = ScanEventPipeline::new(event_tx, pipeline_config);
+    let mut pipeline = ScanEventPipeline::with_sender(event_tx.clone(), pipeline_config);
+    let mut totals = FallbackTotals::default();
+    let scheduler =
+        crate::scheduler::ScanScheduler::new(crate::scheduler::WorkerCount(worker_limit));
 
     loop {
+        let available = shared.queue.lock().unwrap().outstanding;
+        let desired = scheduler.worker_count_for_work(available).0;
+        let mut started = workers_started.load(Ordering::Relaxed);
+        while started < desired {
+            match workers_started.compare_exchange_weak(
+                started,
+                started + 1,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => {
+                    let sender = event_tx.clone();
+                    scope.spawn(move || {
+                        run_fallback_worker(
+                            scope,
+                            shared,
+                            cancelled,
+                            sender,
+                            pipeline_config,
+                            workers_started,
+                            worker_limit,
+                        )
+                    });
+                    started += 1;
+                }
+                Err(actual) => started = actual,
+            }
+        }
         let task = {
             let mut guard = shared.queue.lock().unwrap();
             loop {
-                if let Some(task) = guard.tasks.pop_front() {
+                // Consume recent descendants first: a breadth-first queue can
+                // retain paths for an entire wide level before visiting leaves.
+                // Other workers still share all queued tasks, so narrow branches
+                // do not strand work on a particular worker.
+                if let Some(task) = guard.tasks.pop_back() {
                     break Some(task);
                 }
                 if guard.outstanding == 0 {
@@ -862,14 +1007,18 @@ fn run_fallback_worker(
         let new_tasks = if cancelled.load(Ordering::SeqCst) {
             Vec::new()
         } else {
-            process_fallback_directory(shared, &mut pipeline, &task, cancelled)
+            process_fallback_directory(shared, &mut pipeline, &task, cancelled, &mut totals)
         };
 
+        let new_work = !new_tasks.is_empty();
         let mut guard = shared.queue.lock().unwrap();
         guard.outstanding += new_tasks.len();
         guard.tasks.extend(new_tasks);
         guard.outstanding -= 1;
-        if guard.outstanding == 0 || !guard.tasks.is_empty() {
+        // Newly queued tasks must wake idle workers. Finishing a leaf adds
+        // no work; active workers already consume the queue without a wake.
+        // The final completion wakes every waiter so each can terminate.
+        if guard.outstanding == 0 || new_work {
             shared.work_available.notify_all();
         }
         drop(guard);
@@ -883,6 +1032,7 @@ fn process_fallback_directory(
     pipeline: &mut ScanEventPipeline,
     task: &FallbackTask,
     cancelled: &AtomicBool,
+    totals: &mut FallbackTotals,
 ) -> Vec<FallbackTask> {
     let entries = match winfind::read_dir_auto(&task.path, shared.fast_enumeration) {
         Ok(entries) => entries,
@@ -920,6 +1070,15 @@ fn process_fallback_directory(
             }
         };
         let attributes = FileAttributes(entry.attributes);
+        if !shared.rules.is_empty()
+            && !shared.rules.allows(
+                &shared.scan_root,
+                &task.path.join(&entry.name),
+                attributes.is_directory(),
+            )
+        {
+            continue;
+        }
 
         // Branch on the DIRECTORY attribute bit, not file-type inference:
         // directory symlinks/junctions must route through the directory
@@ -928,6 +1087,7 @@ fn process_fallback_directory(
         // Only directories materialize a path (joined with the exact
         // on-disk name): file records carry a parent id, not a path.
         if attributes.is_directory() {
+            flush_file_records_shared(pipeline, shared, task.directory_id, totals);
             let entry_path = task.path.join(&entry.name);
             let decision = evaluate_reparse_descent(
                 &task.path,
@@ -969,10 +1129,18 @@ fn process_fallback_directory(
                 ReparseDecision::SkippedByPolicy | ReparseDecision::SkippedUnresolvable => {}
             }
         } else {
-            emit_file_record_shared(pipeline, shared, task.directory_id, entry);
+            if totals.pending.capacity() == 0 {
+                totals.pending.reserve(64);
+            }
+            totals.pending.push(entry);
+            if totals.pending.len() == 64 {
+                flush_file_records_shared(pipeline, shared, task.directory_id, totals);
+            }
         }
     }
 
+    flush_file_records_shared(pipeline, shared, task.directory_id, totals);
+    totals.publish(shared);
     maybe_emit_progress_shared(shared, pipeline);
     new_tasks
 }
@@ -998,37 +1166,70 @@ fn emit_directory_record_shared(
     });
 }
 
+fn flush_file_records_shared(
+    pipeline: &mut ScanEventPipeline,
+    shared: &FallbackSharedState,
+    parent: winblaze_core::DirectoryId,
+    totals: &mut FallbackTotals,
+) {
+    if totals.pending.is_empty() {
+        return;
+    }
+    let mut pending = std::mem::take(&mut totals.pending);
+    let first = shared
+        .next_file_id
+        .fetch_add(pending.len() as u64, Ordering::Relaxed);
+    for (offset, entry) in pending.drain(..).enumerate() {
+        emit_file_record_shared(
+            pipeline,
+            shared,
+            parent,
+            entry,
+            first + offset as u64,
+            totals,
+        );
+    }
+    totals.pending = pending;
+}
+
 fn emit_file_record_shared(
     pipeline: &mut ScanEventPipeline,
     shared: &FallbackSharedState,
     parent_directory_id: winblaze_core::DirectoryId,
     entry: winfind::FindEntry,
+    file_id: u64,
+    totals: &mut FallbackTotals,
 ) {
     let size_bytes = entry.size_bytes;
     let attributes = winblaze_core::FileAttributes(entry.attributes);
-    let allocation_bytes = entry.allocation_bytes;
-    shared.files_seen.fetch_add(1, Ordering::Relaxed);
-    shared
-        .total_size_bytes
-        .fetch_add(size_bytes, Ordering::Relaxed);
-    shared
-        .total_allocation_bytes
-        .fetch_add(allocation_bytes, Ordering::Relaxed);
-    let file_id = shared.next_file_id.fetch_add(1, Ordering::Relaxed);
+    let allocation_bytes = entry
+        .physical_identity
+        .map_or(entry.allocation_bytes, |id| {
+            shared.physical_ids.claim(id, entry.allocation_bytes)
+        });
+    totals.files += 1;
+    totals.logical = totals.logical.saturating_add(size_bytes);
+    totals.physical = totals.physical.saturating_add(allocation_bytes);
 
     pipeline.emit_file(winblaze_core::FileRecord {
         id: winblaze_core::FileId(file_id),
         parent_directory_id,
-        name: display_name(entry.name),
+        name: entry.name.into_display(),
         // Derived on demand from the parent directory (see FileRecord docs).
-        full_path: String::new(),
+        full_path: String::new().into(),
         size_bytes,
         allocation_bytes,
         attributes,
-        created_utc: filetime_or_none(entry.created_utc),
-        modified_utc: filetime_or_none(entry.modified_utc),
-        accessed_utc: filetime_or_none(entry.accessed_utc),
+        timestamps: winblaze_core::FileTimestamps::new(
+            filetime_or_none(entry.created_utc),
+            filetime_or_none(entry.modified_utc),
+            filetime_or_none(entry.accessed_utc),
+        ),
     });
+    if totals.files >= 512 {
+        totals.publish(shared);
+        maybe_emit_progress_shared(shared, pipeline);
+    }
 }
 
 fn emit_deduplicated_issue_shared(

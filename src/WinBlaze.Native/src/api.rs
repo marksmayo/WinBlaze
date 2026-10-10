@@ -81,6 +81,69 @@ pub struct WbTreeChildrenResult {
     pub total: u64,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WbPermissionRow {
+    pub kind: WbCStringView,
+    pub account: WbCStringView,
+    pub sid: WbCStringView,
+    pub rights: WbCStringView,
+    pub mask: u32,
+    pub inherited: u8,
+}
+pub type WbPermissionCallback =
+    Option<extern "C" fn(row: *const WbPermissionRow, user_data: *mut core::ffi::c_void)>;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WbDuplicateRow {
+    pub group: u64,
+    pub logical_bytes: u64,
+    pub path: WbCStringView,
+    pub digest: WbCStringView,
+    pub status: WbCStringView,
+    pub is_error: u8,
+}
+pub type WbDuplicateCallback =
+    Option<extern "C" fn(row: *const WbDuplicateRow, user_data: *mut core::ffi::c_void)>;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WbDuplicateResult {
+    pub groups: u64,
+    pub errors: u64,
+    pub reclaimable_bytes: u64,
+    pub status: u32,
+}
+
+/// Complete-index search. Bound-presence flags: logical 1/2, allocation 4/8,
+/// modified 16/32; include files 64, directories 128; descending 256.
+/// Mode: contains/exact/prefix/regex = 0/1/2/3; sort name/logical/allocated/kind/modified = 0..4.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WbSearchFilter {
+    pub pattern: WbCStringView,
+    pub extensions: WbCStringView,
+    pub min_logical: u64,
+    pub max_logical: u64,
+    pub min_allocated: u64,
+    pub max_allocated: u64,
+    pub modified_after: i64,
+    pub modified_before: i64,
+    pub offset: u64,
+    pub limit: u64,
+    pub flags: u32,
+    pub mode: u32,
+    pub sort: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WbSearchResult {
+    pub emitted: u64,
+    pub total: u64,
+    /// 0 success, 1 invalid options, 4 internal failure.
+    pub status: u32,
+}
+
 /// One directory in a live scan batch (see `WbLiveDirectoryBatch`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -226,3 +289,45 @@ pub type WbCatalogCallback =
 
 pub type WbExtensionStatCallback =
     Option<extern "C" fn(entry: *const WbExtensionStat, user_data: *mut core::ffi::c_void)>;
+
+/// Filename patterns separated by semicolons; flags 1/2/4/8 enable each bound.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WbCsvFilter {
+    pub patterns: WbCStringView,
+    pub min_bytes: u64,
+    pub max_bytes: u64,
+    pub modified_after_utc: i64,
+    pub modified_before_utc: i64,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct WbStoragePolicy {
+    pub now_utc: i64,
+    pub warm_after_days: u64,
+    pub cold_after_days: u64,
+    pub monthly_prices: [f64; 3],
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WbStorageEstimate {
+    pub allocated_bytes: [u64; 3],
+    pub files: [u64; 3],
+    pub unknown_dates: u64,
+    pub monthly_cost: f64,
+    pub all_hot_cost: f64,
+    pub status: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WbMultiScanResult {
+    pub roots: u64,
+    pub files: u64,
+    pub logical_bytes: u64,
+    pub allocated_bytes: u64,
+    pub warnings: u64,
+    pub status: u32,
+}

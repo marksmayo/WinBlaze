@@ -29,6 +29,9 @@
     <Component Id="AppExecutable" Directory="INSTALLFOLDER" Guid="*">
       <File Id="WinBlazeExe" Source="$(var.SourceDir)\WinBlaze.UI.exe" KeyPath="yes" />
     </Component>
+    <Component Id="ScanCli" Directory="INSTALLFOLDER" Guid="*">
+      <File Source="$(var.SourceDir)\winblaze-cli.exe" KeyPath="yes" />
+    </Component>
     <Component Id="NativeDll" Directory="INSTALLFOLDER" Guid="*">
       <File Source="$(var.SourceDir)\winblaze_native.dll" KeyPath="yes" />
     </Component>

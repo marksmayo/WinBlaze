@@ -1,0 +1,20 @@
+[
+  {
+    "profile": "tiny",
+    "sample_file": "file-000-000-0000.bin",
+    "logical_bytes": 1024,
+    "allocated_bytes": 4096,
+    "method": "GetFileInformationByHandleEx(FileStandardInfo)",
+    "scope": "one deterministic file per profile, not aggregate allocation",
+    "utc": "2026-10-03T15:37:53.9922632Z"
+  },
+  {
+    "profile": "fanout-large",
+    "sample_file": "file-000-000-0000.bin",
+    "logical_bytes": 256,
+    "allocated_bytes": 256,
+    "method": "GetFileInformationByHandleEx(FileStandardInfo)",
+    "scope": "one deterministic file per profile, not aggregate allocation",
+    "utc": "2026-10-03T15:37:54.0287366Z"
+  }
+]

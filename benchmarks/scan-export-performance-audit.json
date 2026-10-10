@@ -1,0 +1,1083 @@
+{
+  "reviewed_utc": "2026-10-03T20:40:34.621805+00:00",
+  "scope": "Full standard-user startup + scan + complete durable CSV export; 100 candidate review, seven implemented changes. Remaining ordering is profiling priority, not a measured savings ranking.",
+  "method": "Do not add overlapping savings. Current n=10 results determine total improvement; cold cache is uncontrolled. Candidates without evidence are not called safe wins. The existing earlier 100-point audit is separate historical work.",
+  "baseline": {
+    "process_ms": 67555.515,
+    "engine_ms": 60824.5,
+    "runs": 10
+  },
+  "rows": [
+    {
+      "id": 1,
+      "candidate": "Batch allocation, timestamps and file identities per directory",
+      "area": "Scanner",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "implemented",
+      "risk": "low on the tested Windows NTFS workflow; supported API fallback and correctness checks retained",
+      "estimated_savings": "Replace roughly 1.65 million file opens/metadata queries with directory-sized batches; exploratory n=10 engine median 16.8 s versus prior 60.8 s. This includes cache differences, not an isolated causal estimate.",
+      "evidence": "directory_metadata.rs; allocation.rs; existing scanner fanout/cancellation tests"
+    },
+    {
+      "id": 2,
+      "candidate": "Decode names directly from the aligned directory buffer",
+      "area": "Scanner",
+      "source": "src/WinBlaze.Scanner/src/directory_metadata.rs",
+      "status": "implemented",
+      "risk": "low on the tested Windows NTFS workflow; supported API fallback and correctness checks retained",
+      "estimated_savings": "Remove one temporary UTF-16 vector per name; 3000-name cumulative allocation 435009 -> 261003 bytes.",
+      "evidence": "performance.rs::batched_names_use_one_owned_utf16_copy_per_entry"
+    },
+    {
+      "id": 3,
+      "candidate": "Store volume identifiers once per identity set",
+      "area": "Scanner",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "implemented",
+      "risk": "low on the tested Windows NTFS workflow; supported API fallback and correctness checks retained",
+      "estimated_savings": "100k identities: cumulative allocation 8650876 -> approximately 4456880 bytes before the next optimization.",
+      "evidence": "performance.rs::physical_identity_budget_stores_volume_once_instead_of_per_file"
+    },
+    {
+      "id": 4,
+      "candidate": "Store common 64-bit identities compactly with full 128-bit fallback",
+      "area": "Scanner",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "implemented",
+      "risk": "low on the tested Windows NTFS workflow; supported API fallback and correctness checks retained",
+      "estimated_savings": "100k identities: cumulative allocation falls from 4456880 to below 2600000 bytes; wide identities remain distinct.",
+      "evidence": "performance.rs::common_64_bit_file_identities_fit_a_compact_budget_without_truncating_wide_ids"
+    },
+    {
+      "id": 5,
+      "candidate": "Shard parallel physical-storage accounting",
+      "area": "Scanner",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "implemented",
+      "risk": "low on the tested Windows NTFS workflow; supported API fallback and correctness checks retained",
+      "estimated_savings": "Replace one scan-wide identity lock with 64 independent locks. CPU/time savings require final n=10 measurement; cannot be attributed separately from batching.",
+      "evidence": "allocation_tracker.rs::simultaneous_hardlink_claims_allocate_storage_exactly_once"
+    },
+    {
+      "id": 6,
+      "candidate": "Skip identity storage and locking for zero allocation",
+      "area": "Scanner",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "implemented",
+      "risk": "low on the tested Windows NTFS workflow; supported API fallback and correctness checks retained",
+      "estimated_savings": "Avoid a hash insertion/lock for every zero-allocation record. Count and time benefit depend on the volume; no logical file is skipped.",
+      "evidence": "allocation_tracker.rs::physical_storage_claims_preserve_volume_and_full_128_bit_identity"
+    },
+    {
+      "id": 7,
+      "candidate": "Batch atomic export writes in a 1 MiB buffer",
+      "area": "Native",
+      "source": "src/WinBlaze.Native/src/output.rs",
+      "status": "implemented",
+      "risk": "low on the tested Windows NTFS workflow; supported API fallback and correctness checks retained",
+      "estimated_savings": "32 MiB output: 4096 -> 32 OS disk write operations; +approximately 1 MiB transient memory per active export. Durability and atomic replacement retained.",
+      "evidence": "output_performance.rs::large_atomic_exports_batch_disk_writes_and_preserve_the_complete_output"
+    },
+    {
+      "id": 8,
+      "candidate": "Reuse the fallback UTF-16 directory prefix",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 9,
+      "candidate": "Reuse fallback file-path capacity across entries",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 10,
+      "candidate": "Query compression metadata using the already-open file handle",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 11,
+      "candidate": "Combine fallback link count and short identity queries",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 12,
+      "candidate": "Avoid joining paths for fallback directory entries",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 13,
+      "candidate": "Use a smaller first metadata buffer for tiny directories",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 14,
+      "candidate": "Grow directory buffers only when the filesystem requests it",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 15,
+      "candidate": "Pool directory metadata buffers per worker",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 16,
+      "candidate": "Avoid clearing metadata buffers between directory opens",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 17,
+      "candidate": "Select supported metadata classes once per volume",
+      "area": "Directory fallback",
+      "source": "src/WinBlaze.Scanner/src/winfind.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Per-entry open/query/path work only on directories that reject the preferred batch API. Savings cannot exceed fallback work; current full-drive fallback share is not measured.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 18,
+      "candidate": "Reserve child-directory path capacity from exact name length",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 19,
+      "candidate": "Borrow ancestor paths for ordinary child checks",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 20,
+      "candidate": "Avoid duplicate normalized-root conversions",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 21,
+      "candidate": "Avoid duplicate volume-root discovery",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 22,
+      "candidate": "Cache volume information for reparse targets",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 23,
+      "candidate": "Reduce fallback error-path display conversions",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 24,
+      "candidate": "Reuse canonicalization scratch space for followed reparses",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 25,
+      "candidate": "Avoid converting display names twice in logs",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 26,
+      "candidate": "Borrow exact file names during issue classification",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 27,
+      "candidate": "Avoid constructing paths for skipped reparse files",
+      "area": "Path handling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "One operation per directory or legacy file entry. Many paths already avoid work; no isolated full-drive savings established.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 28,
+      "candidate": "Pre-reserve identity sets using a bounded directory estimate",
+      "area": "Identity accounting",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 29,
+      "candidate": "Batch identity claims while holding one shard lock",
+      "area": "Identity accounting",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 30,
+      "candidate": "Select shard count from measured worker count",
+      "area": "Identity accounting",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 31,
+      "candidate": "Use worker-local identity prefilters without false positives",
+      "area": "Identity accounting",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 32,
+      "candidate": "Avoid repeated volume map lookup within one directory batch",
+      "area": "Identity accounting",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 33,
+      "candidate": "Release identity sets immediately after producer completion",
+      "area": "Identity accounting",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 34,
+      "candidate": "Shrink sparse identity shards before long idle periods",
+      "area": "Identity accounting",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 35,
+      "candidate": "Use a measured identity-specific hasher while retaining collision correctness",
+      "area": "Identity accounting",
+      "source": "src/WinBlaze.Scanner/src/allocation.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Identity CPU/memory share can be measured after batching. Additional tuning must preserve full IDs and volume boundaries.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 36,
+      "candidate": "Choose directory worker count from a controlled n=10 sweep",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 37,
+      "candidate": "Avoid waking all workers for one newly queued directory",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 38,
+      "candidate": "Queue child directories in batches",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 39,
+      "candidate": "Amortize queue locking across local child discoveries",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 40,
+      "candidate": "Use a bounded worker-local directory queue",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 41,
+      "candidate": "Reduce empty work-queue polling",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 42,
+      "candidate": "Move non-shared directory counters to workers",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 43,
+      "candidate": "Merge worker byte totals at progress boundaries",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 44,
+      "candidate": "Avoid work-stealing for shallow single-directory scans",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 45,
+      "candidate": "Reuse worker pipeline buffers across directories",
+      "area": "Scheduling",
+      "source": "src/WinBlaze.Scanner/src/controller.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is measured producer time; no independent concurrency sweep yet. Changing scheduling can affect cancellation, event order and I/O pressure.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 46,
+      "candidate": "Tune event batch size with a controlled sweep",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 47,
+      "candidate": "Reuse emptied event batches via a bounded pool",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 48,
+      "candidate": "Use bounded channel capacity derived from byte budgets",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 49,
+      "candidate": "Coalesce superseded non-terminal progress updates",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 50,
+      "candidate": "Reserve issue batches from observed issue density",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 51,
+      "candidate": "Avoid calculating progress intervals until item thresholds pass",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 52,
+      "candidate": "Batch file IDs and shared counter increments per directory",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 53,
+      "candidate": "Avoid copying progress state for unchanged values",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 54,
+      "candidate": "Separate summary delivery from unused per-file CLI callbacks",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 55,
+      "candidate": "Reuse log formatting scratch for bounded diagnostic events",
+      "area": "Events",
+      "source": "src/WinBlaze.Scanner/src/pipeline.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is producer/consumer event overhead. No isolated gain measured; terminal order, UI responsiveness and memory bounds are required.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 56,
+      "candidate": "Skip record permutation when IDs are already sorted",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 57,
+      "candidate": "Reserve transaction maps from bounded walk estimates",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 58,
+      "candidate": "Avoid allocating child-count arrays for empty catalogs",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 59,
+      "candidate": "Reuse child-count storage as child-fill cursors",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 60,
+      "candidate": "Pre-reserve root traversal order from directory count",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 61,
+      "candidate": "Skip child sorting for zero/one-child ranges",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 62,
+      "candidate": "Cache physical size comparison keys for large child sorts",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 63,
+      "candidate": "Fuse file rollups and extension aggregation when measured useful",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 64,
+      "candidate": "Reuse directory lookup results during file attachment",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 65,
+      "candidate": "Avoid building display-only ordering for unattended export",
+      "area": "Index construction",
+      "source": "src/WinBlaze.Index/src/tree.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is post-producer model construction time; several improvements are already present. New changes need allocation budgets and output equivalence.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 66,
+      "candidate": "Batch adjacent snapshot scalar writes",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 67,
+      "candidate": "Reuse string-length encoding scratch",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 68,
+      "candidate": "Avoid sorting already-sorted auxiliary records",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 69,
+      "candidate": "Reserve snapshot serializer vectors from exact collection sizes",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 70,
+      "candidate": "Borrow auxiliary state when lifetimes permit",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 71,
+      "candidate": "Avoid opening an empty repository before a replacement scan",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 72,
+      "candidate": "Release repository state before CSV output begins",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 73,
+      "candidate": "Reduce redundant backup metadata queries",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 74,
+      "candidate": "Size snapshot read buffers from validated header metadata",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 75,
+      "candidate": "Avoid duplicate checksum passes if a compatible streaming checksum exists",
+      "area": "Persistence",
+      "source": "src/WinBlaze.Index/src/store.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is snapshot serialization/flush time. Durability, recovery and cache compatibility are mandatory; no current independent estimate.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 76,
+      "candidate": "Benchmark a stack decimal encoder against standard formatting",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 77,
+      "candidate": "Batch one CSV row into reusable scratch space",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 78,
+      "candidate": "Scan quote-free names with a measured fast byte search",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 79,
+      "candidate": "Write constant CSV suffixes in fewer calls",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 80,
+      "candidate": "Borrow parent-path separators consistently",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 81,
+      "candidate": "Reuse parent path lookup across adjacent sibling records",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 82,
+      "candidate": "Buffer large escaped path fragments in fewer writes",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 83,
+      "candidate": "Avoid dynamic filter dispatch for unfiltered CSV",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 84,
+      "candidate": "Avoid evaluating directory selection predicates for full exports",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 85,
+      "candidate": "Estimate output size for optional file preallocation",
+      "area": "CSV export",
+      "source": "src/WinBlaze.Index/src/export.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Upper bound is CSV-only time, not the full 67.56-second baseline. Existing streaming paths already avoid per-file allocation.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 86,
+      "candidate": "Wait on terminal notification instead of 5 ms polling",
+      "area": "CLI startup and completion",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 87,
+      "candidate": "Parse CLI arguments without collecting an intermediate vector",
+      "area": "CLI startup and completion",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 88,
+      "candidate": "Avoid allocating live UI forwarding state for a quiet CLI",
+      "area": "CLI startup and completion",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 89,
+      "candidate": "Suppress transient extension snapshots in unattended mode",
+      "area": "CLI startup and completion",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 90,
+      "candidate": "Avoid temporary C strings for unused live directory callbacks",
+      "area": "CLI startup and completion",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 91,
+      "candidate": "Avoid capped live file path materialization in unattended mode",
+      "area": "CLI startup and completion",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 92,
+      "candidate": "Avoid repeated current-time reads on a running scan",
+      "area": "CLI startup and completion",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 93,
+      "candidate": "Expose phase telemetry without enabling per-file logging",
+      "area": "CLI startup and completion",
+      "source": "src/WinBlaze.Native/src/main.rs",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "At most startup, polling and live-forwarding overhead; no phase measurements establish a whole-drive benefit yet.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 94,
+      "candidate": "Validate synthetic CSV totals against independent fixture manifests",
+      "area": "Measurement integrity",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 95,
+      "candidate": "Interleave product order across ten paired rounds",
+      "area": "Measurement integrity",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 96,
+      "candidate": "Track process I/O operation counts separately from time",
+      "area": "Measurement integrity",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 97,
+      "candidate": "Record scan/index/persist/export phase durations",
+      "area": "Measurement integrity",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 98,
+      "candidate": "Reject stale example binaries before benchmarking",
+      "area": "Measurement integrity",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 99,
+      "candidate": "Use bounded report publication frequency outside timed work",
+      "area": "Measurement integrity",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    },
+    {
+      "id": 100,
+      "candidate": "Detect background load and annotate affected rounds",
+      "area": "Measurement integrity",
+      "source": "benchmarks/run-competitor-comparison.ps1",
+      "status": "not qualified",
+      "risk": "not classified zero/low until isolated benefit and behavioral equivalence are demonstrated",
+      "estimated_savings": "Measurement-only improvements have zero product-runtime savings. These are excluded from app improvement and medal claims.",
+      "evidence": "Source review only; no red/green implementation or independent savings claim."
+    }
+  ],
+  "final_validation": {
+    "validated_winblaze_observations": 450,
+    "counts": {
+      "workflow": 40,
+      "startup": 10,
+      "engine": 70,
+      "feature-performance": 160,
+      "gui": 70,
+      "cache": 10,
+      "incremental": 30,
+      "index-memory": 30,
+      "public-operation": 20,
+      "ui-ready": 10
+    },
+    "fresh_full_competitor_observations": 20,
+    "before": {
+      "elapsed_ms": 67555.515,
+      "cpu_ms_sampled_lower_bound": 411867.185,
+      "peak_working_set_bytes_sampled": 682240000.0,
+      "peak_private_bytes_sampled": 745682944.0,
+      "files": 1646853.0,
+      "folders_excluding_root": 394328.0,
+      "logical_bytes": 324473965682.5,
+      "allocated_bytes": 308757520248.0
+    },
+    "after_full_workflow": {
+      "WinBlaze": {
+        "elapsed_ms": 17606.42,
+        "cpu_ms_sampled_lower_bound": 114007.815,
+        "peak_working_set_bytes_sampled": 678582272.0,
+        "peak_private_bytes_sampled": 741091328.0,
+        "files": 1658943.0,
+        "folders_excluding_root": 395446.0,
+        "logical_bytes": 354097303394.5,
+        "allocated_bytes": 337993441960.0,
+        "n": 10,
+        "version": null,
+        "sha256": "13B4CD474D160B8C4901C3CEDF94C147C57B2EEC2BF1309C36ADF68C8AB0EBC2",
+        "first_started_utc": "2026-10-03T20:38:25.8987518Z"
+      },
+      "WinDirStat": {
+        "elapsed_ms": 26902.199999999997,
+        "cpu_ms_sampled_lower_bound": 85953.125,
+        "peak_working_set_bytes_sampled": 592623616.0,
+        "peak_private_bytes_sampled": 548360192.0,
+        "files": 1663681.0,
+        "folders_excluding_root": 396697.0,
+        "logical_bytes": 356998734018.0,
+        "allocated_bytes": 504500416176.0,
+        "n": 10,
+        "version": "2.8.0",
+        "sha256": "6D17BEE74A51B0EE1F46B01862871BC45338728DFEEC7D3BAC926C89A20E88A7",
+        "first_started_utc": "2026-10-03T21:02:27.3570495Z"
+      },
+      "WizTree": {
+        "elapsed_ms": 38104.68,
+        "cpu_ms_sampled_lower_bound": 127421.875,
+        "peak_working_set_bytes_sampled": 1002579968.0,
+        "peak_private_bytes_sampled": 975960064.0,
+        "files": 1663699.0,
+        "folders_excluding_root": 396697.0,
+        "logical_bytes": 356999200158.5,
+        "allocated_bytes": 355640406016.0,
+        "n": 10,
+        "version": "4.33",
+        "sha256": "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+        "first_started_utc": "2026-10-03T21:07:02.6326456Z"
+      }
+    },
+    "all_observations_match_current_executable_and_dll": true
+  }
+}

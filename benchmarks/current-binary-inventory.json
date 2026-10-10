@@ -1,0 +1,42 @@
+[
+  {
+    "path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+    "sha256": "CEB5D466F5AB4569F33ADDCEA13EBDD75DAA5340A9976942F2D4E908ACC2DA1E",
+    "version": null,
+    "modified_utc": "2026-10-09T12:30:39.2448394Z",
+    "provenance": "working-tree Release; OS XAML host staged by project build; uncommitted changes"
+  },
+  {
+    "path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\winblaze_native.dll",
+    "sha256": "48DC2FC4DCB061E5880D58D7D5CB0A464E655D630009EAD097A045E3471FA8CE",
+    "version": null,
+    "modified_utc": "2026-10-09T12:25:34.8823057Z",
+    "provenance": "working-tree Release; OS XAML host staged by project build; uncommitted changes"
+  },
+  {
+    "path": "C:\\Users\\markm\\Github\\WinBlaze\\target\\release\\winblaze-cli.exe",
+    "sha256": "12C2759A8A7A79FFD21651A8A1C4E89E398AA063C70868CF59BDFC5C69A70DD2",
+    "version": null,
+    "modified_utc": "2026-10-09T12:25:48.9729653Z",
+    "provenance": "working-tree Release; OS XAML host staged by project build; uncommitted changes"
+  },
+  {
+    "path": "C:\\Users\\markm\\Github\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\winblaze-updater.exe",
+    "sha256": "66C6B59FD2BA257CBAE06C9202176A5DDC4C58A817F8A83C2FCD5F4B08A70799",
+    "version": null,
+    "modified_utc": "2026-10-03T14:31:17.8570531Z",
+    "provenance": "working-tree Release; OS XAML host staged by project build; uncommitted changes"
+  },
+  {
+    "path": "C:\\Program Files\\WizTree\\WizTree64.exe",
+    "sha256": "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+    "version": "4.33.0.0",
+    "modified_utc": "2026-09-15T23:01:14Z"
+  },
+  {
+    "path": "C:\\Program Files\\WinDirStat\\WinDirStat.exe",
+    "sha256": "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+    "version": "2.9.2.2243",
+    "modified_utc": "2026-10-05T22:07:06Z"
+  }
+]
