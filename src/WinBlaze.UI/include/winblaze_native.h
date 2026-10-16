@@ -226,6 +226,8 @@ uint32_t wb_import_csv(WbCStringView input_path);
 uint32_t wb_import_csv_options(WbCStringView input_path, uint32_t timezone);
 uint32_t wb_export_csv(WbCStringView output_path);
 uint32_t wb_export_json(WbCStringView output_path);
+// Blocks until no catalog snapshot write is in flight.
+void wb_wait_for_snapshot_writes(void);
 typedef struct WbCsvFilter {
     WbCStringView patterns; // Semicolon-separated filename wildcards; empty = all files.
     uint64_t min_bytes;

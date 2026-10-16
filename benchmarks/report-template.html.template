@@ -24,7 +24,7 @@ const DATA = /* BENCHMARK_DATA */;
 const $ = id => document.getElementById(id);
 const colors = ['#e94636','#8571c3','#477bd5','#249787','#d08a1e','#b84f9e','#5a8f29','#7a6a58'];
 // Products in report order; colour slots skip 1 (WinBlaze's secondary series).
-const PRODUCTS=DATA.products||PRODUCTS;const SLOTS=[0,2,3,4,5,6,7];
+const PRODUCTS=DATA.products||['WinBlaze','WinDirStat','WizTree'];const SLOTS=[0,2,3,4,5,6,7];
 const median = values => { const a=values.filter(Number.isFinite).sort((a,b)=>a-b); return a.length ? (a[Math.floor((a.length-1)/2)]+a[Math.floor(a.length/2)])/2 : null; };
 const time = n => n==null?'Not measured':n>0&&n<0.001?'<0.001 ms':n>=1000?(n/1000).toFixed(2)+' s':(n>0&&n<1?n.toFixed(3):Math.round(n))+' ms';
 const num = n => n==null?'—':Math.round(n).toLocaleString();

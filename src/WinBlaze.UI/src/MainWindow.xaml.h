@@ -493,8 +493,6 @@ namespace winrt::WinBlaze::UI::implementation
         // Node indices last rendered by RefreshTreeListView during a live scan.
         std::vector<size_t> m_live_window_rows;
         bool m_live_window_shown{ false };
-        // Extension list refreshes are throttled while scanning.
-        std::chrono::steady_clock::time_point m_last_extension_list_refresh{};
         // Diagnostic panels refresh at most every 500 ms during a scan.
         std::chrono::steady_clock::time_point m_last_diagnostics_refresh{};
         bool m_extension_list_stale{ false };

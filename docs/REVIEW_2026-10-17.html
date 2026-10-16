@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WinBlaze review findings</title>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6677; --border: #dfe3ea;
+  --high: #c62828; --medium: #e07b00; --low: #3d6fb6; --info: #6b7280; --fixed: #1b7f45; --open: #8a5a00;
+  --code-bg: #eef1f5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b; --card: #1b2029; --text: #e6e9ef; --muted: #9aa3b2; --border: #2c3340;
+    --high: #ff6b6b; --medium: #ffb454; --low: #7fb2ff; --info: #a0a8b6; --fixed: #4cd287; --open: #ffcf70;
+    --code-bg: #232a35;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 "Segoe UI", system-ui, sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; }
+h2 { font-size: 20px; margin: 36px 0 12px; }
+.sub { color: var(--muted); margin: 0 0 24px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.stat b { display: block; font-size: 26px; }
+.stat span { color: var(--muted); font-size: 13px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; }
+.card h3 { margin: 0 0 6px; font-size: 16px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; font-size: 12.5px; }
+.pill { border-radius: 999px; padding: 2px 10px; font-weight: 600; border: 1px solid currentColor; }
+.High { color: var(--high); } .Medium { color: var(--medium); } .Low { color: var(--low); } .Info { color: var(--info); }
+.Fixed { color: var(--fixed); } .Open { color: var(--open); }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 13px; }
+.table-wrap { overflow-x: auto; }
+dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
+dt { color: var(--muted); }
+dd { margin: 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>WinBlaze review findings</h1>
+<p class="sub">17 October 2026 · branch <code>perf/ui-medals-zero-risk</code> (commit <code>edfd6c5</code> plus working-tree fixes) · deep code review, fuzz testing, security review and FFI audit.</p>
+
+<div class="grid">
+  <div class="stat"><b>7</b><span>defects fixed with tests</span></div>
+  <div class="stat"><b>0</b><span>security vulnerabilities (confidence ≥ 8/10)</span></div>
+  <div class="stat"><b>1.65M</b><span>fuzzed inputs, 0 crashes or hangs</span></div>
+  <div class="stat"><b>6</b><span>open refactor suggestions (not defects)</span></div>
+</div>
+
+<h2>Coverage and limits</h2>
+<div class="card">
+  <dl>
+    <dt>Deep code review</dt><dd>The multi-agent <code>/code-review max</code> run was cut short twice by usage limits. Two of its passes finished (simplification, CLAUDE.md conventions). The remaining high-risk areas were reviewed by hand: window close and persistence, the native FFI boundary, scanner enumeration, search and import changes, and report rendering.</dd>
+    <dt>Fuzz testing</dt><dd>A new dependency-free mutation fuzzer, <code>src/WinBlaze.Native/examples/fuzz_inputs.rs</code>, ran 9 targets: CSV, TSV and JSON import, MFT records, MFT dump, the snapshot cache, the capacity hint, the update manifest, and search plus export filters. It fed 200,000 inputs per target (50,000 for the snapshot cache). There were no panics and no input took longer than 1 s. The MFT seed is synthetic, so coverage there is shallow; a real dump from an elevated <code>--dump-mft</code> would reach deeper.</dd>
+    <dt>Security review</dt><dd><code>/security-review</code> of the branch found nothing at confidence 8/10 or higher. Areas checked: cloud-placeholder traversal, volume inheritance, the CSV import rewrite, command-line opening of saved scans, native persistence, and the scripts.</dd>
+    <dt>FFI audit</dt><dd>All 36 <code>wb_*</code> exports were checked. Each either catches panics or has no code path that can panic, extreme offsets saturate, and the global model mutex recovers from poisoning.</dd>
+    <dt>/ultrareview</dt><dd><b>Not run.</b> It's a billed cloud review that only you can start: run <code>/code-review ultra</code> on this branch.</dd>
+  </dl>
+</div>
+
+<h2>Defects fixed</h2>
+
+<div class="card">
+  <div class="meta"><span class="pill High">High</span><span class="pill Fixed">Fixed</span><span>Data loss</span></div>
+  <h3>Closing the window right after a scan discarded the scan's catalog</h3>
+  <p>A finished GUI scan writes its catalog snapshot in the background. <code>OnWindowClosed</code> called <code>TerminateProcess</code> immediately and killed that write, so the next launch reopened the previous catalog. The CLI already waited for the write; the GUI didn't.</p>
+  <dl><dt>Fix</dt><dd>New export <code>wb_wait_for_snapshot_writes</code> (<code>bridge.rs</code>) takes the persist gate and then waits for terminal-scan writes. <code>NativeBridge::WaitForSnapshotWrites</code> calls it before the process ends, and skips the call if the engine was never loaded.</dd>
+  <dt>Tests</dt><dd>Red then green: <code>snapshot_write_wait_blocks_until_the_persist_gate_is_released</code>. End to end: scan 250k files, close as soon as results appear, relaunch. The catalog is restored, and closing took 55 ms.</dd></dl>
+</div>
+
+<div class="card">
+  <div class="meta"><span class="pill Medium">Medium</span><span class="pill Fixed">Fixed</span><span>UI correctness</span></div>
+  <h3>Title named the wrong folder after restoring a saved catalog</h3>
+  <p>After a launch that restored a catalog, the title read "WinBlaze - C:\" (the default in the path box) while it showed another folder's results.</p>
+  <dl><dt>Fix</dt><dd>When the loaded catalog's root differs from the current path (ignoring case and trailing backslashes), <code>UpdateWindowTitle</code> names the catalog root. Titles for ordinary scans are unchanged.</dd>
+  <dt>Tests</dt><dd>Red then green with the relaunch check: the title showed C:\ before the fix and the lognormal folder after it.</dd></dl>
+</div>
+
+<div class="card">
+  <div class="meta"><span class="pill Medium">Medium</span><span class="pill Fixed">Fixed</span><span>Report rendering</span></div>
+  <h3>The benchmark report crashed when the data had no <code>products</code> field</h3>
+  <p><code>report-template.html.template</code> declared <code>const PRODUCTS=DATA.products||PRODUCTS</code>, which refers to itself and throws "Cannot access 'PRODUCTS' before initialization". Older baselines rendered through <code>verify-best-report.mjs</code> lack the field.</p>
+  <dl><dt>Fix</dt><dd>The fallback is now the three core products.</dd><dt>Tests</dt><dd>Red then green: new <code>benchmarks/verify-template-products.mjs</code>.</dd></dl>
+</div>
+
+<div class="card">
+  <div class="meta"><span class="pill Medium">Medium</span><span class="pill Fixed">Fixed</span><span>Broken tooling</span></div>
+  <h3>Five benchmark scripts ran examples whose sources had been deleted</h3>
+  <p><code>run-feature-comparison.ps1</code>, <code>run-elevated-native-comparison.ps1</code>, <code>run-mft-reopen-validation.ps1</code>, <code>verify-parity-interop.ps1</code> and <code>inspect-empty-scale-process.ps1</code> run <code>feature_catalog</code>, <code>feature_maintenance</code>, <code>ffi_scan_repro</code>, <code>scan_export</code> and <code>soak_repro</code>. The earlier session deleted those sources.</p>
+  <dl><dt>Fix</dt><dd>Restored the five sources from <code>main</code>. All compile against the current APIs.</dd></dl>
+</div>
+
+<div class="card">
+  <div class="meta"><span class="pill Medium">Medium</span><span class="pill Fixed">Fixed</span><span>Race</span></div>
+  <h3>A late text-change event erased the invalid-folder error</h3>
+  <p>XAML raises <code>TextChanged</code> asynchronously, so the event for the text just validated could arrive after Start scan and reset the error. The Debug build lost this race every time.</p>
+  <dl><dt>Fix</dt><dd>The error is kept while the text is still the text that failed validation.</dd><dt>Tests</dt><dd>The <code>path-ux.ps1 -Case invalid</code> smoke test, which had been failing, now passes.</dd></dl>
+</div>
+
+<div class="card">
+  <div class="meta"><span class="pill Low">Low</span><span class="pill Fixed">Fixed</span><span>Robustness</span></div>
+  <h3>A poisoned per-session lock would abort the app</h3>
+  <p>Five session mutex locks in <code>bridge.rs</code> used <code>.expect("lock poisoned")</code>. Some run inside the unguarded <code>wb_scan_session_cancel</code> and <code>wb_scan_session_destroy</code>, where a panic across the C ABI aborts the process.</p>
+  <dl><dt>Fix</dt><dd>These locks now recover the guard (<code>PoisonError::into_inner</code>), as the global model lock already did.</dd></dl>
+</div>
+
+<div class="card">
+  <div class="meta"><span class="pill Low">Low</span><span class="pill Fixed">Fixed</span><span>Tests and conventions</span></div>
+  <h3>Gate and test hygiene</h3>
+  <ul>
+    <li>The UI smoke test reused a catalog from 11 October, which changed the window title. It now clears its app-data folder on each run.</li>
+    <li>The restored-window test sized the window in raw pixels, a 450×350 layout at 200% scaling. It now sizes in DIPs.</li>
+    <li>In <code>capacity_hint.rs</code> a test module sat in the middle of the file (clippy <code>items_after_test_module</code>).</li>
+    <li>The extension-list throttle member was written but never read; it's removed, and the extension list now rebuilds from a single path, which is traced.</li>
+    <li>The live extension totals now use one shared helper instead of a second lookup and a duplicated update block.</li>
+    <li>New lines in <code>main.rs</code> and <code>csv_import.rs</code> broke the CLAUDE.md 100-character limit; they're wrapped now.</li>
+  </ul>
+</div>
+
+<h2>Open suggestions (refactors, not defects)</h2>
+<div class="table-wrap">
+<table>
+<tr><th>Area</th><th>Suggestion</th><th>Why it matters</th></tr>
+<tr><td><code>bridge.rs</code> scan flush</td><td>Remove the unreachable incremental change-summary branch in the in-loop flush, and the derivable <code>repository_loaded</code> flag and <code>persist &amp;&amp;</code> guard.</td><td>Incremental rescans never flush inside the loop now, so this code can't run and misleads readers.</td></tr>
+<tr><td><code>MainWindow.cpp</code> tree fill</td><td>Replace the self-referencing <code>shared_ptr&lt;std::function&gt;</code> chunk filler with a member function that re-enqueues itself, and compare the live window with <code>std::equal</code> instead of copying it.</td><td>Simpler lifetime handling, and two fewer heap allocations per live refresh.</td></tr>
+<tr><td><code>run-gui-session-comparison.ps1</code></td><td>Move the resize measurement and identity lookup, which are pasted twice, into one helper.</td><td>Keeps added and core products measured by the same protocol.</td></tr>
+<tr><td><code>run-gui-*.ps1</code></td><td>Share <code>GuiProbe</code> and the WizTree Cancel-visible check through <code>gui-win32.ps1</code>, and drop the unused <code>$hwnd</code> parameter.</td><td>Today one copy can silently shadow another within the same session.</td></tr>
+<tr><td><code>live-medal-results.mjs</code>, <code>adopt-medal-events.mjs</code></td><td>Derive the full-drive metric regex from <code>FULL_RESOURCE_EVENTS</code>.</td><td>A renamed metric would otherwise stay pending without any error.</td></tr>
+<tr><td>Scan adapters</td><td>Use <code>ConvertTo-ScanArgument</code> for the drive-root backslash normalisation, which is repeated five times.</td><td>Duplicated quoting logic.</td></tr>
+</table>
+</div>
+
+<h2>Verification</h2>
+<div class="card">
+  <ul>
+    <li><code>scripts/check-local.ps1 -Configuration Debug</code> passes: fmt, clippy <code>-D warnings</code>, every Rust test, the UI unit harnesses, the directory UX checks, the UI smoke test and portable packaging.</li>
+    <li>Release UI build: exit 0. <code>cargo clippy --workspace --all-targets -D warnings</code>: clean.</li>
+  </ul>
+</div>
+</main>
+</body>
+</html>

@@ -32,6 +32,8 @@ namespace WinBlaze::UI::NativeBridge
     uint32_t ExportJson(const wchar_t* outputPath);
     uint32_t ExportJsonDetailed(const wchar_t* outputPath);
     uint32_t ExportCsvDetailed(const wchar_t* outputPath);
+    // Blocks until no catalog snapshot write is in flight (no-op before the engine loads).
+    void WaitForSnapshotWrites();
     uint32_t ExportCsvFiltered(const wchar_t* outputPath, const wchar_t* patterns, WbCsvFilter filter);
     uint32_t ExportCsvExtension(const wchar_t* outputPath, const wchar_t* extension);
     bool ValidateScanRules(const wchar_t* exclusions, const wchar_t* includes);

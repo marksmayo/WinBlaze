@@ -2268,7 +2268,10 @@ namespace winrt::WinBlaze::UI::implementation
         if (m_ui_flush_timer) {
             m_ui_flush_timer.Stop();
         }
-        // Nothing left needs an orderly teardown: snapshots and exports are
+        // A finished scan writes its catalog snapshot in the background; ending
+        // the process mid-write would reopen the previous scan next launch.
+        ::WinBlaze::UI::NativeBridge::WaitForSnapshotWrites();
+        // Nothing else needs an orderly teardown: snapshots and exports are
         // staged and renamed atomically, and logs are written unbuffered.
         // Process exit would stop the same worker threads anyway; ending here
         // skips tearing down XAML, a loaded catalog and C++ statics.
@@ -4938,7 +4941,15 @@ namespace winrt::WinBlaze::UI::implementation
                 title += L" - " + std::to_wstring(m_tree_rows_shown) + L" rows shown";
             }
         } else if (m_title_results_ready && !m_current_root_path.empty()) {
-            title += L" - " + m_current_root_path;
+            // A catalog restored at launch belongs to its own root, not to the
+            // path box's default; name the folder whose results are shown.
+            auto comparable = [](std::wstring path) {
+                while (path.size() > 1 && path.back() == L'\\') { path.pop_back(); }
+                return LowercaseCopy(path);
+            };
+            const bool restored_other_root = !m_tree_nodes.empty() && !m_tree_nodes.front().name.empty() &&
+                comparable(m_tree_nodes.front().name) != comparable(m_current_root_path);
+            title += L" - " + (restored_other_root ? m_tree_nodes.front().name : m_current_root_path);
         }
         if (title == m_window_title) {
             return;
@@ -5235,18 +5246,11 @@ namespace winrt::WinBlaze::UI::implementation
             // time), which delayed input every few seconds of a full-drive
             // scan. During a scan the list keeps its last state; the final
             // stats are applied when the scan ends (see below).
-            const auto now = std::chrono::steady_clock::now();
-            if (!m_session_active) {
-                m_last_extension_list_refresh = now;
-                m_extension_list_stale = false;
-                TimedFlushSection(L"extension list", [&] { PopulateExtensionList(m_extension_stats); });
-            } else {
-                m_extension_list_stale = true;
-            }
+            m_extension_list_stale = true;
         }
         if (m_extension_list_stale && !m_session_active) {
             m_extension_list_stale = false;
-            PopulateExtensionList(m_extension_stats);
+            TimedFlushSection(L"extension list", [&] { PopulateExtensionList(m_extension_stats); });
         }
 
         m_last_ui_flush_time = flush_started;

@@ -77,7 +77,10 @@ fn parses_quotes_line_endings_and_blank_rows_and_folds_paths_like_to_lowercase()
     let header = "Path,Kind,LogicalBytes,AllocatedBytes,Files,Directories,ModifiedUnixSeconds\r\n";
     // Blank and all-empty rows are skipped, a bare CR is field data, "" escapes a
     // quote inside a quoted field, and the last row needs no line break.
-    let csv = format!("{header}\r\n\"Z:\\o\",Directory,2,2,2,0,\r\n,,,,,,\nZ:\\o\\a\rb,File,1,1,0,0,\n\"Z:\\o\\x\"\"y\",File,1,1,0,0,");
+    let csv = format!(
+        "{header}\r\n\"Z:\\o\",Directory,2,2,2,0,\r\n,,,,,,\n\
+         Z:\\o\\a\rb,File,1,1,0,0,\n\"Z:\\o\\x\"\"y\",File,1,1,0,0,"
+    );
     let tree = read_csv(csv.as_bytes()).unwrap();
     let mut names: Vec<_> = tree
         .files()

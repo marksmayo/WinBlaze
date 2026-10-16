@@ -626,6 +626,17 @@ pub fn wait_for_pending_persist() {
     }
 }
 
+/// Blocks until no catalog snapshot write is in flight, so a host can end its
+/// process without losing the last scan. GUI sessions hold the persist gate
+/// from Completed until their deferred write ends; terminal scans count theirs.
+#[no_mangle]
+pub extern "C" fn wb_wait_for_snapshot_writes() {
+    let _ = std::panic::catch_unwind(|| {
+        drop(persist_gate_lock());
+        wait_for_pending_persist();
+    });
+}
+
 fn build_index_model(
     transaction: BufferedIndexTransaction,
     cache_stats: Option<(u64, u64, u64, bool)>,
@@ -973,27 +984,26 @@ impl UiEventForwarder {
                 }
                 None => None,
             };
-            let totals = match lowered {
-                Some(lowered) if self.extension_totals.contains_key(lowered) => self
-                    .extension_totals
-                    .get_mut(lowered)
-                    .expect("checked above"),
-                _ => self
-                    .extension_totals
-                    .entry(extension.to_ascii_lowercase())
-                    .or_insert((0, 0)),
-            };
-            totals.0 = totals.0.saturating_add(file.size_bytes);
-            totals.1 = totals.1.saturating_add(1);
+            let key = lowered.map_or_else(
+                || std::borrow::Cow::Owned(extension.to_ascii_lowercase()),
+                std::borrow::Cow::Borrowed,
+            );
+            self.add_extension_total(&key, file.size_bytes);
             return;
         }
 
+        self.add_extension_total(extension, file.size_bytes);
+    }
+
+    /// Adds one file to an already-lowercase extension's totals, allocating
+    /// the key only when the extension is first seen.
+    fn add_extension_total(&mut self, extension: &str, size_bytes: u64) {
         if let Some(totals) = self.extension_totals.get_mut(extension) {
-            totals.0 = totals.0.saturating_add(file.size_bytes);
+            totals.0 = totals.0.saturating_add(size_bytes);
             totals.1 = totals.1.saturating_add(1);
         } else {
             self.extension_totals
-                .insert(extension.to_string(), (file.size_bytes, 1));
+                .insert(extension.to_string(), (size_bytes, 1));
         }
     }
 
@@ -1105,7 +1115,10 @@ impl NativeSession {
             },
         };
         let scan_handle = session.controller.start_scan(request);
-        *session.scan_handle.lock().expect("lock poisoned") = Some(scan_handle);
+        *session
+            .scan_handle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(scan_handle);
 
         let user_data = user_data as usize;
         let index_root = index_storage_root();
@@ -1125,13 +1138,21 @@ impl NativeSession {
                 None,
             );
         });
-        *session.worker.lock().expect("lock poisoned") = Some(worker);
+        *session
+            .worker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(worker);
 
         session
     }
 
     fn cancel(&self) {
-        if let Some(handle) = self.scan_handle.lock().expect("lock poisoned").as_ref() {
+        if let Some(handle) = self
+            .scan_handle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+        {
             handle.cancel();
         }
     }
@@ -1143,14 +1164,21 @@ impl NativeSession {
             worker,
             scan_handle,
         } = self;
-        if let Some(handle) = scan_handle.lock().expect("lock poisoned").take() {
+        if let Some(handle) = scan_handle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
             handle.join();
         }
         // The event-forwarding worker's `for event in rx` loop only ends once
         // every Sender is gone; the controller holds the original one, so it
         // must drop before joining the worker or this blocks forever.
         drop(controller);
-        let worker_handle = worker.lock().expect("lock poisoned").take();
+        let worker_handle = worker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
         if let Some(worker_handle) = worker_handle {
             let _ = worker_handle.join();
         }
@@ -3202,6 +3230,27 @@ mod tests {
             len: 0,
         };
         assert_eq!(wb_update_check(view("0.8.0"), null_view).parsed, 0);
+    }
+
+    #[test]
+    fn snapshot_write_wait_blocks_until_the_persist_gate_is_released() {
+        let held = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let writer = {
+            let held = held.clone();
+            std::thread::spawn(move || {
+                let _gate = persist_gate_lock();
+                held.wait();
+                std::thread::sleep(Duration::from_millis(300));
+            })
+        };
+        held.wait();
+        let started = Instant::now();
+        wb_wait_for_snapshot_writes();
+        assert!(
+            started.elapsed() >= Duration::from_millis(250),
+            "returned while a write was in flight"
+        );
+        writer.join().unwrap();
     }
 
     #[test]

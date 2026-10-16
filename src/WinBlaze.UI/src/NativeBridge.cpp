@@ -266,6 +266,15 @@ namespace WinBlaze::UI::NativeBridge
         const auto path = ToUtf8(outputPath);
         return function({path.data(), path.size()});
     }
+    void WaitForSnapshotWrites()
+    {
+        // Only a loaded engine can have a write in flight; never load it just to exit.
+        if (!Api().module) { return; }
+        using Fn = void(__stdcall *)();
+        if (auto function = reinterpret_cast<Fn>(GetProcAddress(Api().module, "wb_wait_for_snapshot_writes"))) {
+            function();
+        }
+    }
     uint32_t ExportCsvDetailed(const wchar_t* outputPath)
     {
         EnsureLoaded();

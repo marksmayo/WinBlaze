@@ -52,7 +52,10 @@ fn main() {
             (mode.as_str(), root, output)
         }
         _ => {
-            eprintln!("usage: winblaze-cli [--keep-catalog] [--scan|--duplicates|--permissions|--dump-mft] <root> <output.csv>");
+            eprintln!(
+                "usage: winblaze-cli [--keep-catalog] \
+                 [--scan|--duplicates|--permissions|--dump-mft] <root> <output.csv>"
+            );
             std::process::exit(2);
         }
     };
@@ -103,8 +106,12 @@ fn main() {
         // export and is joined at persisted_us.
         let persisted_us = started.elapsed().as_micros();
         let phases = format!(
-            "{{\"session_started_us\":{},\"terminal_received_us\":{},\"finalized_us\":{},\"exported_us\":{},\"persisted_us\":{persisted_us}}}",
-            session_started_us.unwrap(), terminal_received_us.unwrap(), finalized_us.unwrap(), exported_us.unwrap()
+            "{{\"session_started_us\":{},\"terminal_received_us\":{},\
+             \"finalized_us\":{},\"exported_us\":{},\"persisted_us\":{persisted_us}}}",
+            session_started_us.unwrap(),
+            terminal_received_us.unwrap(),
+            finalized_us.unwrap(),
+            exported_us.unwrap()
         );
         if let Err(error) = std::fs::write(path, phases) {
             eprintln!("Could not write optional CLI phase diagnostic: {error}");
