@@ -98,13 +98,28 @@ pub struct DirectoryEntry {
     pub accessed_utc: u64,
 }
 
+/// Facts shared by every directory on one volume. A non-reparse child
+/// directory always lives on its parent's volume, so walkers query these once
+/// per volume instead of once per directory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VolumeContext {
+    pub serial: u64,
+    /// NTFS returns as many records as fit in every batch, so a batch that
+    /// leaves room for a maximum-length record is the directory's last one.
+    pub fills_batches: bool,
+}
+
+/// FILE_ID_EXTD_DIR_INFO header plus a 255-unit name, rounded to alignment.
+const MAX_RECORD_BYTES: usize = 88 + 255 * 2 + 6;
+
 pub struct DirectoryMetadataIterator {
     file: File,
     buffer: Vec<u64>,
     offset: usize,
-    volume: u64,
+    volume: VolumeContext,
     exhausted: bool,
     refill: bool,
+    final_batch: bool,
     metadata_reads: usize,
     compact_names: bool,
 }
@@ -123,14 +138,82 @@ extern "system" {
         info: *mut c_void,
         size: u32,
     ) -> i32;
+    fn GetVolumeInformationByHandleW(
+        handle: *mut c_void,
+        volume_name: *mut u16,
+        volume_name_size: u32,
+        serial: *mut u32,
+        max_component: *mut u32,
+        flags: *mut u32,
+        filesystem_name: *mut u16,
+        filesystem_name_size: u32,
+    ) -> i32;
+}
+
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+
+/// Cloud-files placeholders (OneDrive and other providers) use
+/// IO_REPARSE_TAG_CLOUD or one of its CLOUD_1..CLOUD_F variants.
+pub(crate) fn is_cloud_reparse_tag(tag: u32) -> bool {
+    tag & 0xFFFF_0FFF == 0x9000_001A
+}
+
+/// Attributes as the walk should see them. A cloud placeholder folder is a
+/// real folder whose files are held by the provider: unlike a junction or
+/// symlink it aliases no other tree, so it is traversed like any folder.
+/// Files keep the reparse bit so content features never hydrate them.
+pub(crate) fn traversal_attributes(attributes: u32, reparse_tag: u32) -> u32 {
+    let cloud_folder = attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)
+        == FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT
+        && is_cloud_reparse_tag(reparse_tag);
+    if cloud_folder {
+        attributes & !FILE_ATTRIBUTE_REPARSE_POINT
+    } else {
+        attributes
+    }
 }
 
 pub fn read_directory(path: &Path) -> io::Result<DirectoryMetadataIterator> {
+    read_directory_on(path, None)
+}
+
+/// Reads `path` on a volume already described by its parent directory, or
+/// queries the volume when `volume` is `None` (roots and reparse targets).
+pub fn read_directory_on(
+    path: &Path,
+    volume: Option<VolumeContext>,
+) -> io::Result<DirectoryMetadataIterator> {
     let file = OpenOptions::new()
         .access_mode(1)
         .share_mode(7)
         .custom_flags(0x02000000)
         .open(path)?;
+    let volume = match volume {
+        Some(volume) => volume,
+        None => query_volume(&file)?,
+    };
+    let mut entries = DirectoryMetadataIterator {
+        file,
+        buffer: DIRECTORY_BUFFER
+            .with(|cached| cached.borrow_mut().take())
+            .unwrap_or_else(|| vec![0; 2048]),
+        offset: 0,
+        volume,
+        exhausted: false,
+        refill: false,
+        final_batch: false,
+        metadata_reads: 0,
+        compact_names: true,
+    };
+    // Most directories fit one small batch. Retain cached capacity, but avoid
+    // requesting a large kernel enumeration buffer for every small directory.
+    entries.buffer.truncate(2048);
+    entries.fill(20)?;
+    Ok(entries)
+}
+
+fn query_volume(file: &File) -> io::Result<VolumeContext> {
     let mut id = IdInfo::default();
     // SAFETY: live directory handle and ABI-compatible, writable FILE_ID_INFO.
     if unsafe {
@@ -144,23 +227,26 @@ pub fn read_directory(path: &Path) -> io::Result<DirectoryMetadataIterator> {
     {
         return Err(io::Error::last_os_error());
     }
-    let mut entries = DirectoryMetadataIterator {
-        file,
-        buffer: DIRECTORY_BUFFER
-            .with(|cached| cached.borrow_mut().take())
-            .unwrap_or_else(|| vec![0; 2048]),
-        offset: 0,
-        volume: id.volume,
-        exhausted: false,
-        refill: false,
-        metadata_reads: 0,
-        compact_names: true,
-    };
-    // Most directories fit one small batch. Retain cached capacity, but avoid
-    // requesting a large kernel enumeration buffer for every small directory.
-    entries.buffer.truncate(2048);
-    entries.fill(20)?;
-    Ok(entries)
+    let mut filesystem = [0u16; 16];
+    // SAFETY: live handle; the filesystem-name buffer is writable and sized.
+    // Optional outputs are null. Failure only disables the final-batch check.
+    let named = unsafe {
+        GetVolumeInformationByHandleW(
+            file.as_raw_handle(),
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            filesystem.as_mut_ptr(),
+            filesystem.len() as u32,
+        )
+    } != 0;
+    let ntfs: Vec<u16> = "NTFS\0".encode_utf16().collect();
+    Ok(VolumeContext {
+        serial: id.volume,
+        fills_batches: named && filesystem[..ntfs.len()] == ntfs[..],
+    })
 }
 
 impl Drop for DirectoryMetadataIterator {
@@ -189,8 +275,35 @@ impl DirectoryMetadataIterator {
         self.metadata_reads
     }
 
+    /// The volume this directory is on, for its non-reparse children.
+    pub fn volume(&self) -> VolumeContext {
+        self.volume
+    }
+
+    /// End of the last record in a filled batch, or `None` if malformed.
+    fn batch_end(&self) -> Option<usize> {
+        let bytes_len = self.buffer.len() * 8;
+        // SAFETY: viewing an initialized u64 buffer as bytes preserves its size.
+        let bytes =
+            unsafe { std::slice::from_raw_parts(self.buffer.as_ptr().cast::<u8>(), bytes_len) };
+        let u32_at = |at: usize| {
+            bytes
+                .get(at..at + 4)
+                .map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize)
+        };
+        let mut offset = 0;
+        loop {
+            let next = u32_at(offset)?;
+            if next == 0 {
+                return Some(offset + 88 + u32_at(offset + 60)?);
+            }
+            offset = offset.checked_add(next).filter(|&o| o < bytes_len)?;
+        }
+    }
+
     fn fill(&mut self, class: u32) -> io::Result<()> {
         self.metadata_reads += 1;
+        let requested = self.buffer.len() * 8;
         // SAFETY: the buffer is writable and aligned to eight bytes as
         // required for FILE_ID_EXTD_DIR_INFO. The owned handle stays live.
         if unsafe {
@@ -218,6 +331,13 @@ impl DirectoryMetadataIterator {
         }
         self.offset = 0;
         self.refill = false;
+        // A filling filesystem stops a batch only when the next record does
+        // not fit. Room for a maximum-length record means this batch ended the
+        // directory, so the end-of-directory request can be skipped.
+        self.final_batch = self.volume.fills_batches
+            && self
+                .batch_end()
+                .is_some_and(|end| requested.saturating_sub(end) >= MAX_RECORD_BYTES);
         Ok(())
     }
     fn record(&mut self) -> io::Result<Option<DirectoryEntry>> {
@@ -251,11 +371,11 @@ impl DirectoryMetadataIterator {
         // allocating or converting a filename (two per traversed directory).
         let entry = (!matches!(name_units, [46] | [46, 46])).then(|| DirectoryEntry {
             name: EntryName::from_wide(name_units),
-            attributes: u32_at(56),
+            attributes: traversal_attributes(u32_at(56), u32_at(68)),
             size_bytes: (u64_at(40) as i64).max(0) as u64,
             allocation_bytes: (u64_at(48) as i64).max(0) as u64,
             identity: (
-                self.volume,
+                self.volume.serial,
                 u128::from_le_bytes(record[72..88].try_into().unwrap()),
             ),
             created_utc: u64_at(8),
@@ -282,6 +402,10 @@ impl Iterator for DirectoryMetadataIterator {
                 return None;
             }
             if self.refill {
+                if self.final_batch {
+                    self.exhausted = true;
+                    return None;
+                }
                 if let Err(error) = self.fill(19) {
                     self.exhausted = true;
                     return Some(Err(error));
@@ -328,5 +452,24 @@ mod tests {
             let expected = String::from_utf16_lossy(&units);
             assert_eq!(name.into_display().as_ref(), expected);
         }
+    }
+    #[test]
+    fn cloud_placeholder_folders_are_traversed_but_links_and_files_are_not() {
+        use super::{is_cloud_reparse_tag, traversal_attributes};
+        const DIR: u32 = 0x10;
+        const REPARSE: u32 = 0x400;
+        const CLOUD: u32 = 0x9000_001A;
+        const CLOUD_3: u32 = 0x9000_301A;
+        const JUNCTION: u32 = 0xA000_0003;
+        const SYMLINK: u32 = 0xA000_000C;
+        assert!(is_cloud_reparse_tag(CLOUD) && is_cloud_reparse_tag(CLOUD_3));
+        assert!(!is_cloud_reparse_tag(JUNCTION) && !is_cloud_reparse_tag(SYMLINK));
+        assert_eq!(traversal_attributes(DIR | REPARSE, CLOUD), DIR);
+        assert_eq!(traversal_attributes(DIR | REPARSE, CLOUD_3), DIR);
+        // Links still alias other trees; cloud files must never be hydrated.
+        assert_eq!(traversal_attributes(DIR | REPARSE, JUNCTION), DIR | REPARSE);
+        assert_eq!(traversal_attributes(DIR | REPARSE, SYMLINK), DIR | REPARSE);
+        assert_eq!(traversal_attributes(0x20 | REPARSE, CLOUD), 0x20 | REPARSE);
+        assert_eq!(traversal_attributes(DIR, 0), DIR);
     }
 }

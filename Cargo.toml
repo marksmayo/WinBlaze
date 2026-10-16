@@ -13,3 +13,7 @@ resolver = "2"
 edition = "2021"
 license = "MIT"
 authors = ["WinBlaze Contributors"]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1

@@ -1,0 +1,41 @@
+{
+  "GUI lognormal · repeat scan": {
+    "SpaceSniffer": "No rescan command (menus: New, Export, Exit, Configure); views update live from file-system notifications."
+  },
+  "GUI lognormal · memory growth over 10 rescans": {
+    "SpaceSniffer": "No rescan command, so there are no rescans to measure; views update live from file-system notifications."
+  },
+  "GUI session · time to first result": {
+    "TreeSize Free": "Rows are drawn progressively in a virtual tree that exposes no rows to UI Automation or Win32, so the first row on screen cannot be timed.",
+    "SpaceSniffer": "The treemap is drawn progressively with no observable row or item signal, so the first result on screen cannot be timed."
+  },
+  "GUI session · reload saved results": {
+    "TreeSize Free": "The Free edition has no command to reopen a saved scan.",
+    "SpaceSniffer": "Scans can be exported (File > Export to file) but not reopened.",
+    "Directory Report": "Saves printed reports only; File > Open does not reopen a scan."
+  },
+  "GUI full drive · scan to results": {
+    "Everything": "As a standard user Everything can index C: only as a folder, and that index never completes (it follows junction loops; see the Full C: volume results)."
+  },
+  "GUI full drive · memory with results": {
+    "Everything": "No full-drive results as a standard user: the folder index of C: never completes (junction loops)."
+  },
+  "GUI full drive · responsiveness p95": {
+    "Everything": "No full-drive scan as a standard user: the folder index of C: never completes (junction loops)."
+  },
+  "GUI full drive · exit with results": {
+    "Everything": "No full-drive results as a standard user: the folder index of C: never completes (junction loops)."
+  },
+  "GUI full drive · GDI objects with results": {
+    "Everything": "No full-drive results as a standard user: the folder index of C: never completes (junction loops)."
+  },
+  "GUI full drive · USER objects with results": {
+    "Everything": "No full-drive results as a standard user: the folder index of C: never completes (junction loops)."
+  },
+  "GUI full drive · cancel latency": {
+    "TreeSize Free": "Stop is only a ribbon command, which exposes no automation interface; Esc does not stop a scan.",
+    "SpaceSniffer": "No stop command (menus: New, Export, Exit, Configure).",
+    "Directory Report": "Scans on its UI thread with no cancel command.",
+    "Everything": "No full-drive scan as a standard user: the folder index of C: never completes (junction loops)."
+  }
+}

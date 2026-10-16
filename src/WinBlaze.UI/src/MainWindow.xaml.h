@@ -5,6 +5,7 @@
 #include "NativeBridge.h"
 #include "DirectoryWatcher.h"
 #include "ColorResourceCache.h"
+#include "StartupTrace.h"
 
 #include <map>
 #include <functional>
@@ -97,7 +98,8 @@ namespace winrt::WinBlaze::UI::implementation
         void ApplyShellState();
         void ScheduleUiFlush();
         void FlushPendingUiState();
-        void ScheduleTreemapRender(std::wstring const& reason);
+        void ScheduleTreemapRender(std::wstring_view reason);
+        void OnTreemapRenderTick();
         void UpdatePerformanceCounters(std::wstring const& reason);
         void UpdateSummaryText();
         void UpdateRuntimeSnapshot();
@@ -446,11 +448,22 @@ namespace winrt::WinBlaze::UI::implementation
         size_t m_tree_window_offset{ 0 };
         bool m_tree_updates_ready{ false };
         bool m_tree_selection_updates_suppressed{ false };
+        // Bumped whenever the tree list is refilled; stale chunked fills stop.
+        uint64_t m_tree_fill_generation{ 0 };
 
         Microsoft::UI::Dispatching::DispatcherQueueTimer m_ui_flush_timer{ nullptr };
         Microsoft::UI::Dispatching::DispatcherQueueTimer m_treemap_render_timer{ nullptr };
         std::mutex m_pending_ui_mutex;
         bool m_ui_flush_requested{ false };
+        // Guarded by m_pending_ui_mutex. After a scan's first flush, progress
+        // flushes run at 10 Hz instead of 60 Hz (each one costs a XAML layout
+        // pass); first results and completion still flush within one frame.
+        bool m_scan_flush_throttled{ false };
+        bool m_ui_flush_urgent{ false };
+        // Rows in the results list, shown in the title while scanning.
+        uint32_t m_tree_rows_shown{ 0 };
+        // Root path text whose validation error is showing.
+        winrt::hstring m_invalid_root_text;
         bool m_treemap_render_requested{ false };
         bool m_shell_ready{ false };
         bool m_initializing_shell{ true };
@@ -470,6 +483,32 @@ namespace winrt::WinBlaze::UI::implementation
         std::wstring m_png_export_path;
         HRESULT m_png_export_result{ E_FAIL };
         std::wstring m_benchmark_png_path;
+        // `WinBlaze.UI.exe <path>` scans that path as soon as the shell is ready.
+        std::wstring m_startup_scan_path;
+        // Window title mirrors scan state ("WinBlaze - Scanning <root>" while
+        // scanning, "WinBlaze - <root>" once results are on screen).
+        bool m_title_results_ready{ false };
+        std::wstring m_window_title{ L"WinBlaze" };
+        void UpdateWindowTitle();
+        // Node indices last rendered by RefreshTreeListView during a live scan.
+        std::vector<size_t> m_live_window_rows;
+        bool m_live_window_shown{ false };
+        // Extension list refreshes are throttled while scanning.
+        std::chrono::steady_clock::time_point m_last_extension_list_refresh{};
+        // Diagnostic panels refresh at most every 500 ms during a scan.
+        std::chrono::steady_clock::time_point m_last_diagnostics_refresh{};
+        bool m_extension_list_stale{ false };
+        // Diagnostic: traces a UI flush section that blocks the UI thread > 15 ms.
+        template <typename Work> void TimedFlushSection(wchar_t const* name, Work&& work)
+        {
+            if (!WinBlazeStartupTraceEnabled()) { work(); return; }
+            const auto started = std::chrono::steady_clock::now();
+            work();
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+            if (ms > 15.0) { TraceStartup(std::wstring(L"Slow flush section ") + name + L": " + std::to_wstring(static_cast<int>(ms)) + L" ms"); }
+        }
+        // Opens a saved CSV/TSV/JSON/MFT scan without dialogs (menu and command line).
+        winrt::fire_and_forget OpenSavedScan(std::wstring path, bool wiztree_utc);
         bool m_imported_snapshot{ false };
         uint64_t m_largest_files_offset{ 0 };
         bool m_has_results{ false };

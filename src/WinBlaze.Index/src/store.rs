@@ -203,6 +203,17 @@ impl SqliteIndexRepository {
         // full paths, and scanners no longer store them per file.
         let previous_files = self.state.snapshot_files_with_paths();
         let current_files = transaction.snapshot_files_with_paths();
+        self.merge_incremental_files(transaction, &previous_files, &current_files)
+    }
+
+    /// `apply_incremental_transaction` with both sides' path-materialized
+    /// files already in hand (sorted by id).
+    fn merge_incremental_files(
+        &mut self,
+        transaction: &BufferedIndexTransaction,
+        previous_files: &[FileRecord],
+        current_files: &[FileRecord],
+    ) -> Result<FileChangeSet, IndexStorageError> {
         // Keep the new scan's volumes/sessions/directories but the prior state's
         // files/lineages/file_changes. Building the struct directly avoids
         // `transaction.clone()` deep-copying millions of new-scan file records
@@ -216,7 +227,7 @@ impl SqliteIndexRepository {
             file_changes: self.state.file_changes.clone(),
             committed: transaction.committed,
         };
-        let change_set = merged.apply_incremental_files(&previous_files, &current_files);
+        let change_set = merged.apply_incremental_files(previous_files, current_files);
         self.state = merged;
         persist_index_state(&self.storage_path, &self.state)?;
         Ok(change_set)
@@ -239,8 +250,18 @@ impl SqliteIndexRepository {
             &mut current_files,
             &mut current_volumes,
         );
-        // Set `files` to the remapped set directly rather than cloning the whole
-        // transaction (millions of file records) only to overwrite `.files`.
+        // The merge keeps only the scan's volumes, sessions and directories;
+        // the remapped files feed the diff directly, already path-materialized,
+        // sorted by id like `snapshot_files_with_paths`. A repeated id keeps
+        // its last record, as collecting into the id map did.
+        current_files.sort_by_key(|file| file.id.0);
+        current_files.dedup_by(|later, kept| {
+            let duplicate = later.id == kept.id;
+            if duplicate {
+                std::mem::swap(later, kept);
+            }
+            duplicate
+        });
         let current_transaction = BufferedIndexTransaction {
             volumes: current_volumes,
             sessions: transaction.sessions.clone(),
@@ -248,15 +269,10 @@ impl SqliteIndexRepository {
                 .into_iter()
                 .map(|record| (record.id, record))
                 .collect(),
-            files: current_files
-                .into_iter()
-                .map(|file| (file.id, file))
-                .collect(),
-            lineages: transaction.lineages.clone(),
-            file_changes: transaction.file_changes.clone(),
             committed: transaction.committed,
+            ..Default::default()
         };
-        self.apply_incremental_transaction(&current_transaction)
+        self.merge_incremental_files(&current_transaction, &previous_files, &current_files)
     }
 
     pub fn invalidate_cache(&mut self) -> Result<(), IndexStorageError> {

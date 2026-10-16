@@ -3,8 +3,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import crypto from 'node:crypto';
-import {buildMedalTable, featureMedalCoverage, isParityFeature, rankMedalEvents} from './medal-table.mjs';
+import {applyUnsupported, buildMedalTable, featureMedalCoverage, isParityFeature, rankMedalEvents} from './medal-table.mjs';
 import {retainCompetitorBests} from './competitor-bests.mjs';
+import {PRODUCTS, COMPETITORS} from './products.mjs';
 import {retainLiveMedals, medalEvidence} from './live-medal-results.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -36,6 +37,14 @@ data.parityFeatures = data.features.rows.filter(row => isParityFeature(row.suppo
 data.indexMemory = read('current-index-memory-results.json');
 data.publicOperations = read('current-public-operation-results.json');
 data.workflow = read('current-workflow-results.json');
+data.extended = read('current-extended-medal-results.json');
+// Reviewed {event: {tool: reason}} for events a product cannot perform.
+data.unsupported = read('unsupported-events.json');
+data.guiMedals = read('current-gui-medal-results.json');
+data.guiRescan = read('current-gui-rescan-results.json');
+data.guiSession = read('current-gui-session-results.json');
+data.reliability = read('current-reliability-results.json');
+data.footprint = read('current-footprint-results.json');
 data.batch = read('current-benchmark-batch.json');
 const standardFeatures=read('current-feature-performance-results.json');
 const standaloneMft=read('current-feature-mft-results.json');
@@ -51,7 +60,14 @@ const mftBatch=[...new Set([...standardMft,...standaloneMft].map(r=>r.job))].fla
 data.featurePerformance=[...standardFeatures.filter(r=>r.operation!=='raw-mft-dump'),...mftBatch,...read('current-portable-device-results.json'),...read('current-mft-reopen-results.json')];
 // Raw desktop text can contain personal directory names. Embed numeric evidence only.
 data.gui = data.gui.map(({status, ...row}) => row);
-const latest = tool => data.versions.filter(r => r.tool === tool).at(-1);
+// WinBlaze ships two binaries (GUI exe, CLI); each row is compared with the
+// latest identity of the same executable, so one stage's run never retires the other's.
+const exeName = p => (p || '').split(/[\/]/).pop().toLowerCase();
+const latest = (tool, executable) => {
+    const rows = data.versions.filter(r => r.tool === tool);
+    const same = executable ? rows.filter(r => exeName(r.executable_path) === exeName(executable)) : [];
+    return (same.length ? same : rows).at(-1);
+};
 const liveHashes = new Map();
 const liveHash = filename => {
     if (!liveHashes.has(filename)) {
@@ -71,15 +87,16 @@ const matchesLiveBinary = binary => {
         'winblaze_native.dll')) === binary.native_dll_sha256.toUpperCase();
 };
 // Older evidence remains downloadable but cannot silently enter a new binary's median.
-for (const [rows, family] of [[data.featurePerformance,null],[data.workflow,null],[data.competitors,null],[data.elevated,null],[data.engine,'WinBlaze engine'],[data.gui,'WinBlaze'],[data.startup,null],[data.uiReady,'WinBlaze'],[data.cache,'WinBlaze'],[data.incremental,'WinBlaze'],[data.native,'WinBlaze native pipeline'],[data.mft,'WinBlaze MFT phases'],[data.publicOperations,'WinBlaze public operations'],[data.indexMemory,'WinBlaze index memory']]) {
+for (const [rows, family] of [[data.featurePerformance,null],[data.workflow,null],[data.extended,null],[data.guiMedals,null],[data.guiRescan,null],[data.guiSession,null],[data.reliability,null],[data.footprint,null],[data.competitors,null],[data.elevated,null],[data.engine,'WinBlaze engine'],[data.gui,'WinBlaze'],[data.startup,null],[data.uiReady,'WinBlaze'],[data.cache,'WinBlaze'],[data.incremental,'WinBlaze'],[data.native,'WinBlaze native pipeline'],[data.mft,'WinBlaze MFT phases'],[data.publicOperations,'WinBlaze public operations'],[data.indexMemory,'WinBlaze index memory']]) {
     for (const row of rows) {
         const tool = family || row.binary?.tool || row.tool;
         if (!row.binary) {
             const legacy = tool.startsWith('WinBlaze') ? (tool === 'WinBlaze engine' ? data.versions.find(r => r.tool === tool) : data.built[0]) : data.inventory.find(r => r.path?.includes(tool));
             row.binary = {tool, product_version: legacy?.version || null, sha256: legacy?.sha256, provenance: 'joined to recorded inventory; original run did not embed binary identity'};
         }
-        row.baseline_current = matchesLiveBinary(row.binary) && (!latest(tool) ||
-            (latest(tool).identity_sha256 || latest(tool).sha256) ===
+        const current = latest(tool, row.binary.executable_path);
+        row.baseline_current = matchesLiveBinary(row.binary) && (!current ||
+            (current.identity_sha256 || current.sha256) ===
             (row.binary.identity_sha256 || row.binary.sha256));
         if (!row.baseline_current) {
             row.historical_eligible = row.included_in_summary !== false;
@@ -100,14 +117,23 @@ data.medals = buildMedalTable(data);
 const provenance={source:'benchmarks/runs/'+data.generated.replace(/[:.]/g,'-')+'/report-data.json',recorded_utc:data.generated,batch_started_utc:data.batch.started_utc};
 const definitions=read('original-medal-events.json').events;
 const liveEvents=retainLiveMedals(read('live-medal-results.json'),definitions,data.medals.measurementEvents,medalEvidence(data,definitions),provenance);
-const competitorIdentities = Object.fromEntries(['WinDirStat','WizTree'].map(tool=>[tool,latest(tool)]));
+const competitorIdentities = Object.fromEntries(COMPETITORS.map(tool=>[tool,latest(tool)]));
 const retained = retainCompetitorBests(read('competitor-best-results.json')?.schema
     ? read('competitor-best-results.json') : null, liveEvents, competitorIdentities,
     {source:'benchmarks/runs/'+data.generated.replace(/[:.]/g,'-')+'/report-data.json',recorded_utc:data.generated,
         batch_started_utc:data.batch.started_utc});
 data.latestMedals = data.medals;
+// Recorded failures survive the retained-value pass for products that have no
+// retained value (a stored valid best outranks a later failure).
+const failedByName = Object.fromEntries(data.medals.measurementEvents.filter(e=>e.failed).map(e=>[e.name,e.failed]));
+for (const event of retained.events) {
+    const failed = Object.fromEntries(Object.entries(failedByName[event.name] || {}).filter(([tool])=>!Number.isFinite(event.times?.[tool])));
+    if (Object.keys(failed).length) event.failed = failed;
+    applyUnsupported(event, data.unsupported);
+}
 data.medals = {...data.medals,...rankMedalEvents(retained.events)};
-data.competitorBaselinePolicy = 'WinDirStat and WizTree retain the lowest validated n=10 statistic per medal metric and executable version/hash. Subsequent iterations reuse complete competitor baselines until their version or executable hash changes; missing baselines require collection. WinBlaze is rerun and uses the latest validated batch per metric; pending refreshes retain their dated previous result. Each metric may select a different dated batch. Raw latest observations remain separately dated.';
+data.products = PRODUCTS;
+data.competitorBaselinePolicy = 'Every competitor retains the lowest validated n=10 statistic per medal metric and executable version/hash. Subsequent iterations reuse complete competitor baselines until their version or executable hash changes; missing baselines require collection. WinBlaze is rerun and uses the latest validated batch per metric; pending refreshes retain their dated previous result. Each metric may select a different dated batch. Raw latest observations remain separately dated.';
 data.featureMedalCoverage = featureMedalCoverage(data,data.medals.events);
 const template = fs.readFileSync(path.join(root, 'report-template.html.template'), 'utf8');
 const payload = JSON.stringify(data).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
@@ -154,6 +180,13 @@ async function writeWithRetry(filename, content) {
 const archive = path.join(root, 'runs', data.generated.replace(/[:.]/g, '-'));
 fs.mkdirSync(archive, {recursive: true});
 fs.writeFileSync(path.join(archive, 'report-data.json'), JSON.stringify(data, null, 2));
+// Watchers re-render every few minutes; keep only the newest archives (each is
+// several MB, and thousands of them filled the disk). runs/ is not tracked.
+const KEEP_ARCHIVES = 50;
+const archives = fs.readdirSync(path.join(root, 'runs'), {withFileTypes: true}).filter(entry => entry.isDirectory())
+    .map(entry => ({dir: path.join(root, 'runs', entry.name), mtime: fs.statSync(path.join(root, 'runs', entry.name)).mtimeMs}))
+    .sort((a, b) => b.mtime - a.mtime);
+for (const {dir} of archives.slice(KEEP_ARCHIVES)) fs.rmSync(dir, {recursive: true, force: true});
 const bestPath=path.join(root, 'competitor-best-results.json');
 const bestTemporary=bestPath+'.'+process.pid+'.tmp';
 await writeWithRetry(bestTemporary, JSON.stringify(retained.store,null,2));

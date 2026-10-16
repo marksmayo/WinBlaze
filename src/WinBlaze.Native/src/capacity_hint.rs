@@ -37,7 +37,45 @@ pub fn scope_key(root: &str, rules: &winblaze_scanner::ScanRules) -> String {
     let mut hash = std::collections::hash_map::DefaultHasher::new();
     rules.exclude_paths.hash(&mut hash);
     rules.include_files.hash(&mut hash);
-    format!("{root}\0{:016x}", hash.finish())
+    // A volume whose usage moved by more than ~2% (say a large tree was added
+    // or removed) gets its own estimate: reserving for the old, larger count
+    // commits memory a smaller scan never touches. Each state keeps its own.
+    match volume_used_bytes(&root).map(usage_bucket) {
+        Some(bucket) => format!("{root}\0{:016x}\0u{bucket}", hash.finish()),
+        None => format!("{root}\0{:016x}", hash.finish()),
+    }
+}
+
+/// Logarithmic 2% buckets of a volume's used bytes.
+fn usage_bucket(used: u64) -> u32 {
+    ((used.max(1) as f64).ln() / 1.02_f64.ln()) as u32
+}
+
+#[cfg(windows)]
+fn volume_used_bytes(root: &str) -> Option<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetDiskFreeSpaceExW(
+            directory: *const u16,
+            available: *mut u64,
+            total: *mut u64,
+            free: *mut u64,
+        ) -> i32;
+    }
+    let wide: Vec<u16> = std::ffi::OsStr::new(root)
+        .encode_wide()
+        .chain([0])
+        .collect();
+    let (mut available, mut total, mut free) = (0u64, 0u64, 0u64);
+    // SAFETY: NUL-terminated path; the three outputs are valid u64s.
+    let ok = unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, &mut total, &mut free) };
+    (ok != 0 && total >= free).then(|| total - free)
+}
+
+#[cfg(not(windows))]
+fn volume_used_bytes(_root: &str) -> Option<u64> {
+    None
 }
 
 /// Read a bounded advisory cache and return the exact scope's estimate with
@@ -154,4 +192,19 @@ pub fn save_hint(path: &Path, scope: &str, files: usize, directories: usize) -> 
         }
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::usage_bucket;
+
+    #[test]
+    fn usage_buckets_separate_large_changes_but_not_small_drift() {
+        let gib = 1u64 << 30;
+        let base = usage_bucket(192 * gib);
+        // Writing a report or snapshot (a few hundred MiB) rarely changes it.
+        assert!(usage_bucket(192 * gib + 300 * (1 << 20)) - base <= 1);
+        // Adding a 10 GiB tree (~5%) always does.
+        assert!(usage_bucket(202 * gib) - base >= 2);
+    }
 }

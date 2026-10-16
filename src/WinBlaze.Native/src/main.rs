@@ -5,7 +5,10 @@ use std::{ffi::c_void, sync::mpsc::SyncSender};
 use winblaze_native::api::WbCStringView;
 #[cfg(test)]
 use winblaze_native::api::{WbEvent, WbEventKind};
-use winblaze_native::bridge::{run_terminal_scan, wb_dump_mft, wb_export_analysis, wb_export_csv};
+use winblaze_native::bridge::{
+    run_terminal_scan_with, wait_for_pending_persist, wb_dump_mft, wb_export_analysis,
+    wb_export_csv,
+};
 
 #[cfg(test)]
 struct State {
@@ -32,7 +35,12 @@ fn view(text: &str) -> WbCStringView {
     }
 }
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
+    // Reports only by default; `--keep-catalog` also saves the scan for the GUI.
+    let keep_catalog = args.len() > 1 && args[1] == "--keep-catalog";
+    if keep_catalog {
+        args.remove(1);
+    }
     let (mode, root, output) = match args.as_slice() {
         [_, root, output] => ("--scan", root, output),
         [_, mode, root, output]
@@ -44,7 +52,7 @@ fn main() {
             (mode.as_str(), root, output)
         }
         _ => {
-            eprintln!("usage: winblaze-cli [--scan|--duplicates|--permissions|--dump-mft] <root> <output.csv>");
+            eprintln!("usage: winblaze-cli [--keep-catalog] [--scan|--duplicates|--permissions|--dump-mft] <root> <output.csv>");
             std::process::exit(2);
         }
     };
@@ -58,7 +66,13 @@ fn main() {
     }
     let phase_path = std::env::var_os("WINBLAZE_CLI_PHASES");
     let started = Instant::now();
-    let outcome = run_terminal_scan(root, Duration::from_secs(300), None, std::ptr::null_mut());
+    let outcome = run_terminal_scan_with(
+        root,
+        Duration::from_secs(300),
+        None,
+        std::ptr::null_mut(),
+        keep_catalog,
+    );
     let session_started_us = phase_path
         .as_ref()
         .map(|_| outcome.session_setup.as_micros());
@@ -67,6 +81,7 @@ fn main() {
         .map(|_| outcome.terminal_received.as_micros());
     let finalized_us = phase_path.as_ref().map(|_| started.elapsed().as_micros());
     if !outcome.completed {
+        wait_for_pending_persist();
         eprintln!("scan failed or timed out");
         std::process::exit(1);
     }
@@ -75,15 +90,21 @@ fn main() {
         "--permissions" => wb_export_analysis(view(output), 2),
         _ => wb_export_csv(view(output)),
     };
+    let exported_us = phase_path.as_ref().map(|_| started.elapsed().as_micros());
+    // The export overlapped the snapshot write; the catalog must be on disk
+    // before this process reports completion or exits.
+    wait_for_pending_persist();
     if result != 0 {
         eprintln!("CSV export failed");
         std::process::exit(1);
     }
     if let Some(path) = phase_path {
-        let exported_us = started.elapsed().as_micros();
+        // finalized_us no longer includes the snapshot write: it overlaps the
+        // export and is joined at persisted_us.
+        let persisted_us = started.elapsed().as_micros();
         let phases = format!(
-            "{{\"session_started_us\":{},\"terminal_received_us\":{},\"finalized_us\":{},\"exported_us\":{exported_us}}}",
-            session_started_us.unwrap(), terminal_received_us.unwrap(), finalized_us.unwrap()
+            "{{\"session_started_us\":{},\"terminal_received_us\":{},\"finalized_us\":{},\"exported_us\":{},\"persisted_us\":{persisted_us}}}",
+            session_started_us.unwrap(), terminal_received_us.unwrap(), finalized_us.unwrap(), exported_us.unwrap()
         );
         if let Err(error) = std::fs::write(path, phases) {
             eprintln!("Could not write optional CLI phase diagnostic: {error}");

@@ -53,8 +53,9 @@ $manifest.fixture = $fixture
 if ($fixture) { Write-FeatureJson (Join-Path $batch 'fixture.json') $fixture }
 $wb = Join-Path $repo 'target/release/winblaze-cli.exe'
 $catalog = Join-Path $repo 'target/release/examples/feature_catalog.exe'
-$wd = 'C:/Program Files/WinDirStat/WinDirStat.exe'
-$wiz = 'C:/Program Files/WizTree/WizTree64.exe'
+# Portable competitor copies may live elsewhere; the installed paths stay the default.
+$wd = if ($env:WINBLAZE_BENCH_WINDIRSTAT) { $env:WINBLAZE_BENCH_WINDIRSTAT } else { 'C:/Program Files/WinDirStat/WinDirStat.exe' }
+$wiz = if ($env:WINBLAZE_BENCH_WIZTREE) { $env:WINBLAZE_BENCH_WIZTREE } else { 'C:/Program Files/WizTree/WizTree64.exe' }
 $wizSeed = Join-Path $artifacts 'wiz-scan-csv-1.csv'
 $wbSeed = Join-Path $artifacts 'wb-scan-csv-1.csv'
 $wdSeed = Join-Path $artifacts 'windirstat-import-seed.csv'
@@ -76,9 +77,17 @@ if (!$OnlyMft -and !$OnlyWinBlazeScanCsv -and 'WinBlaze' -in $Tools) {
         $null=Test-FeatureOutput $seed.kind $seed.out '' $fixture
     }
 }
+if (!$OnlyMft -and 'WinBlaze' -in $Tools) {
+    # winblaze-cli saves no catalog unless asked; seed the isolated cache the
+    # cache-load and cached-export jobs read. Outside the timed workloads.
+    $info=[Diagnostics.ProcessStartInfo]::new(); $info.FileName=$wb; $info.Arguments=('--keep-catalog "{0}" "{1}"' -f $root,(Join-Path $artifacts 'wb-catalog-seed.csv'))
+    $info.UseShellExecute=$false; $info.CreateNoWindow=$true; $info.EnvironmentVariables['LOCALAPPDATA']=$featureCache
+    $child=[Diagnostics.Process]::Start($info)
+    try {if (!$child.WaitForExit(60000)) {$child.Kill(); throw 'WinBlaze catalog seed timed out'}; if ($child.ExitCode -ne 0) {throw 'WinBlaze catalog seed failed'}} finally {$child.Dispose()}
+}
 
 $jobs = @(
-    @{id='wb-scan-csv';tool='WinBlaze';operation='scan-csv-fixture';kind='csv-wb';exe=$wb;ext='csv';scope='Startup + scan/index/persistence + CSV export; duplicate fixture';args={param($out) '"{0}" "{1}"' -f $root,$out}},
+    @{id='wb-scan-csv';tool='WinBlaze';operation='scan-csv-fixture';kind='csv-wb';exe=$wb;ext='csv';scope='Startup + scan/index + CSV export (no catalog save); duplicate fixture';args={param($out) '"{0}" "{1}"' -f $root,$out}},
     @{id='wb-cache-load';tool='WinBlaze';operation='cache-load';kind='cache-load';exe=$catalog;ext='csv';scope='Startup + persisted native catalog decode; no GUI';args={param($out) 'cache-load "{0}" "{1}"' -f $root,$out}},
     @{id='wb-cached-csv';tool='WinBlaze';operation='cached-csv';kind='csv-native';exe=$catalog;ext='csv';scope='Startup + catalog decode + complete CSV export; no scan/GUI';args={param($out) 'csv-export "{0}" "{1}"' -f $root,$out}},
     @{id='wb-json';tool='WinBlaze';operation='json-export';kind='json-native';exe=$catalog;ext='json';scope='Startup + persisted catalog decode + full JSON export; no scan/GUI';args={param($out) 'json-export "{0}" "{1}"' -f $root,$out}},

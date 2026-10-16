@@ -256,6 +256,7 @@ fn run_fallback_scan(
                 fast_enumeration,
                 selected_root,
                 rules,
+                None,
             );
 
             (
@@ -486,8 +487,9 @@ fn walk_directory_tree(
     fast_enumeration: bool,
     scan_root: &std::path::Path,
     rules: &crate::types::ScanRules,
+    volume: Option<crate::directory_metadata::VolumeContext>,
 ) {
-    let entries = match winfind::read_dir_auto(directory, fast_enumeration) {
+    let entries = match winfind::read_dir_auto(directory, fast_enumeration, volume) {
         Ok(entries) => entries,
         Err(error) => {
             emit_deduplicated_issue(
@@ -498,6 +500,7 @@ fn walk_directory_tree(
             return;
         }
     };
+    let child_volume = entries.volume();
 
     for entry_result in entries {
         if cancelled.load(Ordering::SeqCst) {
@@ -575,6 +578,7 @@ fn walk_directory_tree(
                         fast_enumeration,
                         scan_root,
                         rules,
+                        inherited_volume(attributes, child_volume),
                     );
                 }
                 ReparseDecision::SkippedCycle => {
@@ -801,6 +805,16 @@ struct FallbackTask {
     path: PathBuf,
     directory_id: winblaze_core::DirectoryId,
     ancestors: AncestorChain,
+    volume: Option<crate::directory_metadata::VolumeContext>,
+}
+
+/// A non-reparse child directory is on its parent's volume. Reparse points
+/// (junctions, mount points, symlinks) may cross volumes, so they query.
+fn inherited_volume(
+    attributes: FileAttributes,
+    parent: Option<crate::directory_metadata::VolumeContext>,
+) -> Option<crate::directory_metadata::VolumeContext> {
+    parent.filter(|_| !attributes.is_reparse_point())
 }
 
 struct FallbackQueue {
@@ -880,6 +894,7 @@ fn run_fallback_scan_parallel(
                 path: selected_root.to_path_buf(),
                 directory_id: root_id,
                 ancestors: root_ancestors,
+                volume: None,
             }]),
             outstanding: 1,
         }),
@@ -1034,7 +1049,7 @@ fn process_fallback_directory(
     cancelled: &AtomicBool,
     totals: &mut FallbackTotals,
 ) -> Vec<FallbackTask> {
-    let entries = match winfind::read_dir_auto(&task.path, shared.fast_enumeration) {
+    let entries = match winfind::read_dir_auto(&task.path, shared.fast_enumeration, task.volume) {
         Ok(entries) => entries,
         Err(error) => {
             emit_deduplicated_issue_shared(
@@ -1045,6 +1060,7 @@ fn process_fallback_directory(
             return Vec::new();
         }
     };
+    let child_volume = entries.volume();
 
     let mut new_tasks = Vec::new();
     for entry_result in entries {
@@ -1117,6 +1133,7 @@ fn process_fallback_directory(
                         path: entry_path,
                         directory_id,
                         ancestors,
+                        volume: inherited_volume(attributes, child_volume),
                     });
                 }
                 ReparseDecision::SkippedCycle => {

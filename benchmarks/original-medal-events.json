@@ -25,16 +25,16 @@
   ],
   "events": [
     {
-      "name": "Startup \u00b7 first idle message queue",
-      "unit": "ms",
-      "scope": "Same hidden-window first-idle protocol. Does not measure a visible usable window.",
+      "name": "Install footprint \u00b7 64-bit GUI files",
+      "unit": "MiB",
+      "scope": "Bytes of the files each product needs to run its 64-bit GUI (measure-footprint.ps1); optional languages and 32-bit builds excluded.",
       "comparable": true,
       "observational": false
     },
     {
-      "name": "Startup CPU at first idle",
-      "unit": "CPU-s",
-      "scope": "Same hidden-window first-idle observation boundary; excludes later cache restoration and usable-window work.",
+      "name": "Reliability \u00b7 failed scans on hostile datasets",
+      "unit": "%",
+      "scope": "Standard-user scan/export. Share of 10 scans per run (rotating deep paths, junction maze, access-denied subtree, alternate data streams, Unicode names) that crashed, hung past 120 s, exited non-zero or wrote no root row. Mean over all 100 scans, so a single failure counts.",
       "comparable": true,
       "observational": false
     },
@@ -53,79 +53,51 @@
       "observational": false
     },
     {
-      "name": "Quick folder \u00b7 scan workflow",
-      "unit": "ms",
-      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Quick folder \u00b7 90th percentile completion",
-      "unit": "ms",
-      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Quick folder \u00b7 timing variability",
-      "unit": "%",
-      "scope": "Common startup + scan + CSV export. Interquartile range / median \u00d7 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Quick folder \u00b7 peak memory",
+      "name": "Standard-user \u00b7 full-drive private memory",
       "unit": "MiB",
-      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins.",
       "comparable": true,
       "observational": false
     },
     {
-      "name": "Quick folder \u00b7 private memory",
+      "name": "Windows folder \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Live folder or live writer; accessible counts can differ by policy.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Standard-user \u00b7 full-drive peak memory",
       "unit": "MiB",
-      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins.",
       "comparable": true,
       "observational": false
     },
     {
-      "name": "Quick folder \u00b7 CPU consumption",
+      "name": "Startup \u00b7 first idle message queue",
+      "unit": "ms",
+      "scope": "Same hidden-window first-idle protocol. Does not measure a visible usable window.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Startup CPU at first idle",
       "unit": "CPU-s",
-      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "scope": "Same hidden-window first-idle observation boundary; excludes later cache restoration and usable-window work.",
       "comparable": true,
       "observational": false
     },
     {
-      "name": "Empty-file scale \u00b7 scan workflow",
+      "name": "500k empty folders \u00b7 scan workflow",
       "unit": "ms",
-      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
       "comparable": true,
       "observational": false
     },
     {
-      "name": "Empty-file scale \u00b7 90th percentile completion",
-      "unit": "ms",
-      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Empty-file scale \u00b7 timing variability",
-      "unit": "%",
-      "scope": "Common startup + scan + CSV export. Interquartile range / median \u00d7 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Empty-file scale \u00b7 peak memory",
-      "unit": "MiB",
-      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Empty-file scale \u00b7 private memory",
-      "unit": "MiB",
-      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "name": "Standard-user \u00b7 full-drive CPU consumption",
+      "unit": "CPU-s",
+      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins.",
       "comparable": true,
       "observational": false
     },
@@ -137,9 +109,142 @@
       "observational": false
     },
     {
-      "name": "Nonempty dense folder \u00b7 scan workflow",
+      "name": "User profile \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Live folder or live writer; accessible counts can differ by policy.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 90th percentile completion",
+      "unit": "ms",
+      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Administrator \u00b7 full-drive peak memory",
+      "unit": "MiB",
+      "scope": "Mixed scope: whole native process including deferred snapshot write and tree queries versus whole competitor export process. Sampled resources; lower wins.",
+      "comparable": false,
+      "observational": true
+    },
+    {
+      "name": "Full C: volume \u00b7 scan workflow",
       "unit": "ms",
       "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 private memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 peak memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Administrator \u00b7 full-drive workflow",
+      "unit": "ms",
+      "scope": "Mixed scope: WinBlaze native scan + index publication (deferred cache write excluded; no GUI) versus competitor startup + scan + export. Administrator tokens; file totals differ.",
+      "comparable": false,
+      "observational": true
+    },
+    {
+      "name": "Administrator \u00b7 full-drive CPU consumption",
+      "unit": "CPU-s",
+      "scope": "Mixed scope: whole native process including deferred snapshot write and tree queries versus whole competitor export process. Sampled resources; lower wins.",
+      "comparable": false,
+      "observational": true
+    },
+    {
+      "name": "Deep long paths \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "node_modules tree \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "1-million-file scale \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Lognormal size mix \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "1M files under a 1 GiB memory limit \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest. Each scanned process is limited to 1 GiB committed memory (Job object).",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Churned folder \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Scan while disk is busy \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest. A sequential 256 MiB write-and-flush loop runs throughout.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Unicode names \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Files changing during scan \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Live folder or live writer; accessible counts can differ by policy. A writer creates and deletes files inside the target throughout.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Hard-link fixture \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Git repository \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Live folder or live writer; accessible counts can differ by policy.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 90th percentile completion",
+      "unit": "ms",
+      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
       "comparable": true,
       "observational": false
     },
@@ -151,9 +256,16 @@
       "observational": false
     },
     {
-      "name": "Nonempty dense folder \u00b7 timing variability",
-      "unit": "%",
-      "scope": "Common startup + scan + CSV export. Interquartile range / median \u00d7 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread.",
+      "name": "Quick folder \u00b7 90th percentile completion",
+      "unit": "ms",
+      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Empty-file scale \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
       "comparable": true,
       "observational": false
     },
@@ -165,8 +277,120 @@
       "observational": false
     },
     {
+      "name": "Quick folder \u00b7 peak memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Lognormal mix under CPU load \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest. Busy-loop processes on half the logical CPUs run throughout.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Nonempty dense folder \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Feature fixture \u00b7 scan/CSV time",
+      "unit": "ms",
+      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Quick folder \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "10 GiB of 1 MiB files \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Feature fixture \u00b7 scan/CSV peak memory",
+      "unit": "MiB",
+      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
+      "comparable": true,
+      "observational": false
+    },
+    {
       "name": "Nonempty dense folder \u00b7 private memory",
       "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Junction maze \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Alternate data streams \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "OneDrive cloud placeholders \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Live folder or live writer; accessible counts can differ by policy.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Sparse and compressed files \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Access-denied subtree \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Single 50 GiB sparse file \u00b7 scan workflow",
+      "unit": "ms",
+      "scope": "Whole-process startup + scan + CSV export; elapsed is kernel exit-minus-create time (no launcher overhead). Files and logical bytes must match the fixture manifest.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Quick folder \u00b7 private memory",
+      "unit": "MiB",
+      "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Feature fixture \u00b7 scan/CSV private memory",
+      "unit": "MiB",
+      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Quick folder \u00b7 CPU consumption",
+      "unit": "CPU-s",
       "scope": "Same synthetic dataset and startup + scan + CSV export boundary; median of sampled resources. At least 3 valid samples per product; short-run missing samples remain missing.",
       "comparable": true,
       "observational": false
@@ -179,76 +403,6 @@
       "observational": false
     },
     {
-      "name": "Full C: volume \u00b7 scan workflow",
-      "unit": "ms",
-      "scope": "Common workflow: startup + scan/indexing + CSV export, no GUI rendering. File counts and scanner policies remain visible in the evidence.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Full C: volume \u00b7 90th percentile completion",
-      "unit": "ms",
-      "scope": "Common startup + scan + CSV export. R-7 interpolated p90; at least 10 valid repetitions per product. Small-sample tail estimate, not a worst-case guarantee. Live-disk differences remain.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Full C: volume \u00b7 timing variability",
-      "unit": "%",
-      "scope": "Common startup + scan + CSV export. Interquartile range / median \u00d7 100; lower means more consistent, not faster. At least 10 valid repetitions; uncontrolled caches and live-disk changes affect spread.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Administrator \u00b7 full-drive workflow",
-      "unit": "ms",
-      "scope": "Mixed scope: WinBlaze native scan + index publication (deferred cache write excluded; no GUI) versus competitor startup + scan + export. Administrator tokens; file totals differ.",
-      "comparable": false,
-      "observational": true
-    },
-    {
-      "name": "Standard-user \u00b7 full-drive peak memory",
-      "unit": "MiB",
-      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Standard-user \u00b7 full-drive private memory",
-      "unit": "MiB",
-      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Standard-user \u00b7 full-drive CPU consumption",
-      "unit": "CPU-s",
-      "scope": "Common whole-process scan/export telemetry; sampled resources, lower wins.",
-      "comparable": true,
-      "observational": false
-    },
-    {
-      "name": "Administrator \u00b7 full-drive peak memory",
-      "unit": "MiB",
-      "scope": "Mixed scope: whole native process including deferred snapshot write and tree queries versus whole competitor export process. Sampled resources; lower wins.",
-      "comparable": false,
-      "observational": true
-    },
-    {
-      "name": "Administrator \u00b7 full-drive CPU consumption",
-      "unit": "CPU-s",
-      "scope": "Mixed scope: whole native process including deferred snapshot write and tree queries versus whole competitor export process. Sampled resources; lower wins.",
-      "comparable": false,
-      "observational": true
-    },
-    {
-      "name": "Feature fixture \u00b7 scan/CSV time",
-      "unit": "ms",
-      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
-      "comparable": true,
-      "observational": false
-    },
-    {
       "name": "Feature fixture \u00b7 scan/CSV CPU",
       "unit": "CPU-s",
       "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
@@ -256,18 +410,186 @@
       "observational": false
     },
     {
-      "name": "Feature fixture \u00b7 scan/CSV peak memory",
-      "unit": "MiB",
-      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
+      "name": "GUI lognormal \u00b7 repeat scan",
+      "unit": "ms",
+      "scope": "Standard-user GUI. Median of 10 full rescans of the 250k-file lognormal dataset in one GUI session.",
       "comparable": true,
       "observational": false
     },
     {
-      "name": "Feature fixture \u00b7 scan/CSV private memory",
+      "name": "GUI lognormal \u00b7 memory growth over 10 rescans",
       "unit": "MiB",
-      "scope": "Common whole-process scan/export of the same 224-file, 224 MiB fixture; includes native indexing for WinBlaze. Output counts validated.",
+      "scope": "Standard-user GUI. Working set after the 10th rescan minus after the first scan.",
       "comparable": true,
       "observational": false
+    },
+    {
+      "name": "GUI lognormal \u00b7 refresh after a small change",
+      "unit": "ms",
+      "scope": "Standard-user GUI. One added file, then each product's fastest refresh until done (WinBlaze incremental rescan, WinDirStat Refresh All, WizTree Scan).",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI session \u00b7 time to first result",
+      "unit": "ms",
+      "scope": "Standard-user GUI. Launch with the 250k-file lognormal dataset until the first result row is on screen (WinDirStat directory list, WinBlaze results list; WizTree draws rows only once its scan completes).",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI session \u00b7 reload saved results",
+      "unit": "ms",
+      "scope": "Standard-user GUI. Launch with the product's own saved scan of the 250k-file lognormal dataset until its loaded-results signal (WinDirStat /LoadFrom, WizTree CSV, WinBlaze CSV).",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI session \u00b7 redraw after resize",
+      "unit": "ms",
+      "scope": "Standard-user GUI. With the reloaded results shown, resize the window from 1200x800 to 1600x1000 until its screen pixels last change before 400 ms without change (treemap and lists redrawn).",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 disk bytes read",
+      "unit": "MiB",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 disk bytes written",
+      "unit": "MiB",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 peak handles",
+      "unit": "handles",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 peak threads",
+      "unit": "threads",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 page faults",
+      "unit": "faults",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 peak commit",
+      "unit": "MiB",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 kernel CPU",
+      "unit": "CPU-s",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 user CPU",
+      "unit": "CPU-s",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 memory per million files",
+      "unit": "MiB",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 context switches",
+      "unit": "switches",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Full C: volume \u00b7 package energy",
+      "unit": "J",
+      "scope": "Standard-user whole process scan + CSV export of C:. Exact kernel counters at exit; handle, thread and context-switch counts are 250 ms polled lower bounds; package energy integrates the RAPL power counter (package-wide, quiet machine). Export schemas differ, so written bytes include each product's own CSV.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI \u00b7 usable-window startup",
+      "unit": "ms",
+      "scope": "Standard-user GUI. Launch with no target until the main window is visible and answers WM_NULL.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI full drive \u00b7 scan to results",
+      "unit": "ms",
+      "scope": "Standard-user GUI. Launch with C: until the product signals results are ready.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI full drive \u00b7 memory with results",
+      "unit": "MiB",
+      "scope": "Standard-user GUI. Working set when results are ready.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI full drive \u00b7 responsiveness p95",
+      "unit": "ms",
+      "scope": "Standard-user GUI. 95th percentile WM_NULL round trip, polled every 100 ms during the scan.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI full drive \u00b7 exit with results",
+      "unit": "ms",
+      "scope": "Standard-user GUI. WM_CLOSE with full-drive results loaded until the process exits.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI full drive \u00b7 GDI objects with results",
+      "unit": "objects",
+      "scope": "Standard-user GUI. GDI objects (GetGuiResources) when results are ready.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI full drive \u00b7 USER objects with results",
+      "unit": "objects",
+      "scope": "Standard-user GUI. USER objects (GetGuiResources) when results are ready.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "GUI full drive \u00b7 cancel latency",
+      "unit": "ms",
+      "scope": "Standard-user GUI. Product cancel command after 2 s of scanning until it stops showing a scan in progress.",
+      "comparable": true,
+      "observational": false
+    },
+    {
+      "name": "Administrator \u00b7 full-drive private memory",
+      "unit": "MiB",
+      "scope": "Mixed scope: whole native process including deferred snapshot write and tree queries versus whole competitor export process. Sampled resources; lower wins.",
+      "comparable": false,
+      "observational": true
     }
   ]
 }

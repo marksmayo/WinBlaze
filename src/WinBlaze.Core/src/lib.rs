@@ -18,7 +18,7 @@ pub use model::{
     FileChangeRecord, FileChangeSet, FileId, FileLineageRecord, FileRecord, FileSystemKind,
     FileTimestamps, ScanSession, ScanSummary, VolumeId, VolumeRecord,
 };
-pub use name::FileName;
+pub use name::{FileName, RecordPath};
 pub use query::{
     DateFilter, MatchMode, SearchQuery, SearchScope, SizeFilter, SortDirection, SortField,
 };

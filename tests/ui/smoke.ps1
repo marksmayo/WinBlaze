@@ -112,6 +112,11 @@ Assert-True (Test-Path -LiteralPath $resolvedAppPath) "App executable not found:
 if (Test-Path -LiteralPath $FixturePath) {
     Remove-Item -LiteralPath $FixturePath -Recurse -Force
 }
+# A catalog left by an earlier run would load at startup and change the window title.
+$appDataPath = [IO.Path]::GetFullPath($FixturePath) + '.appdata'
+if (Test-Path -LiteralPath $appDataPath) {
+    Remove-Item -LiteralPath $appDataPath -Recurse -Force
+}
 if (Test-Path -LiteralPath $CancelFixturePath) {
     Remove-Item -LiteralPath $CancelFixturePath -Recurse -Force
 }
@@ -133,7 +138,7 @@ Add-Type -AssemblyName UIAutomationTypes
 $start = [Diagnostics.ProcessStartInfo]::new()
 $start.FileName = $resolvedAppPath
 $start.UseShellExecute = $false
-$start.EnvironmentVariables['LOCALAPPDATA'] = [IO.Path]::GetFullPath($FixturePath) + '.appdata'
+$start.EnvironmentVariables['LOCALAPPDATA'] = $appDataPath
 $app = [Diagnostics.Process]::Start($start)
 try {
     Start-Sleep -Seconds 3

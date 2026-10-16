@@ -223,7 +223,11 @@ impl Iterator for FindIterator {
             });
             return Some(Ok(FindEntry {
                 name: name.into(),
-                attributes: data.dwFileAttributes,
+                // dwReserved0 holds the reparse tag when the reparse bit is set.
+                attributes: crate::directory_metadata::traversal_attributes(
+                    data.dwFileAttributes,
+                    data.dwReserved0,
+                ),
                 size_bytes,
                 allocation_bytes,
                 physical_identity: details
@@ -297,10 +301,15 @@ pub enum DirEntries {
     Std(Box<fs::ReadDir>),
 }
 
-/// Opens `directory` honoring the fast-enumeration preference.
-pub fn read_dir_auto(directory: &Path, fast: bool) -> io::Result<DirEntries> {
+/// Opens `directory` honoring the fast-enumeration preference. `volume` is
+/// the parent's volume for a non-reparse child, sparing a per-directory query.
+pub fn read_dir_auto(
+    directory: &Path,
+    fast: bool,
+    volume: Option<crate::directory_metadata::VolumeContext>,
+) -> io::Result<DirEntries> {
     if fast {
-        if let Ok(entries) = crate::directory_metadata::read_directory(directory) {
+        if let Ok(entries) = crate::directory_metadata::read_directory_on(directory, volume) {
             return Ok(DirEntries::Batched(entries));
         }
         // Fall through to fs::read_dir on open failure so exotic paths keep
@@ -310,6 +319,16 @@ pub fn read_dir_auto(directory: &Path, fast: bool) -> io::Result<DirEntries> {
         }
     }
     fs::read_dir(directory).map(|entries| DirEntries::Std(Box::new(entries)))
+}
+
+impl DirEntries {
+    /// Volume of a batched directory, inherited by its non-reparse children.
+    pub fn volume(&self) -> Option<crate::directory_metadata::VolumeContext> {
+        match self {
+            DirEntries::Batched(entries) => Some(entries.volume()),
+            _ => None,
+        }
+    }
 }
 
 impl Iterator for DirEntries {
@@ -447,8 +466,8 @@ mod tests {
         fs::create_dir_all(root.join("inner")).expect("create fixture");
         fs::write(root.join("c.dat"), vec![0u8; 77]).expect("write c");
 
-        let fast = collect_entries(read_dir_auto(&root, true).expect("fast open"));
-        let slow = collect_entries(read_dir_auto(&root, false).expect("std open"));
+        let fast = collect_entries(read_dir_auto(&root, true, None).expect("fast open"));
+        let slow = collect_entries(read_dir_auto(&root, false, None).expect("std open"));
         assert_eq!(fast, slow);
         let _ = fs::remove_dir_all(&root);
     }

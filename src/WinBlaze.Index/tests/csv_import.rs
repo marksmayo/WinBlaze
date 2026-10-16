@@ -73,6 +73,33 @@ fn rejects_malformed_or_ambiguous_csv_instead_of_loading_a_partial_scan() {
     assert!(read_csv(b"Path,wrong,header\n".as_slice()).is_err());
 }
 #[test]
+fn parses_quotes_line_endings_and_blank_rows_and_folds_paths_like_to_lowercase() {
+    let header = "Path,Kind,LogicalBytes,AllocatedBytes,Files,Directories,ModifiedUnixSeconds\r\n";
+    // Blank and all-empty rows are skipped, a bare CR is field data, "" escapes a
+    // quote inside a quoted field, and the last row needs no line break.
+    let csv = format!("{header}\r\n\"Z:\\o\",Directory,2,2,2,0,\r\n,,,,,,\nZ:\\o\\a\rb,File,1,1,0,0,\n\"Z:\\o\\x\"\"y\",File,1,1,0,0,");
+    let tree = read_csv(csv.as_bytes()).unwrap();
+    let mut names: Vec<_> = tree
+        .files()
+        .iter()
+        .map(|file| file.name.to_string())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["a\rb", "x\"y"]);
+    for rows in [
+        "Z:\\o\\K.txt,File,1,1,0,0,\nZ:\\o\\k.txt,File,1,1,0,0,\n",
+        "Z:\\o\\\u{212A}.txt,File,1,1,0,0,\nZ:\\o\\k.txt,File,1,1,0,0,\n",
+        "Z:\\o\\\u{c9}.txt,File,1,1,0,0,\nZ:\\o\\\u{e9}.txt,File,1,1,0,0,\n",
+        "\"Z:\\o\\a,File,1,1,0,0,\n",
+        "Z:\\o\\a\"b,File,1,1,0,0,\n",
+    ] {
+        assert!(
+            read_csv(format!("{header}{rows}").as_bytes()).is_err(),
+            "accepted {rows}"
+        );
+    }
+}
+#[test]
 fn reopens_filtered_file_only_csv_and_reconstructs_missing_directory_hierarchy() {
     let csv="Path,Kind,LogicalBytes,AllocatedBytes,Files,Directories,ModifiedUnixSeconds\nZ:\\offline\\left\\a.bin,File,7,4096,0,0,\nZ:\\offline\\right\\b.bin,File,9,4096,0,0,\n";
     let tree = read_csv(csv.as_bytes()).unwrap();

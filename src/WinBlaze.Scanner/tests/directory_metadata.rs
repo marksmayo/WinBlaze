@@ -191,3 +191,44 @@ fn directory_metadata_handles_empty_missing_and_long_exact_utf16_paths() {
     }
     fs::remove_dir(root).unwrap();
 }
+
+#[test]
+fn skipped_end_of_directory_request_never_drops_entries_at_batch_boundaries() {
+    use winblaze_scanner::directory_metadata::read_directory_on;
+    let root = std::env::temp_dir().join(format!(
+        "winblaze-final-batch-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir(&root).unwrap();
+    // Name lengths from short to the 255-unit maximum, across counts that
+    // straddle the first 16 KiB batch, so some batches end with little room.
+    let mut created = 0;
+    for name_units in [4usize, 40, 120, 200, 255] {
+        for count in [0usize, 1, 13, 27, 28, 29, 60, 140, 300] {
+            let directory = root.join(format!("{name_units}-{count}"));
+            fs::create_dir(&directory).unwrap();
+            for id in 0..count {
+                let name = format!("{id:04}{}", "n".repeat(name_units - 4));
+                fs::write(directory.join(&name), []).unwrap();
+            }
+            let expected = fs::read_dir(&directory).unwrap().count();
+            let first = read_directory(&directory).unwrap();
+            let volume = first.volume();
+            assert_eq!(first.count(), expected, "{name_units}-{count}");
+            // Inherited volume context yields the same entries and identities.
+            let inherited = read_directory_on(&directory, Some(volume)).unwrap();
+            assert_eq!(inherited.volume(), volume);
+            assert_eq!(
+                inherited.count(),
+                expected,
+                "{name_units}-{count} inherited"
+            );
+            created += 1;
+        }
+    }
+    assert_eq!(created, 45);
+    fs::remove_dir_all(root).unwrap();
+}

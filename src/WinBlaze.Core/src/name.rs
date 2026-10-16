@@ -106,9 +106,76 @@ impl PartialEq<&str> for FileName {
     }
 }
 
+/// Optional per-record path in one pointer: empty paths (the norm, since
+/// scanners derive file paths from the parent directory) cost no allocation,
+/// and present ones pay a second indirection only when read.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct RecordPath(Option<Box<Box<str>>>);
+
+impl From<Box<str>> for RecordPath {
+    fn from(path: Box<str>) -> Self {
+        Self((!path.is_empty()).then(|| Box::new(path)))
+    }
+}
+
+impl From<String> for RecordPath {
+    fn from(path: String) -> Self {
+        Self::from(path.into_boxed_str())
+    }
+}
+
+impl From<&str> for RecordPath {
+    fn from(path: &str) -> Self {
+        Self::from(Box::<str>::from(path))
+    }
+}
+
+impl Deref for RecordPath {
+    type Target = str;
+    fn deref(&self) -> &str {
+        self.0.as_deref().map_or("", |path| path)
+    }
+}
+
+impl AsRef<str> for RecordPath {
+    fn as_ref(&self) -> &str {
+        self
+    }
+}
+
+impl std::hash::Hash for RecordPath {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&**self, state);
+    }
+}
+
+impl fmt::Display for RecordPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self)
+    }
+}
+
+impl fmt::Debug for RecordPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&**self, f)
+    }
+}
+
+impl PartialEq<str> for RecordPath {
+    fn eq(&self, other: &str) -> bool {
+        &**self == other
+    }
+}
+
+impl PartialEq<&str> for RecordPath {
+    fn eq(&self, other: &&str) -> bool {
+        &**self == *other
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::FileName;
+    use super::{FileName, RecordPath};
     #[test]
     fn inline_and_long_unicode_names_keep_owned_bytes_and_clone() {
         for text in [
@@ -139,5 +206,18 @@ mod tests {
             assert_eq!(names.get(text), Some(&text.len()));
         }
         assert!(FileName::default().is_empty());
+    }
+
+    #[test]
+    fn record_paths_are_one_pointer_and_empty_paths_do_not_allocate() {
+        assert_eq!(std::mem::size_of::<RecordPath>(), 8);
+        assert_eq!(RecordPath::from(""), RecordPath::default());
+        assert!(RecordPath::from(String::new()).0.is_none());
+        let path = RecordPath::from(r"C:\dir\é😀.txt");
+        assert_eq!(&*path, r"C:\dir\é😀.txt");
+        assert_eq!(path.to_string(), r"C:\dir\é😀.txt");
+        assert_eq!(format!("{path:?}"), format!("{:?}", r"C:\dir\é😀.txt"));
+        assert!(path == r"C:\dir\é😀.txt");
+        assert!(RecordPath::default().is_empty());
     }
 }

@@ -27,7 +27,7 @@ public static class FolderPickerInvocation {
         if (owner != process) throw new Exception("Screenshot target owner mismatch");
         return PrintWindow(window, context, 2);
     }
-    public static void Resize(IntPtr window) { MoveWindow(window, 50, 50, 900, 700, true); }
+    public static void Resize(IntPtr window, double scale) { MoveWindow(window, 50, 50, (int)(900 * scale), (int)(700 * scale), true); }
     public static void Cancel(IntPtr window) { PostMessage(window, 0x0111, new IntPtr(2), IntPtr.Zero); }
     public static IntPtr FindDialog(int process) {
         IntPtr result = IntPtr.Zero;
@@ -128,7 +128,12 @@ try {
         $presentation = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
         if ($presentation.Current.WindowVisualState -ne [System.Windows.Automation.WindowVisualState]::Maximized) { throw 'WinBlaze must launch maximized.' }
         $presentation.SetWindowVisualState([System.Windows.Automation.WindowVisualState]::Normal)
-        [FolderPickerInvocation]::Resize([IntPtr]$window.Current.NativeWindowHandle)
+        # 900x700 DIPs. The display scale comes from the user's setting: this script runs
+        # DPI-unaware, so DPI queries from it report 96, and at 200% a 900x700-pixel
+        # window is a 450x350 layout that clips any design.
+        $appliedDpi = (Get-ItemProperty 'HKCU:\Control Panel\Desktop\WindowMetrics' -Name AppliedDPI -ErrorAction SilentlyContinue).AppliedDPI
+        $scale = if ($appliedDpi) { $appliedDpi / 96.0 } else { 1.0 }
+        [FolderPickerInvocation]::Resize([IntPtr]$window.Current.NativeWindowHandle, $scale)
         Start-Sleep -Milliseconds 500
         $bounds = $window.Current.BoundingRectangle
         foreach ($name in @('Scan root path','Scan drive','Browse for folder','Start scan','Incremental rescan','Cancel','Search','Diagnostics')) {

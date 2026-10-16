@@ -28,7 +28,7 @@ $entries[1].source=Join-Path $fixture 'missing.json'
 Assert-Tools @(Get-CompetitorRefreshTools -Definitions @($definition) -Entries $entries -Identities $identities) @('WinBlaze','WizTree')
 Assert-Tools @(Get-CompetitorRefreshTools -Definitions @($definition) -Entries $entries -Identities $identities -RefreshCompetitors) @('WinBlaze','WinDirStat','WizTree')
 Write-Output 'PASS: unchanged complete competitors are reused; changed versions/hashes, missing or invalid baselines are refreshed; WinBlaze always runs.'
-$unicodeName='Full C: volume '+[char]0x00B7+' timing variability'
+$unicodeName='Full C: volume '+[char]0x00B7+' 90th percentile completion'
 $jsonPath=Join-Path $fixture 'utf8-without-bom.json'
 [IO.File]::WriteAllText($jsonPath,(ConvertTo-Json @{name=$unicodeName}),[Text.UTF8Encoding]::new($false))
 if((Read-BenchmarkJson $jsonPath).name -ne $unicodeName){throw 'UTF-8 medal names must survive reading in Windows PowerShell 5.1'}

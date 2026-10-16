@@ -43,6 +43,22 @@ fn synchronous_terminal_scan_indexes_on_the_calling_thread_and_preserves_exports
         let csv = root.join("complete.csv");
         assert_eq!(wb_export_csv(view(csv.to_str().unwrap())), 0);
         assert_complete_catalog(&csv);
+        // The export overlapped the background snapshot write. Once joined,
+        // a fresh repository open must reload the complete primary snapshot
+        // from disk: every fixture file, not the backup.
+        winblaze_native::bridge::wait_for_pending_persist();
+        use winblaze_index::{IndexBackend, IndexRepository, SqliteIndexRepository, TreeIndex};
+        let index = std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap())
+            .join("WinBlaze")
+            .join("index");
+        let repository = SqliteIndexRepository::open(&index, IndexBackend::BinaryCache);
+        assert!(!repository.snapshot().cache_loaded_from_backup);
+        let tree = TreeIndex::build(repository.into_transaction());
+        assert_eq!(
+            tree.files().len(),
+            3,
+            "reloaded snapshot must hold every fixture file"
+        );
         let timed_out = winblaze_native::bridge::run_terminal_scan(
             root.join("data").to_str().unwrap(),
             Duration::ZERO,
@@ -88,6 +104,63 @@ extern "C" fn observe(event: *const WbEvent, context: *mut c_void) {
     ) {
         let _ = observed.terminal.try_send(());
     }
+}
+
+#[test]
+fn in_memory_terminal_scan_exports_the_catalog_without_saving_it() {
+    const CHILD: &str = "WINBLAZE_IN_MEMORY_TERMINAL_ROOT";
+    if let Some(root) = std::env::var_os(CHILD) {
+        let root = std::path::PathBuf::from(root);
+        let outcome = winblaze_native::bridge::run_terminal_scan_with(
+            root.join("data").to_str().unwrap(),
+            Duration::from_secs(30),
+            None,
+            std::ptr::null_mut(),
+            false,
+        );
+        assert!(outcome.completed);
+        let csv = root.join("complete.csv");
+        assert_eq!(wb_export_csv(view(csv.to_str().unwrap())), 0);
+        assert_complete_catalog(&csv);
+        winblaze_native::bridge::wait_for_pending_persist();
+        let index = std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap())
+            .join("WinBlaze")
+            .join("index");
+        let saved = std::fs::read_dir(&index)
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .any(|entry| entry.file_name().to_string_lossy().contains("index"))
+            })
+            .unwrap_or(false);
+        assert!(
+            !saved,
+            "an in-memory scan must not write a catalog snapshot"
+        );
+        return;
+    }
+    let root = std::env::temp_dir().join(format!("winblaze-in-memory-{}", std::process::id()));
+    std::fs::create_dir_all(root.join("data/nested")).unwrap();
+    std::fs::write(root.join("data/alpha.txt"), b"alpha").unwrap();
+    std::fs::write(root.join("data/beta.bin"), b"beta").unwrap();
+    std::fs::write(root.join("data/nested/gamma.txt"), b"gamma").unwrap();
+    let result = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "in_memory_terminal_scan_exports_the_catalog_without_saving_it",
+            "--nocapture",
+        ])
+        .env(CHILD, &root)
+        .env("LOCALAPPDATA", root.join("cache"))
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(
+        result.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
 }
 
 fn view(text: &str) -> WbCStringView {

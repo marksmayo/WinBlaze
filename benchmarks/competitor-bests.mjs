@@ -1,10 +1,12 @@
+import {COMPETITORS} from './products.mjs';
 export function retainCompetitorBests(store, events, identities, provenance) {
     if (store && store.schema !== 1) throw new Error('Unsupported competitor best schema');
     const entries = new Map((store?.entries || []).map(entry => [entry.key, entry]));
     const selected = events.map(original => {
         const event = {...original, times:{...original.times}, samples:{...original.samples},
-            measurements:{...original.measurements}, competitor_bests:{...original.competitor_bests}, pending_refresh:{...original.pending_refresh}};
-        for (const tool of ['WinDirStat','WizTree']) {
+            measurements:{...original.measurements}, competitor_bests:{...original.competitor_bests}, pending_refresh:{...original.pending_refresh},
+            partial:{...original.partial}};
+        for (const tool of COMPETITORS) {
             const identity = identities[tool];
             if (!identity?.sha256) continue;
             const key = JSON.stringify([tool,event.name,event.unit,event.scope,event.comparable,
@@ -25,6 +27,8 @@ export function retainCompetitorBests(store, events, identities, provenance) {
                 event.measurements[tool] = [...best.values];
                 event.competitor_bests[tool] = best;
                 event.pending_refresh[tool] = false;
+                // A stored n=10 best replaces a partial retried cohort (n<10).
+                delete event.partial[tool];
             }
         }
         return event;

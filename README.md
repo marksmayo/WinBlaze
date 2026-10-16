@@ -91,6 +91,8 @@ The portable package and installer include the unattended CLI:
 .\winblaze-cli.exe --dump-mft C:\ volume.mft
 ```
 
+The CLI writes only the requested report. Add `--keep-catalog` before the other arguments (`.\winblaze-cli.exe --keep-catalog C:\Data scan.csv`) to also save the scan as the catalog the GUI reopens.
+
 Duplicate detection compares complete bytes and excludes hard-link aliases from reclaimable copies. ACL reports include errors for inaccessible entries and exclude privileged audit SACLs. Allocation uses actual Windows storage; logical totals retain hard-link names while physical storage is counted once.
 
 The current offline benchmark dashboard is [CURRENT_COMPARISON.html](benchmarks/CURRENT_COMPARISON.html), with ten repeats per workload, binary/version provenance, feature-support medals and explicit timing scopes. The performance snapshot above is historical.

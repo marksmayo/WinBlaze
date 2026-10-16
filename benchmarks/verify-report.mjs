@@ -74,8 +74,9 @@ for (const row of embedded.medals.standings) {
     assert(staticHtml.includes(`${row.tool}, rank ${row.place}, ${row.gold} gold, ${row.silver} silver, ${row.bronze} bronze`));
 }
 assert(embedded.medals.events.some(e=>e.unit==='MiB'));
-assert.equal(embedded.medals.events.filter(e=>e.name.includes('90th percentile completion')||e.name.includes('timing variability')).length,8);
-assert(staticHtml.includes('Slow runs &amp; consistency')||staticHtml.includes('Slow runs & consistency'));
+assert.equal(embedded.medals.events.filter(e=>e.name.includes('90th percentile completion')).length,4);
+assert(!embedded.medals.events.some(e=>e.name.includes('timing variability')),'Timing variability medals are retired');
+assert(staticHtml.includes('<h2>Slow runs</h2>'));
 assert(embedded.medals.events.some(e=>e.unit==='CPU-s'));
 assert(embedded.features.rows.length >= 10);
 assert(embedded.features.rows.find(r=>r.feature==='Direct NTFS / MFT scan').WizTree.toLowerCase().includes('administrator mode required'));
@@ -209,7 +210,7 @@ assert(elements.get('feature-performance-coverage').innerHTML.includes('Raw MFT 
 assert(elements.get('feature-performance-coverage').innerHTML.includes('Duplicate detection'));
 for(const profile of ['tiny','scale','fanout-large','full']) {
  elements.get('profile').value=profile;
- for(const metric of ['90th percentile completion','timing variability']) {
+ for(const metric of ['90th percentile completion']) {
   elements.get('distribution-metric').value=metric;
   vm.runInContext('distributions();resources()',context);
   assert(elements.get('distribution-chart').innerHTML.includes('accepted n=10'));

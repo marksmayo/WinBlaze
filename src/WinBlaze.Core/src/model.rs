@@ -76,9 +76,12 @@ impl BitAndAssign for FileAttributes {
     }
 }
 
-/// Three lossless optional timestamps sharing one presence byte. Values stay
-/// aligned and retain the full i64 range; no timestamp is reserved as a sentinel.
+/// Three lossless optional timestamps sharing one presence byte. Values retain
+/// the full i64 range; no timestamp is reserved as a sentinel. Packed (25 bytes)
+/// so the presence byte doesn't pad every file record by 7 bytes; fields are
+/// only ever read by value, never borrowed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct FileTimestamps {
     values: [i64; 3],
     present: u8,
@@ -135,8 +138,8 @@ pub struct FileRecord {
     /// demand from the parent directory's `full_path` via
     /// [`derive_file_path`] / [`join_path`]. Directory records always carry
     /// their full path. File paths are immutable between record replacements;
-    /// boxed storage avoids a capacity word in every indexed file record.
-    pub full_path: Box<str>,
+    /// one pointer wide, and empty paths allocate nothing.
+    pub full_path: crate::RecordPath,
     pub size_bytes: u64,
     pub allocation_bytes: u64,
     pub attributes: FileAttributes,

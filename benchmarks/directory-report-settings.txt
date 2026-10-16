@@ -1,0 +1,328 @@
+﻿#Directory Report settings
+[SCAN DIRECTORIES]
+{{TARGET}}
+
+[OTHER]
+Dont follow symbolic links=1
+Scan Subdirectories=1
+Maximum dir depth=-1
+Display size=BYTES
+Files sort by=Size wsubdir des
+Directories sort by=size wsubdir des
+
+[FILTER FILE NAME VERSION]
+*.exe
+*.dll
+*.msi
+*.msp
+*.msm
+*.mui
+*.cpl
+
+[FILTER OFFICE EXTENSIONS]
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
+[FILTER OTHER]
+filter created date > accessed date=0
+filter any dates EQ 0=0
+filter file has NTFS streams=0
+filter system file yes=0
+filter system file no=0
+filter compressed yes=0
+filter compressed no=0
+filter encrypted yes=0
+filter encrypted no=0
+filter archive yes=0
+filter archive no=0
+filter read only yes=0
+filter read only no=0
+filter hidden yes=0
+filter hidden no=0
+filter hard link yes=0
+filter hard link no=0
+filter symbolic link yes=0
+filter symbolic link no=0
+filter path length=0
+
+[COMPUTE]
+# a size of -1 denotes no limit
+Largest files flag=0
+Largest files count=-1
+Largest directories flag=0
+Largest directories count=-1
+Largest owner flag=0
+Largest type flag=0
+Check for NTFS streams=0
+
+[AUTOPRINT_MAIN]
+autoprint=1
+print_type=excel
+fname={{REPORT}}
+Append date to file name=0
+Files sort by=Size des
+Directories sort by=size wsubdir des
+Print Full Path=1
+Exit program after printing=1
+file name in a separate column=0
+
+[AUTOPRINT_DUP_DIRS]
+autoprint=0
+
+[AUTOPRINT_DUP_FILES]
+autoprint=0
+
+[AUTOPRINT_LARGEST_FILES]
+autoprint=0
+
+[AUTOPRINT_LARGEST_DIRS]
+autoprint=0
+
+[AUTOPRINT_LARGEST_OWNER]
+autoprint=0
+
+[AUTOPRINT_LARGEST_TYPE]
+autoprint=0
+
+[DUPLICATE OPTIONS]
+Duplicate files by name=0
+Duplicate files by copied name=0
+Duplicate files by size=0
+Duplicate files by comparing byte by byte=0
+Duplicate files by CRC=0
+Duplicate files ignore 0 size=0
+Duplicate dirs by name=0
+Duplicate dirs by copied name=0
+Duplicate dirs by size=0
+Duplicate dirs by size wsub=0
+Duplicate dirs by CRC=0
+Duplicate dirs by CRC wsub=0
+Duplicate dirs by total files=0
+Duplicate dirs by total files wsub=0
+Duplicate dirs ignore 0 size=0
+Duplicates show color=1
+Duplicates play sound when finished=0
+Duplicates play sound file name=
+Duplicates disable screen saver=0
+
+[AUTOFIND DUPLICATES]
+FindFiles=0
+FindDirs=0
+
+[CRC]
+Show CRC=0
+Show CRC HEX=0
+CRC from file=
+
+[DEFAULT FILE COMPARE MODE]
+binary
+
+[DIFF PROGRAM]
+use default program=1
+program=
+A options=
+B options=
+C options=
+
+[PRINTING WIDTHS]
+name width=0.400000
+size width=0.130000
+date width=0.090000
+CRC width=0.090000
+CRC-MD5 width=0.352000
+CRC-SHA1 width=0.440000
+CRC-SHA256 width=0.704000
+CRC-SHA512 width=1.400000
+Owner width=0.090000
+
+[LARGEST OWNER WIDTHS]
+owner width=0.500000
+number of files width=0.250000
+size width=0.250000
+
+[LARGEST TYPE WIDTHS]
+type width=0.500000
+number of files width=0.250000
+size width=0.250000
+
+[MARGINS]
+spread unused space=1
+left margin=40
+top margin=40
+right margin=0
+bottom margin=0
+
+[GENERAL PRINT FLAGS]
+Print accessed date=1
+Print CRC=0
+Print CRC MD5=0
+Print CRC SHA-1=0
+Print CRC SHA-256=0
+Print CRC SHA-512=0
+Print CRC with SUBDIR=0
+Print create date=1
+Print time=1
+Print directory totals=1
+Print modify date=1
+Print attributes=1
+Print no files=0
+Print no dirs=0
+Print owner=0
+Print file name in separate column=0
+Print size=1
+Print size compressed=0
+Print size compressed with SUBDIR=0
+Print size actual=1
+Print size with subdirs=1
+Print size with subdirs actual=1
+Print filters=1
+Print file system information=1
+Print duplicate group=0
+Print Hard Link count=0
+Print Symbolic link=0
+Unicode=1
+
+[MSI PRINT FLAGS]
+Print Title=0
+Print Subject=0
+Print Keywords=0
+Print Template=0
+Print Page Count=0
+Print Word Count=0
+Print Comments=0
+Print Author=0
+Print Last Author=0
+Print Revision=0
+Print Application=0
+Print Edit Time=0
+Print Printed Date=0
+Print Create Date=0
+Print Save Date=0
+
+[OFFICE PRINT FLAGS]
+Print Title=0
+Print Subject=0
+Print Author=0
+Print Keywords=0
+Print Comments=0
+Print Template=0
+Print Last Author=0
+Print Rev Number=0
+Print Edit Time=0
+Print Last Printed Date Time=0
+Print Created Date Time=0
+Print Last Saved Date Time=0
+Print Page Count=0
+Print Word Count=0
+Print Char Count=0
+Print App Name=0
+Print Doc Security=0
+Print Category=0
+Print Pres Format=0
+Print Byte Count=0
+Print Line Count=0
+Print Paragraph Count=0
+Print Slide Count=0
+Print Note Count=0
+Print Hidden Count=0
+Print MM Clip Count=0
+Print Scale=0
+Print Doc Parts=0
+Print Manager=0
+Print Company=0
+Print Links Dirty=0
+Print Total Time=0
+Print Shared Doc=0
+Print Hyperlinks Changed=0
+Print Application Version=0
+Print Description=0
+Print Content Status=0
+Print Version=0
+
+[MP3 PRINT FLAGS]
+Print Album=0
+Print Artist=0
+Print Bitrate=0
+Print Comment=0
+Print Frames=0
+Print Frequency=0
+Print Genre=0
+Print Length=0
+Print Mode=0
+Print Title=0
+Print Version=0
+Print Year=0
+Print Track=0
+
+[WAV PRINT FLAGS]
+Print archival location=0
+Print artist=0
+Print audio format=0
+Print audio sample rate=0
+Print channels=0
+Print sample size=0
+Print bit rate=0
+Print comments=0
+Print commisioned=0
+Print copyright=0
+Print create date=0
+Print cropped=0
+Print digitization=0
+Print dimensions=0
+Print display name=0
+Print dots per inch=0
+Print engineer=0
+Print genre=0
+Print keywords=0
+Print lightness=0
+Print media length=0
+Print medium=0
+Print name=0
+Print palette=0
+Print product=0
+Print sharpness=0
+Print smpte=0
+Print software=0
+Print source=0
+Print source form=0
+Print subject=0
+Print technician=0
+
+[AVI PRINT FLAGS]
+Print video frame width=0
+Print video frame height=0
+Print video play length=0
+Print video frame count=0
+Print video frame rate=0
+Print video data rate=0
+Print video sample size=0
+Print video compression=0
+Print audio format=0
+Print audio avg data rate=0
+Print audio sample rate=0
+Print audio sample size=0
+Print audio channels=0
+
+[VERSION PRINT FLAGS]
+Print 32 64 bit=0
+Print comments=0
+Print company name=0
+Print copyright=0
+Print description=0
+Print internal name=0
+Print language=0
+Print legal trademarks=0
+Print original filename=0
+Print private build=0
+Print product name=0
+Print product version=0
+Print special build=0
+Print version=0
+
+[HTML PRINT FLAGS]
+Print files/dirs as hyperlinks=0
+

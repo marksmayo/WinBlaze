@@ -401,7 +401,8 @@ foreach ($taskFile in Get-ChildItem $taskSource -File | Where-Object Extension -
         $taskImportEnd=$taskContent.IndexOf('    winrt::fire_and_forget MainWindow::ExportTreemapPng()', $taskImportStart)
         if($taskImportStart -lt 0 -or $taskImportEnd -lt 0){throw 'Review import coroutine boundaries'}
         $taskImportDialogs=$taskContent.Substring($taskImportStart,$taskImportEnd-$taskImportStart)
-        if([regex]::Matches($taskImportDialogs,[regex]::Escape('        auto lifetime = get_strong();')).Count -ne 1){throw 'Review import owner lifetime'}
+        # ImportCsv (dialogs) and OpenSavedScan (background import) both own the window.
+        if([regex]::Matches($taskImportDialogs,[regex]::Escape('        auto lifetime = get_strong();')).Count -ne 2){throw 'Review import owner lifetime'}
         $taskImportDialogs=$taskImportDialogs.Replace('        auto lifetime = get_strong();', "        auto lifetime = get_strong();`n        auto dialog_operation = BeginOwnedCoroutine();`n        if (!dialog_operation || IsClosing()) co_return;")
         if([regex]::Matches($taskImportDialogs,'\boptions\.ShowAsync\(\)').Count -ne 1){throw 'Review import options dialog site'}
         $taskImportDialogs=$taskImportDialogs.Replace('options.ShowAsync()', 'ShowOwnedDialog(options)')
@@ -493,7 +494,14 @@ foreach ($taskFile in Get-ChildItem $taskSource -File | Where-Object Extension -
             }
         }
 '@
-        $taskContent = $taskContent.Replace($taskCloseAnchor, "$taskCloseWork`n$taskCloseAnchor")
+        # Only window close cancels the session. The same cleanup text also occurs
+        # (more indented) in RestartMonitoring; injecting there cancelled any scan
+        # that overlapped a catalog reload, so insert inside OnWindowClosed only.
+        $taskClosedStart = $taskContent.IndexOf('    void MainWindow::OnWindowClosed(')
+        $taskCloseAt = if ($taskClosedStart -ge 0) { $taskContent.IndexOf("`n$taskCloseAnchor", $taskClosedStart) } else { -1 }
+        $taskNextFunction = if ($taskClosedStart -ge 0) { $taskContent.IndexOf("`n    void MainWindow::", $taskClosedStart + 1) } else { -1 }
+        if ($taskCloseAt -lt 0 -or ($taskNextFunction -ge 0 -and $taskCloseAt -gt $taskNextFunction)) { throw 'Missing window-close cleanup anchor' }
+        $taskContent = $taskContent.Insert($taskCloseAt + 1, "$taskCloseWork`n")
         $taskEventAnchor = '            // m_scan_started_at / m_last_scan_duration_text / the UI timing'
         if (-not $taskContent.Contains($taskEventAnchor)) { throw 'Missing native event lock anchor' }
         $taskContent = $taskContent.Replace($taskEventAnchor, "            if (IsClosing()) return;`n`n$taskEventAnchor")

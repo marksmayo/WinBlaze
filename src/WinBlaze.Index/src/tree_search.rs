@@ -141,6 +141,23 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
         if let Some(regex) = &regex {
             return regex.is_match(text);
         }
+        if text.is_ascii() && pattern.is_ascii() {
+            // ASCII lowercasing is byte-wise, so this matches the general path
+            // below without allocating a lowercase copy per candidate.
+            let (text, pattern) = (text.as_bytes(), pattern.as_bytes());
+            return match options.mode {
+                TextMode::Exact => text.eq_ignore_ascii_case(pattern),
+                TextMode::Prefix => text
+                    .get(..pattern.len())
+                    .is_some_and(|prefix| prefix.eq_ignore_ascii_case(pattern)),
+                _ => {
+                    pattern.is_empty()
+                        || text
+                            .windows(pattern.len())
+                            .any(|window| window.eq_ignore_ascii_case(pattern))
+                }
+            };
+        }
         let text = text.to_lowercase();
         match options.mode {
             TextMode::Exact => text == pattern,
@@ -181,7 +198,13 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
                 || (!extensions.is_empty()
                     && (key.0
                         || !name(item).rsplit_once('.').is_some_and(|(_, ext)| {
-                            extensions.iter().any(|value| ext.to_lowercase() == *value)
+                            extensions.iter().any(|value| {
+                                if ext.is_ascii() {
+                                    ext.eq_ignore_ascii_case(value)
+                                } else {
+                                    ext.to_lowercase() == *value
+                                }
+                            })
                         })))
             {
                 return false;
@@ -209,12 +232,7 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
             SearchSort::Modified => modified(left_entry).cmp(&modified(right_entry)),
             SearchSort::Name => std::cmp::Ordering::Equal,
         }
-        .then_with(|| {
-            name(left_entry)
-                .chars()
-                .flat_map(char::to_lowercase)
-                .cmp(name(right_entry).chars().flat_map(char::to_lowercase))
-        })
+        .then_with(|| cmp_lowercase(name(left_entry), name(right_entry)))
         .then_with(|| left.cmp(&right));
         if options.descending {
             order.reverse()
@@ -249,4 +267,58 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
         })
         .collect();
     Ok(SearchPage { total, hits })
+}
+
+/// Compares the `char::to_lowercase` sequences of two names; ASCII names
+/// compare byte-wise, which orders identically.
+fn cmp_lowercase(left: &str, right: &str) -> std::cmp::Ordering {
+    if left.is_ascii() && right.is_ascii() {
+        left.bytes()
+            .map(|byte| byte.to_ascii_lowercase())
+            .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+    } else {
+        left.chars()
+            .flat_map(char::to_lowercase)
+            .cmp(right.chars().flat_map(char::to_lowercase))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ascii_fast_path_orders_like_unicode_lowercase() {
+        let names = [
+            "",
+            "a",
+            "A",
+            "ab",
+            "aB",
+            "Ab",
+            "b",
+            "Z",
+            "_x",
+            "a.txt",
+            "A.TXT",
+            "readme",
+            "\u{212A}elvin",
+            "kelvin",
+            "\u{c9}t\u{e9}",
+            "\u{e9}t\u{e9}",
+            "zz\u{e9}",
+            "Zz",
+        ];
+        for left in names {
+            for right in names {
+                let unicode = left
+                    .chars()
+                    .flat_map(char::to_lowercase)
+                    .cmp(right.chars().flat_map(char::to_lowercase));
+                assert_eq!(
+                    super::cmp_lowercase(left, right),
+                    unicode,
+                    "{left:?} vs {right:?}"
+                );
+            }
+        }
+    }
 }

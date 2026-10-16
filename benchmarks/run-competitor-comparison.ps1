@@ -5,7 +5,7 @@ param(
     [ValidateRange(1,3600)][int]$TimeoutSeconds = 600,
     [string]$OutputPath = (Join-Path $PSScriptRoot 'current-competitor-results.json'),
     [switch]$AppendResults,
-    [ValidateSet('WinBlaze', 'WinDirStat', 'WizTree')]
+    [ValidateSet('WinBlaze', 'WinDirStat', 'WizTree', 'SpaceSniffer', 'Everything', 'Directory Report', 'TreeSize Free')]
     [string[]]$Tools = @('WinBlaze', 'WinDirStat', 'WizTree'),
     [int]$RunOffset = 0,
     [string]$WinBlazeCliPath = (Join-Path $PSScriptRoot '../target/release/winblaze-cli.exe'),
@@ -39,6 +39,7 @@ if([IO.Path]::GetFullPath($resolvedOutputPath) -eq $elevatedPath -and (Test-Path
     }
 }
 $exports = Join-Path $repo 'artifacts/benchmark-exports'
+. (Join-Path $PSScriptRoot 'scan-adapters.ps1')
 New-Item -ItemType Directory -Force -Path $exports | Out-Null
 $results = [Collections.Generic.List[object]]::new()
 if ($AppendResults -and (Test-Path -LiteralPath $OutputPath)) {
@@ -49,6 +50,7 @@ foreach ($profile in $Profiles) {
     $target = if ($profile -eq 'full') { 'C:\' } else { Join-Path $repo "artifacts/benchmark-datasets/$profile" }
     foreach ($tool in $Tools) {
         $exe = if ($tool -eq 'WinBlaze') { [IO.Path]::GetFullPath($WinBlazeCliPath) } elseif ($tool -eq 'WinDirStat') { 'C:\Program Files\WinDirStat\WinDirStat.exe' } else { 'C:\Program Files\WizTree\WizTree64.exe' }
+        if (Test-ScanAdapterTool $tool) { $exe = Get-BenchToolExecutable $tool }
         $identityName = if ($tool -eq 'WinBlaze') { 'WinBlaze scan/export' } else { $tool }
         $identityOptions = @{Tool=$identityName;Executable=$exe}
         if($HistoryPath){$identityOptions.HistoryPath=$HistoryPath}
@@ -67,9 +69,12 @@ foreach ($profile in $Profiles) {
                 $wizTarget = $target.TrimEnd('\')
                 $argsText = '"{0}" /admin=0 /export="{1}"' -f $wizTarget, $csv
             }
+            $plan = if (Test-ScanAdapterTool $tool) { New-ScanPlan $tool $target $csv } else { $null }
+            if ($plan) { $argsText = $plan.Arguments }
             $started = [DateTime]::UtcNow
             $timer = [Diagnostics.Stopwatch]::StartNew()
             $process = Start-Process -FilePath $exe -ArgumentList $argsText -WindowStyle Hidden -PassThru
+            if ($plan -and $plan.CompanionExecutable) { $null = Start-Process -FilePath $plan.CompanionExecutable -ArgumentList $plan.CompanionArguments -WindowStyle Hidden -PassThru }
             $peakWs = 0L; $cpuMs = 0.0; $privateBytes = 0L; $sampleCount = 0
             # Sample before the first wait too: a valid short scan/export can
             # finish inside that first 25 ms interval. Keep the same periodic
@@ -92,13 +97,14 @@ foreach ($profile in $Profiles) {
             if (($null -ne $process.ExitCode -and $process.ExitCode -ne 0) -or !(Test-Path -LiteralPath $csv)) {
                 throw "$tool did not produce a successful export (exit $($process.ExitCode))."
             }
-            $reader = [IO.StreamReader]::new($csv)
-            try {
+            $totals = if ($plan) { Read-ScanTotals $plan } else { $null }
+            $reader = if ($plan) { $null } else { [IO.StreamReader]::new($csv) }
+            if ($plan) { $root = [pscustomobject]@{ Files = $totals.files; Folders = $totals.folders } } else { try {
                 if ($tool -eq 'WizTree') { $null = $reader.ReadLine() }
                 $header = $reader.ReadLine()
                 $line = $reader.ReadLine()
                 $root = @($header, $line) | ConvertFrom-Csv
-            } finally { $reader.Dispose() }
+            } finally { $reader.Dispose() } }
             if ($tool -eq 'WinBlaze' -and ![string]::Equals($root.Path.TrimEnd('\'), $target.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) {
                 throw "WinBlaze exported a different root than the requested workload; result rejected."
             }
@@ -118,15 +124,17 @@ foreach ($profile in $Profiles) {
                 export_bytes = (Get-Item -LiteralPath $csv).Length
                 files = [long]$root.Files
                 folders_excluding_root = if ($tool -eq 'WinBlaze') { [long]$root.Directories } else { [long]$root.Folders }
-                logical_bytes = if ($tool -eq 'WinBlaze') { [long]$root.LogicalBytes } elseif ($tool -eq 'WinDirStat') { [long]$root.'Logical Size' } else { [long]$root.Size }
-                allocated_bytes = if ($tool -eq 'WinBlaze') { [long]$root.AllocatedBytes } elseif ($tool -eq 'WinDirStat') { [long]$root.'Physical Size' } else { [long]$root.Allocated }
+                logical_bytes = if ($plan) { $totals.logical } elseif ($tool -eq 'WinBlaze') { [long]$root.LogicalBytes } elseif ($tool -eq 'WinDirStat') { [long]$root.'Logical Size' } else { [long]$root.Size }
+                allocated_bytes = if ($plan) { $totals.allocated } elseif ($tool -eq 'WinBlaze') { [long]$root.AllocatedBytes } elseif ($tool -eq 'WinDirStat') { [long]$root.'Physical Size' } else { [long]$root.Allocated }
+                # 'files-only' adapters (SpaceSniffer, TreeSize Free) are validated on file count.
+                size_precision = if ($plan) { $totals.size_precision } else { 'exact' }
             }
             $results.Add($row)
             ConvertTo-Json -InputObject $results.ToArray() -Depth 6 | Set-Content -LiteralPath $OutputPath
             Write-Output ("{0} {1} run {2}: {3:N0} ms; {4} files; peak {5:N1} MiB" -f $tool, $profile, $run, $elapsed, $row.files, ($peakWs / 1MB))
             # Full-volume exports contain personal paths and can be large.
             # Keep aggregate evidence only; delete this exact generated file.
-            if ($profile -eq 'full') { Remove-Item -LiteralPath $csv }
+            if ($plan) { Remove-ScanOutputs $plan } elseif ($profile -eq 'full') { Remove-Item -LiteralPath $csv }
         }
         # Publish only after the full validated cohort, outside timed work.
         if ($OnToolComplete) { & $OnToolComplete }

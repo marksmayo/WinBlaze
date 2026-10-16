@@ -582,6 +582,50 @@ fn persist_gate_lock() -> std::sync::MutexGuard<'static, ()> {
     }
 }
 
+/// Background snapshot writes started by terminal scans. A write is counted
+/// while its scan still holds the persist gate and uncounted only after the
+/// write returns, so a reader that waits for zero never sees a partial file,
+/// however many threads wait concurrently.
+struct PendingPersist {
+    writes: usize,
+    workers: Vec<thread::JoinHandle<()>>,
+}
+
+static PENDING_PERSIST: Mutex<PendingPersist> = Mutex::new(PendingPersist {
+    writes: 0,
+    workers: Vec::new(),
+});
+static PERSIST_FINISHED: std::sync::Condvar = std::sync::Condvar::new();
+
+fn pending_persist_lock() -> std::sync::MutexGuard<'static, PendingPersist> {
+    match PENDING_PERSIST.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+/// Blocks until no background snapshot write is in progress. Every on-disk
+/// snapshot read in this module calls it first.
+fn wait_for_persisted_snapshot() {
+    let mut pending = pending_persist_lock();
+    while pending.writes > 0 {
+        pending = match PERSIST_FINISHED.wait(pending) {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+    }
+}
+
+/// Blocks until every background snapshot write from `run_terminal_scan` has
+/// finished and its worker has exited. Call it before the process exits.
+pub fn wait_for_pending_persist() {
+    wait_for_persisted_snapshot();
+    let workers = std::mem::take(&mut pending_persist_lock().workers);
+    for worker in workers {
+        let _ = worker.join();
+    }
+}
+
 fn build_index_model(
     transaction: BufferedIndexTransaction,
     cache_stats: Option<(u64, u64, u64, bool)>,
@@ -606,24 +650,32 @@ fn build_index_model(
 /// the ~2.3M-file pass is fanned across worker threads: each thread folds a
 /// local map over its slice and the (few-hundred-key) maps merge at the end.
 fn aggregate_extension_totals(files: &[FileRecord]) -> Vec<(String, u64, u64)> {
+    // Four workers already make this pass a few tens of ms on a full drive;
+    // more only raise the process's peak thread count.
     let workers = thread::available_parallelism()
         .map(|value| value.get())
         .unwrap_or(4)
-        .clamp(1, 16);
+        .clamp(1, 4);
     // Below this a single pass is cheaper than the thread hand-off.
     let chunk = files.len().div_ceil(workers).max(1);
 
     let mut partials: Vec<HashMap<String, (u64, u64)>> = if files.len() < 64_000 || workers == 1 {
         vec![aggregate_extension_chunk(files)]
     } else {
+        // The calling thread folds the first chunk itself instead of idling.
+        let mut chunks = files.chunks(chunk);
+        let own = chunks.next().unwrap_or_default();
         thread::scope(|scope| {
-            files
-                .chunks(chunk)
+            let handles: Vec<_> = chunks
                 .map(|slice| scope.spawn(|| aggregate_extension_chunk(slice)))
-                .collect::<Vec<_>>()
-                .into_iter()
-                .map(|handle| handle.join().unwrap_or_default())
-                .collect()
+                .collect();
+            let mut partials = vec![aggregate_extension_chunk(own)];
+            partials.extend(
+                handles
+                    .into_iter()
+                    .map(|handle| handle.join().unwrap_or_default()),
+            );
+            partials
         })
     };
 
@@ -697,6 +749,7 @@ fn get_or_load_index_model() -> Arc<IndexModel> {
         return Arc::clone(model);
     }
 
+    wait_for_persisted_snapshot();
     let repository = SqliteIndexRepository::open(&index_storage_root(), IndexBackend::BinaryCache);
     let cache_stats = {
         let snapshot = repository.snapshot();
@@ -909,10 +962,27 @@ impl UiEventForwarder {
         };
 
         if extension.bytes().any(|byte| byte.is_ascii_uppercase()) {
-            let totals = self
-                .extension_totals
-                .entry(extension.to_ascii_lowercase())
-                .or_insert((0, 0));
+            // Lowercase short extensions (".DLL", ".JPG") on the stack, so a
+            // known extension costs no allocation. ASCII lowercasing keeps UTF-8 valid.
+            let mut buffer = [0u8; 32];
+            let lowered = match buffer.get_mut(..extension.len()) {
+                Some(lowered) => {
+                    lowered.copy_from_slice(extension.as_bytes());
+                    lowered.make_ascii_lowercase();
+                    std::str::from_utf8(lowered).ok()
+                }
+                None => None,
+            };
+            let totals = match lowered {
+                Some(lowered) if self.extension_totals.contains_key(lowered) => self
+                    .extension_totals
+                    .get_mut(lowered)
+                    .expect("checked above"),
+                _ => self
+                    .extension_totals
+                    .entry(extension.to_ascii_lowercase())
+                    .or_insert((0, 0)),
+            };
             totals.0 = totals.0.saturating_add(file.size_bytes);
             totals.1 = totals.1.saturating_add(1);
             return;
@@ -1047,6 +1117,8 @@ impl NativeSession {
                 IndexScanScope {
                     index_root,
                     capacity_scope,
+                    background_persist: false,
+                    persist: true,
                 },
                 persistence_mode,
                 delivery,
@@ -1088,6 +1160,12 @@ impl NativeSession {
 struct IndexScanScope {
     index_root: PathBuf,
     capacity_scope: String,
+    /// Finish a completed full scan's snapshot write on a registered worker
+    /// (see `wait_for_pending_persist`) instead of before returning.
+    background_persist: bool,
+    /// Write the catalog snapshot to disk at all. Off keeps the scan in
+    /// memory only (the read model is still published for exports).
+    persist: bool,
 }
 
 fn forward_events(
@@ -1102,18 +1180,14 @@ fn forward_events(
     let IndexScanScope {
         index_root,
         capacity_scope,
+        background_persist,
+        persist,
     } = scope;
-    let mut repository = {
-        let _gate = persist_gate_lock();
-        match persistence_mode {
-            ScanPersistenceMode::ReplaceSnapshot => {
-                SqliteIndexRepository::open_empty(&index_root, IndexBackend::BinaryCache)
-            }
-            ScanPersistenceMode::IncrementalRescan => {
-                SqliteIndexRepository::open(&index_root, IndexBackend::BinaryCache)
-            }
-        }
-    };
+    wait_for_persisted_snapshot();
+    // An incremental rescan loads the previous snapshot only when it merges,
+    // after Completed reached the UI (see `deferred_merge`).
+    let mut repository = SqliteIndexRepository::open_empty(&index_root, IndexBackend::BinaryCache);
+    let repository_loaded = matches!(persistence_mode, ScanPersistenceMode::ReplaceSnapshot);
     let mut transaction = BufferedIndexTransaction::default();
     let hint_path = index_root.join("capacity-hint.bin");
     let mut directory_walk = false;
@@ -1130,6 +1204,11 @@ fn forward_events(
     // Full-scan snapshots write AFTER Completed reaches the UI: the write is
     // ~1.6s for a full C:\ index and the UI only needs the in-memory model.
     let mut deferred_persist: Option<DeferredPersist> = None;
+    // A completed incremental rescan publishes its fresh scan as the model,
+    // then merges it into the previous snapshot (path-matched ids, change
+    // summary, disk write) after Completed: that merge was ~85% of the
+    // rescan's perceived time.
+    let mut deferred_merge: Option<BufferedIndexTransaction> = None;
     // Acquired BEFORE Completed is forwarded and held until the deferred
     // write finishes, so a session started the instant the UI sees
     // Completed blocks on the gate instead of reading the stale snapshot.
@@ -1202,14 +1281,38 @@ fn forward_events(
                     let (sessions, lineages, changes) = transaction.auxiliary_parts();
                     let model = Arc::new(build_index_model(std::mem::take(&mut transaction), None));
                     set_index_model_arc(Arc::clone(&model));
-                    persist_guard = Some(persist_gate_lock());
-                    deferred_persist = Some((model, sessions, lineages, changes));
+                    if persist {
+                        persist_guard = Some(persist_gate_lock());
+                        deferred_persist = Some((model, sessions, lineages, changes));
+                    } else if directory_walk && matches!(event, ScanEvent::Completed) {
+                        // Reports-only scans keep no catalog but still record
+                        // the allocation estimate: without it the next walk's
+                        // record maps grow by doubling and commit up to twice
+                        // what they use. Unchanged counts skip the write.
+                        let _ = crate::capacity_hint::save_hint(
+                            &hint_path,
+                            &capacity_scope,
+                            model.tree.files().len(),
+                            model.tree.directories().len(),
+                        );
+                    }
                     records_dirty = false;
                     model_published = true;
                 }
                 ScanPersistenceMode::IncrementalRescan => {
-                    if flushed && !records_dirty {
-                        set_index_model(build_index_model(repository.take_state(), None));
+                    if persist && matches!(event, ScanEvent::Completed) {
+                        transaction.upsert_session(&ScanSession {
+                            session_id: 1,
+                            volume_id: Default::default(),
+                            root_path: String::new(),
+                            state: ScanState::Completed,
+                            progress: Default::default(),
+                        });
+                        let merge = transaction.clone();
+                        set_index_model(build_index_model(std::mem::take(&mut transaction), None));
+                        persist_guard = Some(persist_gate_lock());
+                        deferred_merge = Some(merge);
+                        records_dirty = false;
                         model_published = true;
                     }
                 }
@@ -1228,7 +1331,7 @@ fn forward_events(
             }
         }
 
-        let flush_requested = should_flush_index(&event, persistence_mode);
+        let flush_requested = persist && should_flush_index(&event, persistence_mode);
         // Only label the trigger when a flush is actually requested (rare);
         // flush_trigger is read only inside the flush branch below.
         let flush_trigger = if flush_requested {
@@ -1257,33 +1360,63 @@ fn forward_events(
         }
     }
 
-    if let Some((model, sessions, lineages, changes)) = deferred_persist {
-        let result = repository.persist_sorted_records(
-            model.tree.volumes(),
-            &sessions,
-            model.tree.directories(),
-            model.tree.files(),
-            &lineages,
-            &changes,
-        );
-        log.append_flush("deferred", result.is_ok());
-        if result.is_ok() && directory_walk && scan_completed {
-            // Optional advisory metadata must never make a successful scan or
-            // export fail. Only complete persisted walk catalogs update it.
-            let _ = crate::capacity_hint::save_hint(
-                &hint_path,
-                &capacity_scope,
-                model.tree.files().len(),
-                model.tree.directories().len(),
-            );
+    if let Some(deferred) = deferred_persist {
+        let save_hint = directory_walk && scan_completed;
+        let finish = move || {
+            write_deferred_snapshot(
+                &mut repository,
+                &mut log,
+                deferred,
+                save_hint.then_some((hint_path.as_path(), capacity_scope.as_str())),
+            )
+        };
+        if background_persist {
+            // The in-memory model is already published, so the caller's export
+            // overlaps the disk write. Count the write before this scan
+            // releases the gate; the worker uncounts it only after the write
+            // returns, so a reader waiting for zero never sees a partial file.
+            let mut pending = pending_persist_lock();
+            pending.writes += 1;
+            pending.workers.push(thread::spawn(move || {
+                // Uncount on drop, so a panicking write cannot leave readers waiting.
+                struct Finished;
+                impl Drop for Finished {
+                    fn drop(&mut self) {
+                        pending_persist_lock().writes -= 1;
+                        PERSIST_FINISHED.notify_all();
+                    }
+                }
+                let _finished = Finished;
+                let _gate = persist_gate_lock();
+                finish();
+            }));
+            drop(pending);
+        } else {
+            finish();
         }
+        drop(persist_guard);
+        return scan_completed && drained;
+    }
+    if !repository_loaded {
+        // Never read a snapshot another session is writing.
+        let _gate = persist_guard.is_none().then(persist_gate_lock);
+        repository = SqliteIndexRepository::open(&index_root, IndexBackend::BinaryCache);
+    }
+    if let Some(merge) = deferred_merge {
+        // The gate is still held, so a session started once the UI saw
+        // Completed reads the merged snapshot, not the previous one.
+        let result = repository.apply_path_matched_incremental_transaction(&merge);
+        if let Ok(change_set) = &result {
+            emit_incremental_change_summary(callback, user_data, change_set);
+        }
+        log.append_flush("deferred", result.is_ok());
         drop(persist_guard);
         return scan_completed && drained;
     }
     drop(persist_guard);
 
     if !model_published {
-        if !flushed || records_dirty {
+        if persist && (!flushed || records_dirty) {
             let result = apply_scan_transaction(&mut repository, &transaction, persistence_mode);
             if let Ok(Some(change_set)) = &result {
                 emit_incremental_change_summary(callback, user_data, change_set);
@@ -1302,6 +1435,33 @@ fn forward_events(
         set_index_model(model);
     }
     scan_completed && drained
+}
+
+fn write_deferred_snapshot(
+    repository: &mut SqliteIndexRepository,
+    log: &mut EventLog,
+    (model, sessions, lineages, changes): DeferredPersist,
+    hint: Option<(&std::path::Path, &str)>,
+) {
+    let result = repository.persist_sorted_records(
+        model.tree.volumes(),
+        &sessions,
+        model.tree.directories(),
+        model.tree.files(),
+        &lineages,
+        &changes,
+    );
+    log.append_flush("deferred", result.is_ok());
+    if let (true, Some((hint_path, capacity_scope))) = (result.is_ok(), hint) {
+        // Optional advisory metadata must never make a successful scan or
+        // export fail. Only complete persisted walk catalogs update it.
+        let _ = crate::capacity_hint::save_hint(
+            hint_path,
+            capacity_scope,
+            model.tree.files().len(),
+            model.tree.directories().len(),
+        );
+    }
 }
 
 /// Timing and completion of the complete synchronous scan/persistence path.
@@ -1331,12 +1491,29 @@ extern "C" fn observe_terminal(event: *const WbEvent, context: *mut core::ffi::c
 /// Runs the unattended consumer/indexer on the caller, retaining the GUI's
 /// asynchronous session interface. The callback/context remain borrowed until
 /// return; callback events are terminal-only and execute on this thread.
+/// A completed full scan's snapshot write continues in the background so an
+/// export can overlap it; call `wait_for_pending_persist` before exiting.
 pub fn run_terminal_scan(
     root: &str,
     timeout: Duration,
     callback: WbEventCallback,
     user_data: *mut core::ffi::c_void,
 ) -> TerminalScanOutcome {
+    run_terminal_scan_with(root, timeout, callback, user_data, true)
+}
+
+/// `run_terminal_scan` with a choice of saving the catalog snapshot.
+/// `keep_catalog = false` keeps the scan in memory only: exports still see the
+/// complete catalog, but nothing is written for later reloads.
+pub fn run_terminal_scan_with(
+    root: &str,
+    timeout: Duration,
+    callback: WbEventCallback,
+    user_data: *mut core::ffi::c_void,
+    keep_catalog: bool,
+) -> TerminalScanOutcome {
+    // A previous scan's background write must not consume this scan's deadline.
+    wait_for_persisted_snapshot();
     let started = Instant::now();
     invalidate_index_model();
     let rules = winblaze_scanner::ScanRules::default();
@@ -1368,6 +1545,8 @@ pub fn run_terminal_scan(
         IndexScanScope {
             index_root: index_storage_root(),
             capacity_scope,
+            background_persist: true,
+            persist: keep_catalog,
         },
         ScanPersistenceMode::ReplaceSnapshot,
         ScanDelivery::Terminal,
@@ -1392,9 +1571,9 @@ fn should_flush_index(event: &ScanEvent, persistence_mode: ScanPersistenceMode) 
             event,
             ScanEvent::SessionStarted(_) | ScanEvent::VolumeDiscovered(_) | ScanEvent::Failed(_)
         ),
-        ScanPersistenceMode::IncrementalRescan => {
-            matches!(event, ScanEvent::Summary(_))
-        }
+        // Never mid-scan: a completed rescan merges after Completed reaches
+        // the UI; a cancelled or failed one merges when the stream ends.
+        ScanPersistenceMode::IncrementalRescan => false,
     }
 }
 
@@ -3023,6 +3202,34 @@ mod tests {
             len: 0,
         };
         assert_eq!(wb_update_check(view("0.8.0"), null_view).parsed, 0);
+    }
+
+    #[test]
+    fn live_extension_totals_merge_case_variants_into_lowercase_keys() {
+        let mut forwarder = UiEventForwarder::new(None, 0);
+        let long = format!("x.{}", "E".repeat(40));
+        for (name, size) in [
+            ("a.DLL", 1),
+            ("b.dll", 2),
+            ("c.Dll", 4),
+            ("d.txt", 8),
+            (long.as_str(), 16),
+            ("e.JPG", 32),
+        ] {
+            forwarder.record_extension(&FileRecord {
+                name: name.into(),
+                size_bytes: size,
+                ..FileRecord::default()
+            });
+        }
+        assert_eq!(forwarder.extension_totals.get("dll"), Some(&(7, 3)));
+        assert_eq!(forwarder.extension_totals.get("txt"), Some(&(8, 1)));
+        assert_eq!(forwarder.extension_totals.get("jpg"), Some(&(32, 1)));
+        assert_eq!(
+            forwarder.extension_totals.get(&"e".repeat(40)),
+            Some(&(16, 1))
+        );
+        assert_eq!(forwarder.extension_totals.len(), 4);
     }
 
     #[test]

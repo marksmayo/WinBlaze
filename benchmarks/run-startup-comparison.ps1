@@ -1,7 +1,7 @@
 param(
     [ValidateRange(1,100)][int]$Runs = 10,
     [string]$WinBlazeAppPath = (Join-Path $PSScriptRoot '../src/WinBlaze.UI/bin/x64/Release/WinBlaze.UI.exe'),
-    [ValidateSet('WinBlaze','WinDirStat','WizTree')][string[]]$Tools = @('WinBlaze','WinDirStat','WizTree'),
+    [ValidateSet('WinBlaze','WinDirStat','WizTree','TreeSize Free','SpaceSniffer','Everything','Directory Report')][string[]]$Tools = @('WinBlaze','WinDirStat','WizTree'),
     [string]$OutputPath = (Join-Path $PSScriptRoot 'current-startup-results.json'),
     [string]$HistoryPath = ''
 )
@@ -16,8 +16,22 @@ $definitions = @(
     @{ name = 'WinDirStat'; path = 'C:\Program Files\WinDirStat\WinDirStat.exe'; arguments = '' },
     @{ name = 'WizTree'; path = 'C:\Program Files\WizTree\WizTree64.exe'; arguments = '/admin=0' }
 )
+# Added products (scan-adapters.ps1). Everything gets a private instance with
+# no volumes or folders, so its first-run NTFS indexing prompt never appears.
+. (Join-Path $PSScriptRoot 'scan-adapters.ps1')
+$everythingStartup = Join-Path $env:TEMP 'winblaze-everything-startup'
+New-Item -ItemType Directory -Force -Path $everythingStartup | Out-Null
+@('[Everything]','app_data=0','run_as_admin=0','allow_multiple_instances=1','auto_include_fixed_volumes=0','auto_include_removable_volumes=0',
+  'auto_include_fixed_refs_volumes=0','auto_include_removable_refs_volumes=0','show_tray_icon=0','check_for_updates_on_startup=0') |
+    Set-Content -LiteralPath (Join-Path $everythingStartup 'cfg.ini') -Encoding ASCII
+$definitions += @(
+    @{ name = 'TreeSize Free'; path = Get-BenchToolExecutable 'TreeSize Free'; arguments = '' },
+    @{ name = 'SpaceSniffer'; path = Get-BenchToolExecutable 'SpaceSniffer'; arguments = '' },
+    @{ name = 'Everything'; path = Get-BenchToolExecutable 'Everything'; arguments = "-instance WBStartup -config `"$everythingStartup\cfg.ini`" -db `"$everythingStartup\index.db`"" },
+    @{ name = 'Directory Report'; path = Get-BenchToolExecutable 'Directory Report'; arguments = '' }
+)
 $rows = [Collections.Generic.List[object]]::new()
-if ($Tools.Count -lt 3 -and (Test-Path -LiteralPath $OutputPath)) {
+if (Test-Path -LiteralPath $OutputPath) {
     foreach ($row in (Read-BenchmarkJson -Path $OutputPath)) {
         if ($row.tool -notin $Tools) { $rows.Add($row) }
     }

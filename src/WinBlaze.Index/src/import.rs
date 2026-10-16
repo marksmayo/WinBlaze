@@ -10,6 +10,59 @@ fn invalid(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
 }
 
+/// A path compared as `str::to_lowercase` would, allocating only for non-ASCII
+/// paths: ASCII lowercasing is byte-wise, and both forms hash the same bytes.
+enum FoldedPath<'a> {
+    Ascii(&'a str),
+    Lowered(String),
+}
+
+impl<'a> FoldedPath<'a> {
+    fn new(path: &'a str) -> Self {
+        if path.is_ascii() {
+            Self::Ascii(path)
+        } else {
+            Self::Lowered(path.to_lowercase())
+        }
+    }
+
+    fn bytes(&self) -> impl Iterator<Item = u8> + '_ {
+        let (bytes, fold) = match self {
+            Self::Ascii(path) => (path.as_bytes(), true),
+            Self::Lowered(path) => (path.as_bytes(), false),
+        };
+        bytes
+            .iter()
+            .map(move |&b| if fold { b.to_ascii_lowercase() } else { b })
+    }
+}
+
+impl std::hash::Hash for FoldedPath<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Fixed-size chunks: equal paths make identical write sequences.
+        let mut chunk = [0u8; 64];
+        let mut len = 0;
+        for byte in self.bytes() {
+            chunk[len] = byte;
+            len += 1;
+            if len == chunk.len() {
+                state.write(&chunk);
+                len = 0;
+            }
+        }
+        state.write(&chunk[..len]);
+        state.write_u8(0xff);
+    }
+}
+
+impl PartialEq for FoldedPath<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.bytes().eq(other.bytes())
+    }
+}
+
+impl Eq for FoldedPath<'_> {}
+
 fn is_descendant(path: &str, parent: &str) -> bool {
     if path.is_ascii() && parent.is_ascii() {
         return path
@@ -23,36 +76,57 @@ fn is_descendant(path: &str, parent: &str) -> bool {
 }
 
 fn rows(input: &str, delimiter: char) -> io::Result<Vec<Vec<String>>> {
+    // Byte scanning: the delimiter, quote and line breaks are ASCII, so every
+    // split point is a UTF-8 boundary and unquoted fields copy as whole slices.
+    let delimiter = u8::try_from(delimiter).map_err(|_| invalid("Unsupported CSV delimiter"))?;
+    let bytes = input.as_bytes();
     let mut rows = Vec::new();
-    let mut row = Vec::with_capacity(7);
-    let mut field = String::new();
-    let mut quoted = false;
-    let mut closed = false;
-    let mut chars = input.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if quoted {
-            if ch == '"' {
-                if chars.peek() == Some(&'"') {
-                    chars.next();
+    let mut row: Vec<String> = Vec::with_capacity(7);
+    let mut at = 0;
+    loop {
+        let mut field = String::new();
+        let mut closed = false;
+        if bytes.get(at) == Some(&b'"') {
+            at += 1;
+            loop {
+                let Some(quote) = bytes[at..].iter().position(|&b| b == b'"') else {
+                    return Err(invalid("Unclosed CSV quote"));
+                };
+                field.push_str(&input[at..at + quote]);
+                at += quote + 1;
+                if bytes.get(at) == Some(&b'"') {
                     field.push('"');
+                    at += 1;
                 } else {
-                    quoted = false;
-                    closed = true;
+                    break;
                 }
-            } else {
-                field.push(ch);
             }
-            continue;
+            closed = true;
         }
-        match ch {
-            '"' if field.is_empty() && !closed => quoted = true,
-            '"' => return Err(invalid("Unexpected CSV quote")),
-            ch if ch == delimiter => {
-                row.push(std::mem::take(&mut field));
-                closed = false;
+        // Scan to the end of this field.
+        let start = at;
+        let end_of_row = loop {
+            match bytes.get(at) {
+                None => break None,
+                Some(&b) if b == delimiter => break Some(false),
+                Some(b'\n') => break Some(true),
+                Some(b'\r') if bytes.get(at + 1) == Some(&b'\n') => break Some(true),
+                Some(b'"') => return Err(invalid("Unexpected CSV quote")),
+                Some(_) if closed => return Err(invalid("Characters after closing CSV quote")),
+                Some(_) => at += 1,
             }
-            '\n' => {
-                row.push(std::mem::take(&mut field));
+        };
+        if !closed {
+            field.push_str(&input[start..at]);
+        }
+        match end_of_row {
+            Some(false) => {
+                at += 1;
+                row.push(field);
+            }
+            Some(true) => {
+                at += if bytes[at] == b'\r' { 2 } else { 1 };
+                row.push(field);
                 if row.iter().any(|v| !v.is_empty()) {
                     let next_capacity = row.len().max(7);
                     rows.push(std::mem::replace(
@@ -62,21 +136,16 @@ fn rows(input: &str, delimiter: char) -> io::Result<Vec<Vec<String>>> {
                 } else {
                     row.clear();
                 }
-                closed = false;
             }
-            '\r' if chars.peek() == Some(&'\n') => {}
-            _ if closed => return Err(invalid("Characters after closing CSV quote")),
-            _ => field.push(ch),
+            None => {
+                if !field.is_empty() || !row.is_empty() || closed {
+                    row.push(field);
+                    rows.push(row);
+                }
+                return Ok(rows);
+            }
         }
     }
-    if quoted {
-        return Err(invalid("Unclosed CSV quote"));
-    }
-    if !field.is_empty() || !row.is_empty() || closed {
-        row.push(field);
-        rows.push(row);
-    }
-    Ok(rows)
 }
 
 /// Imports WinBlaze CSV. Paths and sizes are metadata, never filesystem requests.
@@ -330,7 +399,7 @@ fn build_import_metadata(
         if row.len() != 7 {
             return Err(invalid("Wrong number of CSV fields"));
         }
-        if row[0].is_empty() || row[0].contains('\0') || !seen.insert(row[0].to_lowercase()) {
+        if row[0].is_empty() || row[0].contains('\0') || !seen.insert(FoldedPath::new(&row[0])) {
             return Err(invalid("Empty or duplicate CSV path"));
         }
         for column in &row[2..6] {
@@ -465,7 +534,8 @@ fn build_import_metadata(
             id: FileId(ordinal as u64 + 1),
             parent_directory_id: parent,
             name: name.into(),
-            full_path: path.into(),
+            // Derived from the parent directory on demand, as for scanned files.
+            full_path: Default::default(),
             size_bytes: row[2]
                 .parse()
                 .map_err(|_| invalid("Invalid logical bytes"))?,

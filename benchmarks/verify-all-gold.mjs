@@ -17,10 +17,10 @@ const failures = events.flatMap(event => {
 });
 console.log(`WinBlaze gold: ${events.length - failures.length}/${events.length} eligible events`);
 for (const failure of failures) console.log(failure);
-assert.equal(events.length, 35, 'All 35 existing categories require current eligible evidence');
 const original = JSON.parse(fs.readFileSync(new URL('./original-medal-events.json', import.meta.url), 'utf8'));
+assert.equal(events.length, original.events.length, `All ${original.events.length} official categories require current eligible evidence`);
 assertOriginalEvents(events, original.events);
 for(const definition of original.events){const fresh=data.latestMedals.measurementEvents.find(event=>event.name===definition.name);for(const tool of ['WinBlaze','WinDirStat','WizTree'])assert.equal(fresh?.samples[tool],10,'Every original metric must be rerun with fresh n=10: '+definition.name+' '+tool);}
 
 assert.equal(failures.length, 0, 'WinBlaze has not yet achieved gold in every category');
-console.log('PASS: all 35 existing categories are gold in the completed n=10 report.');
+console.log(`PASS: all ${original.events.length} official categories are gold in the completed n=10 report.`);

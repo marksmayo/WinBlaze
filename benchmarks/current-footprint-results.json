@@ -1,0 +1,1482 @@
+[
+    {
+        "tool":  "WinBlaze",
+        "run":  1,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.5629478Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  2,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.5946265Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  3,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.5946265Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  4,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.5946265Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  5,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.5946265Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  6,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.6102656Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  7,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.6102656Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  8,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.6102656Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  9,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.6102656Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  10,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
+                       "sha256":  "FC4D1083D7318C17B2D094F4512ABDF3CFF0C6182A467FFDEACE846FCB8D6AF4",
+                       "native_dll_sha256":  "65C2D251DB0490BE5FACA9B29B9D9B23BC6F2F1108EFA06BA16D2B24D56016B0",
+                       "identity_sha256":  "8FEA893A7C2BF7CCE625E10F2DEA458F8701E46B5D867C20164D345C123D4A86",
+                       "observed_utc":  "2026-10-12T08:41:25.4360122Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.6102656Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinBlaze.UI.exe",
+                      "winblaze_native.dll"
+                  ],
+        "bytes":  4821504
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  1,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9239804Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  2,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9268062Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  3,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9268062Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  4,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9268062Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  5,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9268062Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  6,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9268062Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  7,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9268062Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  8,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9337913Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  9,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9337913Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WinDirStat",
+        "run":  10,
+        "binary":  {
+                       "tool":  "WinDirStat",
+                       "product_version":  "2.9.2",
+                       "file_version":  "2.9.2.2243",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WinDirStat\\WinDirStat.exe",
+                       "sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "52742814A3983B0A934F9B857A8B7CF3A10328134BA1129E91D8DE25293B68B2",
+                       "observed_utc":  "2026-10-12T08:41:25.8166364Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:25.9358008Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WinDirStat.exe"
+                  ],
+        "bytes":  2901680
+    },
+    {
+        "tool":  "WizTree",
+        "run":  1,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1334684Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "WizTree",
+        "run":  2,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1494844Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "WizTree",
+        "run":  3,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1494844Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "WizTree",
+        "run":  4,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1494844Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "WizTree",
+        "run":  5,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1543927Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "WizTree",
+        "run":  6,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1543927Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "WizTree",
+        "run":  7,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1564004Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "WizTree",
+        "run":  8,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1564004Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "WizTree",
+        "run":  9,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1591804Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "WizTree",
+        "run":  10,
+        "binary":  {
+                       "tool":  "WizTree",
+                       "product_version":  "4.33",
+                       "file_version":  "4.33.0.0",
+                       "executable_path":  "C:\\ProgramData\\WinBlazeBench\\WizTree\\WizTree64.exe",
+                       "sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "117E8E3B212F25442E9BE5261E96B8D10E8BAA3CA6E87317E2E11F313F03D533",
+                       "observed_utc":  "2026-10-12T08:41:26.0557095Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.1591804Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "WizTree64.exe"
+                  ],
+        "bytes":  11017016
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  1,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3595883Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  2,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3595883Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  3,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3595883Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  4,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3595883Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  5,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3595883Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  6,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3595883Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  7,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3595883Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  8,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3595883Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  9,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3595883Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "TreeSize Free",
+        "run":  10,
+        "binary":  {
+                       "tool":  "TreeSize Free",
+                       "product_version":  "4.8.1",
+                       "file_version":  "4.8.1.610",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\TreeSizeFree\\TreeSizeFree.exe",
+                       "sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "D72BFE9B69B656DF864A9C7CA14ABC8BE38D4B273E5A09E5BC042EEE587ECF31",
+                       "observed_utc":  "2026-10-12T08:41:26.2604381Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.3725750Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "TreeSizeFree.exe"
+                  ],
+        "bytes":  60945496
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  1,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6604280Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  2,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6604280Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  3,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6604280Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  4,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6604280Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  5,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6604280Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  6,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6604280Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  7,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6604280Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  8,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6604280Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  9,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6748995Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "SpaceSniffer",
+        "run":  10,
+        "binary":  {
+                       "tool":  "SpaceSniffer",
+                       "product_version":  "2.2.0.27",
+                       "file_version":  "2.2.0.27",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\SpaceSniffer\\SpaceSniffer.exe",
+                       "sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "192176A0FF46D84D27885E9D38E60157BC692EAF5D1E5B75CA56B3BEAA0DE7A6",
+                       "observed_utc":  "2026-10-12T08:41:26.5637272Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:26.6748995Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "SpaceSniffer.exe"
+                  ],
+        "bytes":  8691097
+    },
+    {
+        "tool":  "Everything",
+        "run":  1,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1687557Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Everything",
+        "run":  2,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1687557Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Everything",
+        "run":  3,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1687557Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Everything",
+        "run":  4,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1687557Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Everything",
+        "run":  5,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1687557Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Everything",
+        "run":  6,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1845780Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Everything",
+        "run":  7,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1845780Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Everything",
+        "run":  8,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1865900Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Everything",
+        "run":  9,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1865900Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Everything",
+        "run":  10,
+        "binary":  {
+                       "tool":  "Everything",
+                       "product_version":  "1.4.1.1032",
+                       "file_version":  "1.4.1.1032",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\Everything\\Everything.exe",
+                       "sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "F191F756996A14A11E5445FA7103D302EFD510CF2FBF920E6C0C8ED51D512E36",
+                       "observed_utc":  "2026-10-12T08:41:27.0893127Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.1885971Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "Everything.exe"
+                  ],
+        "bytes":  2272424
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  1,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  2,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  3,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  4,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  5,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  6,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  7,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  8,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  9,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    },
+    {
+        "tool":  "Directory Report",
+        "run":  10,
+        "binary":  {
+                       "tool":  "Directory Report",
+                       "product_version":  "80.0.0.0",
+                       "file_version":  "80.0.0.0",
+                       "executable_path":  "C:\\Users\\markm\\AppData\\Local\\WinBlazeBench\\DirectoryReport\\program files\\AMB Software\\Directory Report\\dr64\\dr64.exe",
+                       "sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "2F26B927FA57970B5220B891154D813E882181FBE1972BB9418793B3AB181E2E",
+                       "observed_utc":  "2026-10-12T08:41:27.1952423Z",
+                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                   },
+        "started_utc":  "2026-10-12T08:41:27.2800371Z",
+        "scope":  "Bytes of the files required to run the 64-bit GUI (excludes optional languages and 32-bit builds)",
+        "files":  [
+                      "dr64.exe"
+                  ],
+        "bytes":  2377240
+    }
+]
