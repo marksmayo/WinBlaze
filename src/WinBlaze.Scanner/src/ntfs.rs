@@ -2028,14 +2028,21 @@ fn parse_entries(
         accessed_utc: None,
     });
 
+    // Exact sizes: millions of records would otherwise be copied on every
+    // doubling, and the path cache rehashed as it grows.
+    let (file_count, directory_count) = count_entries(&entries);
     let mut resolved_paths: IdHashMap<u64, String> = IdHashMap::default();
+    resolved_paths.reserve(directory_count as usize);
     resolved_paths.insert(5, root_text.clone());
 
-    let mut directories = Vec::new();
-    let mut files = Vec::new();
+    let mut directories = Vec::with_capacity(directory_count as usize);
+    let mut files = Vec::with_capacity(file_count as usize);
+    let mut path_stack = Vec::new();
 
+    // Map keys are the file ids, so ids are unique and an unstable sort
+    // yields the same order without a stable sort's scratch buffer.
     let mut ordered_entries: Vec<_> = entries.values().collect();
-    ordered_entries.sort_by_key(|entry| entry.file_id.0);
+    ordered_entries.sort_unstable_by_key(|entry| entry.file_id.0);
 
     if let Some(callback) = on_event.as_mut() {
         (*callback)(ScanEvent::VolumeDiscovered(VolumeRecord {
@@ -2053,12 +2060,13 @@ fn parse_entries(
         if entry.is_directory {
             // Only directories carry a materialized path; file paths derive
             // from their parent on demand (see FileRecord docs).
+            path_stack.clear();
             let full_path = resolve_entry_path(
                 entry.file_id.0,
                 &entries,
                 &mut resolved_paths,
                 &root_text,
-                &mut Vec::new(),
+                &mut path_stack,
             );
             let directory = DirectoryRecord {
                 id: DirectoryId(entry.file_id.0),
@@ -2100,8 +2108,11 @@ fn parse_entries(
         }
     }
 
-    directories.sort_by_key(|directory| directory.id.0);
-    files.sort_by_key(|file| file.id.0);
+    // Both were filled from `ordered_entries`, already ascending by unique id.
+    debug_assert!(directories
+        .windows(2)
+        .all(|pair| pair[0].id.0 < pair[1].id.0));
+    debug_assert!(files.windows(2).all(|pair| pair[0].id.0 < pair[1].id.0));
     let directories = aggregate_directory_records(&directories, &files);
 
     let total_size_bytes = sum_u64_saturating(files.iter().map(|file| file.size_bytes));
@@ -2918,6 +2929,55 @@ mod tests {
         record[0x1C..0x20].copy_from_slice(&(NTFS_RECORD_SIZE as u32).to_le_bytes());
         record[0x2C..0x30].copy_from_slice(&(index as u32).to_le_bytes());
         record
+    }
+
+    #[test]
+    fn parsed_entries_come_out_sorted_by_id_with_resolved_paths_and_ordered_events() {
+        // Inserted out of order; 40 -> 30 -> 20 nests, 50 <-> 51 form a cycle.
+        let mut entries = IdHashMap::default();
+        for entry in [
+            parsed_entry(41, 40, "deep.bin", false, 7),
+            parsed_entry(40, 30, "c", true, 0),
+            parsed_entry(12, 5, "top.txt", false, 3),
+            parsed_entry(30, 20, "b", true, 0),
+            parsed_entry(20, 5, "a", true, 0),
+            parsed_entry(51, 50, "loop-b", true, 0),
+            parsed_entry(50, 51, "loop-a", true, 0),
+        ] {
+            entries.insert(entry.file_id.0, entry);
+        }
+        let mut seen = Vec::new();
+        let mut on_event = |event: ScanEvent| match event {
+            ScanEvent::DirectoryFound(directory) => seen.push(directory.id.0),
+            ScanEvent::FileFound(file) => seen.push(file.id.0),
+            _ => {}
+        };
+        let result = parse_entries(Path::new(r"C:\"), entries, Some(&mut on_event)).unwrap();
+        let directory_ids: Vec<_> = result.directories.iter().map(|d| d.id.0).collect();
+        let file_ids: Vec<_> = result.files.iter().map(|f| f.id.0).collect();
+        assert_eq!(directory_ids, [5, 20, 30, 40, 50, 51]);
+        assert_eq!(file_ids, [12, 41]);
+        assert_eq!(seen, [5, 12, 20, 30, 40, 41, 50, 51]);
+        let path = |id: u64| {
+            result
+                .directories
+                .iter()
+                .find(|d| d.id.0 == id)
+                .unwrap()
+                .full_path
+                .clone()
+        };
+        assert_eq!(path(40), r"C:\a\b\c");
+        assert_eq!(path(20), r"C:\a");
+        assert_eq!(
+            result
+                .files
+                .iter()
+                .find(|f| f.id.0 == 41)
+                .unwrap()
+                .size_bytes,
+            7
+        );
     }
 
     fn parsed_entry(

@@ -72,7 +72,7 @@ pub fn find_duplicates_with_algorithm(
         if candidates.len() < 2 {
             continue;
         }
-        candidates.sort();
+        candidates.sort_unstable();
         candidates.dedup();
         let mut groups: Vec<Vec<PathBuf>> = Vec::new();
         for path in candidates {

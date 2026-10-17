@@ -203,29 +203,35 @@ impl SqliteIndexRepository {
         // full paths, and scanners no longer store them per file.
         let previous_files = self.state.snapshot_files_with_paths();
         let current_files = transaction.snapshot_files_with_paths();
-        self.merge_incremental_files(transaction, &previous_files, &current_files)
+        let scan = BufferedIndexTransaction {
+            volumes: transaction.volumes.clone(),
+            sessions: transaction.sessions.clone(),
+            directories: transaction.directories.clone(),
+            committed: transaction.committed,
+            ..Default::default()
+        };
+        self.merge_incremental_files(scan, &previous_files, &current_files)
     }
 
     /// `apply_incremental_transaction` with both sides' path-materialized
     /// files already in hand (sorted by id).
     fn merge_incremental_files(
         &mut self,
-        transaction: &BufferedIndexTransaction,
+        scan: BufferedIndexTransaction,
         previous_files: &[FileRecord],
         current_files: &[FileRecord],
     ) -> Result<FileChangeSet, IndexStorageError> {
         // Keep the new scan's volumes/sessions/directories but the prior state's
-        // files/lineages/file_changes. Building the struct directly avoids
-        // `transaction.clone()` deep-copying millions of new-scan file records
-        // that the next lines would only overwrite.
+        // files/lineages/file_changes. Both are moved, not copied: `self.state`
+        // is replaced below, and `scan`'s own file records are unused.
         let mut merged = BufferedIndexTransaction {
-            volumes: transaction.volumes.clone(),
-            sessions: transaction.sessions.clone(),
-            directories: transaction.directories.clone(),
-            files: self.state.files.clone(),
-            lineages: self.state.lineages.clone(),
-            file_changes: self.state.file_changes.clone(),
-            committed: transaction.committed,
+            volumes: scan.volumes,
+            sessions: scan.sessions,
+            directories: scan.directories,
+            files: std::mem::take(&mut self.state.files),
+            lineages: std::mem::take(&mut self.state.lineages),
+            file_changes: std::mem::take(&mut self.state.file_changes),
+            committed: scan.committed,
         };
         let change_set = merged.apply_incremental_files(previous_files, current_files);
         self.state = merged;
@@ -272,7 +278,7 @@ impl SqliteIndexRepository {
             committed: transaction.committed,
             ..Default::default()
         };
-        self.merge_incremental_files(&current_transaction, &previous_files, &current_files)
+        self.merge_incremental_files(current_transaction, &previous_files, &current_files)
     }
 
     pub fn invalidate_cache(&mut self) -> Result<(), IndexStorageError> {

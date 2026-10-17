@@ -706,26 +706,51 @@ fn aggregate_extension_totals(files: &[FileRecord]) -> Vec<(String, u64, u64)> {
 
 fn aggregate_extension_chunk(files: &[FileRecord]) -> HashMap<String, (u64, u64)> {
     let mut totals: HashMap<String, (u64, u64)> = HashMap::new();
+    let mut buffer = [0u8; 32];
     for file in files {
-        // Borrowed fast path: extensions are usually already lowercase, so
-        // look the key up without materializing a String per file (2.3M
-        // allocations on a full-drive model build otherwise).
-        let raw = match file.name.rsplit_once('.') {
-            Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => ext,
-            _ => "",
-        };
-        let entry = if !raw.bytes().any(|b| b.is_ascii_uppercase()) {
-            match totals.get_mut(raw) {
-                Some(entry) => entry,
-                None => totals.entry(raw.to_string()).or_insert((0, 0)),
-            }
-        } else {
-            totals.entry(raw.to_ascii_lowercase()).or_insert((0, 0))
-        };
-        entry.0 = entry.0.saturating_add(file.size_bytes);
-        entry.1 = entry.1.saturating_add(1);
+        let key = lowercase_extension(file_extension(&file.name), &mut buffer);
+        add_extension_total(&mut totals, &key, file.size_bytes);
     }
     totals
+}
+
+/// The extension a file is grouped under; empty for none or a leading dot.
+fn file_extension(name: &str) -> &str {
+    match name.rsplit_once('.') {
+        Some((stem, extension)) if !stem.is_empty() && !extension.is_empty() => extension,
+        _ => "",
+    }
+}
+
+/// Lowercase key for an extension. Runs once per file (2.3M on a full drive),
+/// so short mixed-case extensions (".DLL", ".JPG") are lowered on the stack;
+/// ASCII lowercasing keeps UTF-8 valid. Only long ones allocate.
+fn lowercase_extension<'a>(
+    extension: &'a str,
+    buffer: &'a mut [u8; 32],
+) -> std::borrow::Cow<'a, str> {
+    if !extension.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return std::borrow::Cow::Borrowed(extension);
+    }
+    match buffer.get_mut(..extension.len()) {
+        Some(lowered) => {
+            lowered.copy_from_slice(extension.as_bytes());
+            lowered.make_ascii_lowercase();
+            std::borrow::Cow::Borrowed(std::str::from_utf8(lowered).expect("ASCII-lowered UTF-8"))
+        }
+        None => std::borrow::Cow::Owned(extension.to_ascii_lowercase()),
+    }
+}
+
+/// Adds one file to a lowercase extension's totals, allocating the key only
+/// when the extension is first seen.
+fn add_extension_total(totals: &mut HashMap<String, (u64, u64)>, extension: &str, size: u64) {
+    if let Some(entry) = totals.get_mut(extension) {
+        entry.0 = entry.0.saturating_add(size);
+        entry.1 = entry.1.saturating_add(1);
+    } else {
+        totals.insert(extension.to_string(), (size, 1));
+    }
 }
 
 fn set_index_model(model: IndexModel) {
@@ -963,48 +988,10 @@ impl UiEventForwarder {
     }
 
     fn record_extension(&mut self, file: &FileRecord) {
-        // Runs once per scanned file, so avoid extension_key's per-call
-        // String: look up by borrowed &str and only allocate when a new
-        // extension is first seen (or the rare mixed-case one needs
-        // lowercasing).
-        let extension = match file.name.rsplit_once('.') {
-            Some((stem, extension)) if !stem.is_empty() && !extension.is_empty() => extension,
-            _ => "",
-        };
-
-        if extension.bytes().any(|byte| byte.is_ascii_uppercase()) {
-            // Lowercase short extensions (".DLL", ".JPG") on the stack, so a
-            // known extension costs no allocation. ASCII lowercasing keeps UTF-8 valid.
-            let mut buffer = [0u8; 32];
-            let lowered = match buffer.get_mut(..extension.len()) {
-                Some(lowered) => {
-                    lowered.copy_from_slice(extension.as_bytes());
-                    lowered.make_ascii_lowercase();
-                    std::str::from_utf8(lowered).ok()
-                }
-                None => None,
-            };
-            let key = lowered.map_or_else(
-                || std::borrow::Cow::Owned(extension.to_ascii_lowercase()),
-                std::borrow::Cow::Borrowed,
-            );
-            self.add_extension_total(&key, file.size_bytes);
-            return;
-        }
-
-        self.add_extension_total(extension, file.size_bytes);
-    }
-
-    /// Adds one file to an already-lowercase extension's totals, allocating
-    /// the key only when the extension is first seen.
-    fn add_extension_total(&mut self, extension: &str, size_bytes: u64) {
-        if let Some(totals) = self.extension_totals.get_mut(extension) {
-            totals.0 = totals.0.saturating_add(size_bytes);
-            totals.1 = totals.1.saturating_add(1);
-        } else {
-            self.extension_totals
-                .insert(extension.to_string(), (size_bytes, 1));
-        }
+        // Runs once per scanned file; see lowercase_extension.
+        let mut buffer = [0u8; 32];
+        let key = lowercase_extension(file_extension(&file.name), &mut buffer);
+        add_extension_total(&mut self.extension_totals, &key, file.size_bytes);
     }
 
     fn maybe_emit_extension_stats(&mut self, force: bool) {
@@ -3251,6 +3238,31 @@ mod tests {
             "returned while a write was in flight"
         );
         writer.join().unwrap();
+    }
+
+    #[test]
+    fn model_extension_totals_merge_case_variants_and_keep_long_and_empty_keys() {
+        let long = format!("x.{}", "E".repeat(40));
+        let files: Vec<FileRecord> = [
+            ("a.DLL", 1),
+            ("b.dll", 2),
+            ("c.Dll", 4),
+            (long.as_str(), 8),
+            ("README", 16),
+            (".gitignore", 32),
+        ]
+        .into_iter()
+        .map(|(name, size)| FileRecord {
+            name: name.into(),
+            size_bytes: size,
+            ..FileRecord::default()
+        })
+        .collect();
+        let totals = aggregate_extension_chunk(&files);
+        assert_eq!(totals.get("dll"), Some(&(7, 3)));
+        assert_eq!(totals.get(&"e".repeat(40)), Some(&(8, 1)));
+        assert_eq!(totals.get(""), Some(&(48, 2)));
+        assert_eq!(totals.len(), 3);
     }
 
     #[test]

@@ -319,6 +319,9 @@ fn increment_directory_entry_aggregation(
     mut current: DirectoryId,
 ) {
     let mut is_direct_entry = true;
+    // A chain longer than the directory count must contain a cycle (corrupt
+    // or crafted metadata); stop instead of walking it forever.
+    let mut steps = aggregates.len();
 
     while let Some(aggregate) = aggregates.get_mut(&current) {
         if is_direct_entry {
@@ -329,8 +332,11 @@ fn increment_directory_entry_aggregation(
         aggregate.total_entries = aggregate.total_entries.saturating_add(1);
 
         match parent_map.get(&current).and_then(|value| *value) {
-            Some(parent) => current = parent,
-            None => break,
+            Some(parent) if steps > 1 => {
+                steps -= 1;
+                current = parent;
+            }
+            _ => break,
         }
     }
 }
@@ -343,6 +349,9 @@ fn increment_file_aggregation(
     allocation_bytes: u64,
 ) {
     let mut is_direct_entry = true;
+    // A chain longer than the directory count must contain a cycle (corrupt
+    // or crafted metadata); stop instead of walking it forever.
+    let mut steps = aggregates.len();
 
     while let Some(aggregate) = aggregates.get_mut(&current) {
         if is_direct_entry {
@@ -355,8 +364,11 @@ fn increment_file_aggregation(
         aggregate.total_bytes = aggregate.total_bytes.saturating_add(allocation_bytes);
 
         match parent_map.get(&current).and_then(|value| *value) {
-            Some(parent) => current = parent,
-            None => break,
+            Some(parent) if steps > 1 => {
+                steps -= 1;
+                current = parent;
+            }
+            _ => break,
         }
     }
 }
@@ -453,6 +465,33 @@ pub fn diff_file_records(previous: &[FileRecord], current: &[FileRecord]) -> Fil
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn aggregation_terminates_on_parent_cycles_from_corrupt_metadata() {
+        // 1 <-> 2 name each other as parent (corrupt or crafted MFT data).
+        let directory = |id: u64, parent: u64| DirectoryRecord {
+            id: DirectoryId(id),
+            parent_directory_id: Some(DirectoryId(parent)),
+            ..DirectoryRecord::default()
+        };
+        let directories = vec![directory(1, 2), directory(2, 1)];
+        let files = vec![FileRecord {
+            parent_directory_id: DirectoryId(1),
+            size_bytes: 5,
+            allocation_bytes: 8,
+            ..FileRecord::default()
+        }];
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = done.send(aggregate_directory_records(&directories, &files));
+        });
+        let aggregated = finished
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("aggregation looped forever on a parent cycle");
+        let one = aggregated.iter().find(|d| d.id == DirectoryId(1)).unwrap();
+        assert_eq!(one.direct_bytes, 5);
+        assert_eq!(one.direct_entries, 2);
+    }
     use super::*;
     use crate::{DirectoryId, DirectoryRecord, FileAttributes, FileId, FileRecord};
 

@@ -610,7 +610,7 @@ fn emit_directory_record(
         id: directory_id,
         parent_directory_id,
         name,
-        full_path: full_path.display().to_string(),
+        full_path: path_text(full_path),
         direct_bytes: 0,
         total_bytes: 0,
         direct_entries: 0,
@@ -1175,7 +1175,7 @@ fn emit_directory_record_shared(
         id: directory_id,
         parent_directory_id: Some(parent_directory_id),
         name,
-        full_path: full_path.display().to_string(),
+        full_path: path_text(full_path),
         direct_bytes: 0,
         total_bytes: 0,
         direct_entries: 0,
@@ -1287,6 +1287,16 @@ fn maybe_emit_progress_shared(shared: &FallbackSharedState, pipeline: &mut ScanE
     }
 }
 
+/// A directory's display path, as `Path::display` renders it. Every directory
+/// of a walk takes this path: valid UTF-8 (nearly all names) copies in one
+/// exact allocation instead of growing a String through the formatter.
+fn path_text(path: &std::path::Path) -> String {
+    match path.to_str() {
+        Some(text) => text.to_owned(),
+        None => path.display().to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1374,5 +1384,23 @@ mod tests {
             "policy allows following the junction; the ancestor-stack check \
              in evaluate_reparse_descent is what actually breaks the cycle"
         );
+    }
+
+    #[test]
+    fn path_text_matches_display_for_utf8_and_unpaired_surrogates() {
+        use std::os::windows::ffi::OsStringExt;
+        let unpaired = [
+            u16::from(b'C'),
+            u16::from(b':'),
+            u16::from(b'\\'),
+            0xD800,
+            u16::from(b'x'),
+        ];
+        for path in [
+            PathBuf::from("C:\\Users\\\u{e9}t\u{e9}\\\u{1f600} folder"),
+            PathBuf::from(std::ffi::OsString::from_wide(&unpaired)),
+        ] {
+            assert_eq!(path_text(&path), path.display().to_string());
+        }
     }
 }
