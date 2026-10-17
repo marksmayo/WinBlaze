@@ -1449,19 +1449,19 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 63.49,
-    "working_set_bytes_at_idle": 14585856,
-    "peak_working_set_bytes_at_idle": 14585856,
-    "cpu_ms_at_idle": 31.25,
-    "process_id": 20664,
-    "utc": "2026-10-14T05:18:30.5073313Z"
+    "initialization_ms": 54.46,
+    "working_set_bytes_at_idle": 14749696,
+    "peak_working_set_bytes_at_idle": 14749696,
+    "cpu_ms_at_idle": 46.875,
+    "process_id": 5300,
+    "utc": "2026-10-17T03:02:31.5740337Z"
   },
   {
     "tool": "WinBlaze",
@@ -1473,19 +1473,19 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 52.1,
-    "working_set_bytes_at_idle": 14671872,
-    "peak_working_set_bytes_at_idle": 14671872,
-    "cpu_ms_at_idle": 46.875,
-    "process_id": 20164,
-    "utc": "2026-10-14T05:18:30.5755818Z"
+    "initialization_ms": 55.65,
+    "working_set_bytes_at_idle": 14774272,
+    "peak_working_set_bytes_at_idle": 14774272,
+    "cpu_ms_at_idle": 15.625,
+    "process_id": 12340,
+    "utc": "2026-10-17T03:02:31.6363084Z"
   },
   {
     "tool": "WinBlaze",
@@ -1497,19 +1497,19 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 52.4,
-    "working_set_bytes_at_idle": 14663680,
-    "peak_working_set_bytes_at_idle": 14663680,
+    "initialization_ms": 56.86,
+    "working_set_bytes_at_idle": 14917632,
+    "peak_working_set_bytes_at_idle": 14917632,
     "cpu_ms_at_idle": 31.25,
-    "process_id": 9096,
-    "utc": "2026-10-14T05:18:30.6272115Z"
+    "process_id": 16744,
+    "utc": "2026-10-17T03:02:31.7159407Z"
   },
   {
     "tool": "WinBlaze",
@@ -1521,19 +1521,19 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 53.9,
-    "working_set_bytes_at_idle": 14663680,
-    "peak_working_set_bytes_at_idle": 14663680,
+    "initialization_ms": 55.72,
+    "working_set_bytes_at_idle": 14893056,
+    "peak_working_set_bytes_at_idle": 14893056,
     "cpu_ms_at_idle": 15.625,
-    "process_id": 11984,
-    "utc": "2026-10-14T05:18:30.7043365Z"
+    "process_id": 18868,
+    "utc": "2026-10-17T03:02:31.7840049Z"
   },
   {
     "tool": "WinBlaze",
@@ -1545,19 +1545,19 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 54.64,
-    "working_set_bytes_at_idle": 14675968,
-    "peak_working_set_bytes_at_idle": 14675968,
+    "initialization_ms": 54.78,
+    "working_set_bytes_at_idle": 14766080,
+    "peak_working_set_bytes_at_idle": 14766080,
     "cpu_ms_at_idle": 46.875,
-    "process_id": 13964,
-    "utc": "2026-10-14T05:18:30.7702565Z"
+    "process_id": 1820,
+    "utc": "2026-10-17T03:02:31.8597972Z"
   },
   {
     "tool": "WinBlaze",
@@ -1569,19 +1569,19 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 55.15,
-    "working_set_bytes_at_idle": 14684160,
-    "peak_working_set_bytes_at_idle": 14684160,
-    "cpu_ms_at_idle": 31.25,
-    "process_id": 1156,
-    "utc": "2026-10-14T05:18:30.8455007Z"
+    "initialization_ms": 63.65,
+    "working_set_bytes_at_idle": 14782464,
+    "peak_working_set_bytes_at_idle": 14782464,
+    "cpu_ms_at_idle": 46.875,
+    "process_id": 16964,
+    "utc": "2026-10-17T03:02:31.9387934Z"
   },
   {
     "tool": "WinBlaze",
@@ -1593,19 +1593,19 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 54.29,
-    "working_set_bytes_at_idle": 14761984,
-    "peak_working_set_bytes_at_idle": 14761984,
-    "cpu_ms_at_idle": 15.625,
-    "process_id": 21868,
-    "utc": "2026-10-14T05:18:30.9123158Z"
+    "initialization_ms": 126.67,
+    "working_set_bytes_at_idle": 14753792,
+    "peak_working_set_bytes_at_idle": 14753792,
+    "cpu_ms_at_idle": 78.125,
+    "process_id": 8236,
+    "utc": "2026-10-17T03:02:32.0891476Z"
   },
   {
     "tool": "WinBlaze",
@@ -1617,19 +1617,19 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 54.23,
-    "working_set_bytes_at_idle": 14688256,
-    "peak_working_set_bytes_at_idle": 14688256,
+    "initialization_ms": 84.66,
+    "working_set_bytes_at_idle": 14766080,
+    "peak_working_set_bytes_at_idle": 14766080,
     "cpu_ms_at_idle": 46.875,
-    "process_id": 18872,
-    "utc": "2026-10-14T05:18:30.9758957Z"
+    "process_id": 14116,
+    "utc": "2026-10-17T03:02:32.1959303Z"
   },
   {
     "tool": "WinBlaze",
@@ -1641,19 +1641,19 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 55.9,
-    "working_set_bytes_at_idle": 14671872,
-    "peak_working_set_bytes_at_idle": 14671872,
-    "cpu_ms_at_idle": 46.875,
-    "process_id": 17544,
-    "utc": "2026-10-14T05:18:31.0498540Z"
+    "initialization_ms": 79.47,
+    "working_set_bytes_at_idle": 14761984,
+    "peak_working_set_bytes_at_idle": 14761984,
+    "cpu_ms_at_idle": 62.5,
+    "process_id": 19744,
+    "utc": "2026-10-17T03:02:32.3000562Z"
   },
   {
     "tool": "WinBlaze",
@@ -1665,18 +1665,18 @@
       "product_version": null,
       "file_version": null,
       "executable_path": "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-      "sha256": "1279639F520983FBCDF03916E391B9048A0465471F9F07DA6ECC8256ED27803F",
-      "native_dll_sha256": "6D013263B443646493585F42A9B9D3B1BEEAB33DFC2CA4151697398A6A829D61",
-      "identity_sha256": "982B8257FA00CEB18EE416590F5095EC3CDD3A1A9669A421394680A47F5B2C1E",
-      "observed_utc": "2026-10-14T05:18:30.3713906Z",
-      "revision": "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+      "sha256": "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+      "native_dll_sha256": "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+      "identity_sha256": "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+      "observed_utc": "2026-10-17T03:02:31.4443253Z",
+      "revision": "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
     },
     "scope": "launch request to first idle GUI message queue; hidden window; not usable-window time",
-    "initialization_ms": 54.72,
-    "working_set_bytes_at_idle": 14684160,
-    "peak_working_set_bytes_at_idle": 14684160,
+    "initialization_ms": 78.95,
+    "working_set_bytes_at_idle": 14774272,
+    "peak_working_set_bytes_at_idle": 14774272,
     "cpu_ms_at_idle": 46.875,
-    "process_id": 20516,
-    "utc": "2026-10-14T05:18:31.1213073Z"
+    "process_id": 8248,
+    "utc": "2026-10-17T03:02:32.4173828Z"
   }
 ]

@@ -1030,246 +1030,6 @@
                      ]
     },
     {
-        "tool":  "WinBlaze",
-        "run":  1,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:45.1192098Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
-        "tool":  "WinBlaze",
-        "run":  2,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:45.7903874Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
-        "tool":  "WinBlaze",
-        "run":  3,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:46.6955827Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
-        "tool":  "WinBlaze",
-        "run":  4,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:47.5295142Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
-        "tool":  "WinBlaze",
-        "run":  5,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:48.1845033Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
-        "tool":  "WinBlaze",
-        "run":  6,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:48.9723899Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
-        "tool":  "WinBlaze",
-        "run":  7,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:49.8082454Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
-        "tool":  "WinBlaze",
-        "run":  8,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:50.5853420Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
-        "tool":  "WinBlaze",
-        "run":  9,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:51.3466500Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
-        "tool":  "WinBlaze",
-        "run":  10,
-        "binary":  {
-                       "tool":  "WinBlaze",
-                       "product_version":  null,
-                       "file_version":  null,
-                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
-                       "sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "native_dll_sha256":  null,
-                       "identity_sha256":  "06286D47C7E28B2FC156BEC6AF838C9DAFE7DC03F305B3F662D9D504E93EF05A",
-                       "observed_utc":  "2026-10-13T13:32:44.1147218Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
-                   },
-        "started_utc":  "2026-10-13T13:32:52.0485026Z",
-        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
-        "scans":  10,
-        "succeeded":  10,
-        "success_percent":  100,
-        "failure_percent":  0,
-        "failures":  [
-
-                     ]
-    },
-    {
         "tool":  "Directory Report",
         "run":  1,
         "binary":  {
@@ -1740,6 +1500,246 @@
                        "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
                    },
         "started_utc":  "2026-10-13T14:31:54.7425259Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  1,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:23.3173082Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  2,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:25.7237935Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  3,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:28.6040838Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  4,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:30.9830566Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  5,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:32.5899537Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  6,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:34.0460237Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  7,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:35.5559121Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  8,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:37.1172331Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  9,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:39.0289657Z",
+        "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
+        "scans":  10,
+        "succeeded":  10,
+        "success_percent":  100,
+        "failure_percent":  0,
+        "failures":  [
+
+                     ]
+    },
+    {
+        "tool":  "WinBlaze",
+        "run":  10,
+        "binary":  {
+                       "tool":  "WinBlaze",
+                       "product_version":  null,
+                       "file_version":  null,
+                       "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\target\\release\\winblaze-cli.exe",
+                       "sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "native_dll_sha256":  null,
+                       "identity_sha256":  "C843DD1BCA9A9E6E2612E747280DC8BF62CB67A185BE7639C25123C9E455CF59",
+                       "observed_utc":  "2026-10-17T02:34:21.1710005Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
+                   },
+        "started_utc":  "2026-10-17T02:34:41.1250287Z",
         "scope":  "10 standard-user scan/export runs rotating over deep, junctions, denied, ads and unicode",
         "scans":  10,
         "succeeded":  10,

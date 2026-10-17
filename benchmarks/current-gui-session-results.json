@@ -1308,19 +1308,19 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:44:50.6738498Z",
+        "started_utc":  "2026-10-17T02:43:12.4117904Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  500.25,
-        "reload_ms":  747.13,
-        "resize_ms":  67.86
+        "first_result_ms":  724.74,
+        "reload_ms":  854.06,
+        "resize_ms":  68.13
     },
     {
         "tool":  "WinBlaze",
@@ -1331,19 +1331,19 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:44:53.6201594Z",
+        "started_utc":  "2026-10-17T02:43:15.2725526Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  419.2,
-        "reload_ms":  658.2,
-        "resize_ms":  82.28
+        "first_result_ms":  407.15,
+        "reload_ms":  636.47,
+        "resize_ms":  65.01
     },
     {
         "tool":  "WinBlaze",
@@ -1354,19 +1354,19 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:44:56.5947733Z",
+        "started_utc":  "2026-10-17T02:43:18.2074679Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  440.37,
-        "reload_ms":  659.97,
-        "resize_ms":  69.72
+        "first_result_ms":  392.43,
+        "reload_ms":  662.81,
+        "resize_ms":  86.51
     },
     {
         "tool":  "WinBlaze",
@@ -1377,19 +1377,19 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:44:59.5408792Z",
+        "started_utc":  "2026-10-17T02:43:21.1699855Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  419.61,
-        "reload_ms":  662.11,
-        "resize_ms":  82.43
+        "first_result_ms":  410.08,
+        "reload_ms":  672.92,
+        "resize_ms":  67.75
     },
     {
         "tool":  "WinBlaze",
@@ -1400,19 +1400,19 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:45:02.5245980Z",
+        "started_utc":  "2026-10-17T02:43:23.8430410Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  420.42,
-        "reload_ms":  646.33,
-        "resize_ms":  83.28
+        "first_result_ms":  183.84,
+        "reload_ms":  639.06,
+        "resize_ms":  69.02
     },
     {
         "tool":  "WinBlaze",
@@ -1423,19 +1423,19 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:45:05.4652105Z",
+        "started_utc":  "2026-10-17T02:43:26.7662405Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  414.49,
-        "reload_ms":  643.89,
-        "resize_ms":  69.84
+        "first_result_ms":  411.25,
+        "reload_ms":  664.08,
+        "resize_ms":  38.97
     },
     {
         "tool":  "WinBlaze",
@@ -1446,19 +1446,19 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:45:08.3820061Z",
+        "started_utc":  "2026-10-17T02:43:29.6575307Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  400.9,
-        "reload_ms":  659.83,
-        "resize_ms":  82.01
+        "first_result_ms":  396.4,
+        "reload_ms":  660.08,
+        "resize_ms":  65.07
     },
     {
         "tool":  "WinBlaze",
@@ -1469,19 +1469,19 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:45:11.3351007Z",
+        "started_utc":  "2026-10-17T02:43:32.5493978Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  425.34,
-        "reload_ms":  643.91,
-        "resize_ms":  69.1
+        "first_result_ms":  390.18,
+        "reload_ms":  652.51,
+        "resize_ms":  65.37
     },
     {
         "tool":  "WinBlaze",
@@ -1492,19 +1492,19 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:45:14.3092093Z",
+        "started_utc":  "2026-10-17T02:43:35.5158788Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  418.83,
-        "reload_ms":  659.27,
-        "resize_ms":  68.79
+        "first_result_ms":  403.29,
+        "reload_ms":  650.75,
+        "resize_ms":  84.29
     },
     {
         "tool":  "WinBlaze",
@@ -1515,18 +1515,18 @@
                        "product_version":  null,
                        "file_version":  null,
                        "executable_path":  "C:\\Users\\markm\\GitHub\\WinBlaze\\src\\WinBlaze.UI\\bin\\x64\\Release\\WinBlaze.UI.exe",
-                       "sha256":  "A6DD3C13BF397C15CDF1C8419B61BCA15A6BB4D7D13A01CD9B344AF9894F3029",
-                       "native_dll_sha256":  "6CE6465FE0C2AAB0F9F1D9859EEDBF46AE01AAC7ACF2C25FD0F4672130DCD417",
-                       "identity_sha256":  "EEAB4545B0347346A99A6E74AA675975FD1F9F41F676685A791C21E55D101145",
-                       "observed_utc":  "2026-10-16T11:44:46.5365301Z",
-                       "revision":  "569a5f21a158419d9da8ff1140e0fca1451cb86f"
+                       "sha256":  "38D142A965C28196481A1AFEF10036944D1B6BDA7DA3330CB900BFEF2971F4E9",
+                       "native_dll_sha256":  "CC519D757C1A7EF69F34EB692C8603D33403B60ACEA4DC2B45B007E16F42D015",
+                       "identity_sha256":  "78521AD805241BCB0A5A64513F782E1C619735FA1EDC8E8708EF264E8852A2C9",
+                       "observed_utc":  "2026-10-17T02:43:07.5550965Z",
+                       "revision":  "ba8b427a10fa7c9f335851fa1337cbe9bef74c59"
                    },
-        "started_utc":  "2026-10-16T11:45:17.2631001Z",
+        "started_utc":  "2026-10-17T02:43:38.4363618Z",
         "scope":  "GUI session on the lognormal dataset: first result while scanning, then reload of the product\u0027s own saved scan and a resize",
-        "saved_scan":  "WinBlaze-lognormal-EEAB4545B034.csv",
+        "saved_scan":  "WinBlaze-lognormal-78521AD80524.csv",
         "saved_scan_bytes":  29356619,
-        "first_result_ms":  414.79,
-        "reload_ms":  641.4,
-        "resize_ms":  83.88
+        "first_result_ms":  415.62,
+        "reload_ms":  652.84,
+        "resize_ms":  66.55
     }
 ]
