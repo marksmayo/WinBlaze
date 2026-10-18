@@ -14,7 +14,7 @@ if(!$CacheDirectory) {
     foreach($size in @(4096,8192,16384)){[IO.File]::WriteAllBytes((Join-Path $fixture ($size.ToString()+'.bin')),(New-Object byte[] $size))}
     $scan=[Diagnostics.ProcessStartInfo]::new()
     $scan.FileName=Join-Path (Split-Path $app -Parent) 'winblaze-cli.exe'
-    $scan.Arguments='--scan "{0}" "{1}"' -f $fixture,(Join-Path $output 'catalog.csv')
+    $scan.Arguments='--keep-catalog --scan "{0}" "{1}"' -f $fixture,(Join-Path $output 'catalog.csv')
     $scan.UseShellExecute=$false
     $scan.CreateNoWindow=$true
     $scan.EnvironmentVariables['LOCALAPPDATA']=$CacheDirectory

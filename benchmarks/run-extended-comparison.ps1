@@ -141,24 +141,25 @@ foreach ($targetName in $Targets) {
             Remove-Item -LiteralPath $csv -ErrorAction SilentlyContinue
             $plan = if (Test-ScanAdapterTool $tool) { New-ScanPlan $tool $target.path $csv } else { $null }
             $started = [DateTime]::UtcNow
-            if ($plan) {
-                # A product that never finishes a fixture is a failed result, not
-                # a stopped benchmark: record it and skip its remaining runs here.
-                $limit = if ($target.manifest -and !$RetryTimedOut) { [math]::Min($TimeoutSeconds, $FixtureTimeoutSeconds) } else { $TimeoutSeconds }
-                try {
+            # A product that never finishes a fixture is a failed result, not a
+            # stopped benchmark: every product gets the same limit, and a timeout
+            # is recorded and skips that product's remaining runs here.
+            $limit = if ($target.manifest -and !$RetryTimedOut) { [math]::Min($TimeoutSeconds, $FixtureTimeoutSeconds) } else { $TimeoutSeconds }
+            try {
+                if ($plan) {
                     $measured = Invoke-MeasuredProcess -Executable $plan.Executable -Arguments $plan.Arguments -CompanionExecutable $plan.CompanionExecutable -CompanionArguments $plan.CompanionArguments -TimeoutSeconds $limit -MemoryLimitBytes $memoryLimit -MeasureEnergy:($baseName -eq 'full')
-                } catch {
-                    Remove-ScanOutputs $plan
-                    $rows.Add([pscustomobject][ordered]@{ target = $targetName; tool = $tool; run = $run; binary = $identity
-                        started_utc = $started.ToString('o'); elevation = $elevation; condition = $condition
-                        scope = 'process startup + scan + CSV export (no GUI); exact kernel counters'
-                        exit_code = -1; timed_out = $true; timeout_seconds = $limit; failure = $_.Exception.Message })
-                    Write-BenchmarkJson -Path $OutputPath -Value $rows.ToArray()
-                    Write-Output ("{0} {1} run {2}: FAILED ({3})" -f $tool, $targetName, $run, $_.Exception.Message)
-                    break
+                } else {
+                    $measured = Invoke-MeasuredProcess -Executable $executables[$tool] -Arguments (Get-Arguments $tool $target.path $csv) -TimeoutSeconds $limit -MemoryLimitBytes $memoryLimit -MeasureEnergy:($baseName -eq 'full')
                 }
-            } else {
-                $measured = Invoke-MeasuredProcess -Executable $executables[$tool] -Arguments (Get-Arguments $tool $target.path $csv) -TimeoutSeconds $TimeoutSeconds -MemoryLimitBytes $memoryLimit -MeasureEnergy:($baseName -eq 'full')
+            } catch {
+                if ($plan) { Remove-ScanOutputs $plan } else { Remove-Item -LiteralPath $csv -ErrorAction SilentlyContinue }
+                $rows.Add([pscustomobject][ordered]@{ target = $targetName; tool = $tool; run = $run; binary = $identity
+                    started_utc = $started.ToString('o'); elevation = $elevation; condition = $condition
+                    scope = 'process startup + scan + CSV export (no GUI); exact kernel counters'
+                    exit_code = -1; timed_out = $true; timeout_seconds = $limit; failure = $_.Exception.Message })
+                Write-BenchmarkJson -Path $OutputPath -Value $rows.ToArray()
+                Write-Output ("{0} {1} run {2}: FAILED ({3})" -f $tool, $targetName, $run, $_.Exception.Message)
+                break
             }
             if ($measured.exit_code -ne 0 -or !(Test-Path -LiteralPath $csv)) { if ($plan) { Remove-ScanOutputs $plan }; throw "$tool $targetName run ${run}: no successful export (exit $($measured.exit_code))" }
             $totals = if ($plan) { Read-ScanTotals $plan } else { Read-RootTotals $tool $csv }

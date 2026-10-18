@@ -2117,7 +2117,7 @@ fn parse_entries(
 
     let total_size_bytes = sum_u64_saturating(files.iter().map(|file| file.size_bytes));
     let total_allocation_bytes = sum_u64_saturating(files.iter().map(|file| file.allocation_bytes));
-    let (files_seen, directories_seen) = count_entries(&entries);
+    let (files_seen, directories_seen) = (file_count, directory_count);
 
     Ok(NtfsEnumeration {
         volume: VolumeRecord {

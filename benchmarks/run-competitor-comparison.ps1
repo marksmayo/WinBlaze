@@ -49,7 +49,7 @@ if ($AppendResults -and (Test-Path -LiteralPath $OutputPath)) {
 foreach ($profile in $Profiles) {
     $target = if ($profile -eq 'full') { 'C:\' } else { Join-Path $repo "artifacts/benchmark-datasets/$profile" }
     foreach ($tool in $Tools) {
-        $exe = if ($tool -eq 'WinBlaze') { [IO.Path]::GetFullPath($WinBlazeCliPath) } elseif ($tool -eq 'WinDirStat') { 'C:\Program Files\WinDirStat\WinDirStat.exe' } else { 'C:\Program Files\WizTree\WizTree64.exe' }
+        $exe = if ($tool -eq 'WinBlaze') { [IO.Path]::GetFullPath($WinBlazeCliPath) } elseif ($tool -eq 'WinDirStat') { $(if ($env:WINBLAZE_BENCH_WINDIRSTAT) { $env:WINBLAZE_BENCH_WINDIRSTAT } else { 'C:\Program Files\WinDirStat\WinDirStat.exe' }) } else { $(if ($env:WINBLAZE_BENCH_WIZTREE) { $env:WINBLAZE_BENCH_WIZTREE } else { 'C:\Program Files\WizTree\WizTree64.exe' }) }
         if (Test-ScanAdapterTool $tool) { $exe = Get-BenchToolExecutable $tool }
         $identityName = if ($tool -eq 'WinBlaze') { 'WinBlaze scan/export' } else { $tool }
         $identityOptions = @{Tool=$identityName;Executable=$exe}

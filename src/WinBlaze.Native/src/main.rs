@@ -36,10 +36,13 @@ fn view(text: &str) -> WbCStringView {
 }
 fn main() {
     let mut args: Vec<String> = std::env::args().collect();
-    // Reports only by default; `--keep-catalog` also saves the scan for the GUI.
-    let keep_catalog = args.len() > 1 && args[1] == "--keep-catalog";
+    // Reports only by default; `--keep-catalog` (anywhere after the program
+    // name) also saves the scan for the GUI.
+    let keep_catalog = args.iter().skip(1).any(|arg| arg == "--keep-catalog");
     if keep_catalog {
-        args.remove(1);
+        let program = args.remove(0);
+        args.retain(|arg| arg != "--keep-catalog");
+        args.insert(0, program);
     }
     let (mode, root, output) = match args.as_slice() {
         [_, root, output] => ("--scan", root, output),

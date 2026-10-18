@@ -280,23 +280,41 @@ pub fn aggregate_directory_records(
         .map(|directory| (directory.id, DirectoryAggregation::default()))
         .collect();
 
+    // Corrupt or crafted metadata can link directories into parent cycles;
+    // walks stop at the first directory on one so each counts once.
+    let cyclic = cyclic_directories(&parent_map);
+
     for directory in directories {
         if let Some(parent_directory_id) = directory.parent_directory_id {
-            increment_directory_entry_aggregation(
+            walk_ancestors(
                 &mut aggregates,
                 &parent_map,
+                &cyclic,
                 parent_directory_id,
+                |aggregate, direct| {
+                    if direct {
+                        aggregate.direct_entries = aggregate.direct_entries.saturating_add(1);
+                    }
+                    aggregate.total_entries = aggregate.total_entries.saturating_add(1);
+                },
             );
         }
     }
 
     for file in files {
-        increment_file_aggregation(
+        walk_ancestors(
             &mut aggregates,
             &parent_map,
+            &cyclic,
             file.parent_directory_id,
-            file.size_bytes,
-            file.allocation_bytes,
+            |aggregate, direct| {
+                if direct {
+                    aggregate.direct_bytes = aggregate.direct_bytes.saturating_add(file.size_bytes);
+                    aggregate.direct_entries = aggregate.direct_entries.saturating_add(1);
+                }
+                aggregate.total_entries = aggregate.total_entries.saturating_add(1);
+                aggregate.total_bytes = aggregate.total_bytes.saturating_add(file.allocation_bytes);
+            },
         );
     }
 
@@ -313,64 +331,65 @@ pub fn aggregate_directory_records(
     aggregated_directories
 }
 
-fn increment_directory_entry_aggregation(
+/// Applies `apply` to `start` and each ancestor (the first call with
+/// `direct = true`), stopping at a directory on a parent cycle.
+fn walk_ancestors(
     aggregates: &mut HashMap<DirectoryId, DirectoryAggregation>,
     parent_map: &HashMap<DirectoryId, Option<DirectoryId>>,
+    cyclic: &std::collections::HashSet<DirectoryId>,
     mut current: DirectoryId,
+    mut apply: impl FnMut(&mut DirectoryAggregation, bool),
 ) {
-    let mut is_direct_entry = true;
-    // A chain longer than the directory count must contain a cycle (corrupt
-    // or crafted metadata); stop instead of walking it forever.
-    let mut steps = aggregates.len();
-
+    let mut direct = true;
     while let Some(aggregate) = aggregates.get_mut(&current) {
-        if is_direct_entry {
-            aggregate.direct_entries = aggregate.direct_entries.saturating_add(1);
-            is_direct_entry = false;
+        apply(aggregate, direct);
+        direct = false;
+        if !cyclic.is_empty() && cyclic.contains(&current) {
+            break;
         }
-
-        aggregate.total_entries = aggregate.total_entries.saturating_add(1);
-
         match parent_map.get(&current).and_then(|value| *value) {
-            Some(parent) if steps > 1 => {
-                steps -= 1;
-                current = parent;
-            }
-            _ => break,
+            Some(parent) => current = parent,
+            None => break,
         }
     }
 }
 
-fn increment_file_aggregation(
-    aggregates: &mut HashMap<DirectoryId, DirectoryAggregation>,
+/// Directories that lie on a parent cycle. Each directory has at most one
+/// parent, so one coloring pass over the chains finds every cycle in O(n).
+fn cyclic_directories(
     parent_map: &HashMap<DirectoryId, Option<DirectoryId>>,
-    mut current: DirectoryId,
-    size_bytes: u64,
-    allocation_bytes: u64,
-) {
-    let mut is_direct_entry = true;
-    // A chain longer than the directory count must contain a cycle (corrupt
-    // or crafted metadata); stop instead of walking it forever.
-    let mut steps = aggregates.len();
-
-    while let Some(aggregate) = aggregates.get_mut(&current) {
-        if is_direct_entry {
-            aggregate.direct_bytes = aggregate.direct_bytes.saturating_add(size_bytes);
-            aggregate.direct_entries = aggregate.direct_entries.saturating_add(1);
-            is_direct_entry = false;
-        }
-
-        aggregate.total_entries = aggregate.total_entries.saturating_add(1);
-        aggregate.total_bytes = aggregate.total_bytes.saturating_add(allocation_bytes);
-
-        match parent_map.get(&current).and_then(|value| *value) {
-            Some(parent) if steps > 1 => {
-                steps -= 1;
-                current = parent;
+) -> std::collections::HashSet<DirectoryId> {
+    const IN_PROGRESS: u8 = 1;
+    const DONE: u8 = 2;
+    let mut state: HashMap<DirectoryId, u8> = HashMap::with_capacity(parent_map.len());
+    let mut cyclic = std::collections::HashSet::new();
+    let mut path = Vec::new();
+    for &start in parent_map.keys() {
+        let mut current = start;
+        loop {
+            match state.get(&current) {
+                None => {
+                    state.insert(current, IN_PROGRESS);
+                    path.push(current);
+                    match parent_map.get(&current).and_then(|value| *value) {
+                        Some(parent) if parent_map.contains_key(&parent) => current = parent,
+                        _ => break,
+                    }
+                }
+                Some(&IN_PROGRESS) => {
+                    if let Some(position) = path.iter().position(|id| *id == current) {
+                        cyclic.extend(path[position..].iter().copied());
+                    }
+                    break;
+                }
+                Some(_) => break,
             }
-            _ => break,
+        }
+        for id in path.drain(..) {
+            state.insert(id, DONE);
         }
     }
+    cyclic
 }
 
 pub fn detect_file_lineage_change(
@@ -474,7 +493,13 @@ mod tests {
             parent_directory_id: Some(DirectoryId(parent)),
             ..DirectoryRecord::default()
         };
-        let directories = vec![directory(1, 2), directory(2, 1)];
+        // Unrelated directories enlarge the step budget a bounded walk would
+        // allow, so laps around the cycle would multiply its totals.
+        let mut directories = vec![directory(1, 2), directory(2, 1)];
+        directories.extend((100..1100).map(|id| DirectoryRecord {
+            id: DirectoryId(id),
+            ..DirectoryRecord::default()
+        }));
         let files = vec![FileRecord {
             parent_directory_id: DirectoryId(1),
             size_bytes: 5,
@@ -491,6 +516,11 @@ mod tests {
         let one = aggregated.iter().find(|d| d.id == DirectoryId(1)).unwrap();
         assert_eq!(one.direct_bytes, 5);
         assert_eq!(one.direct_entries, 2);
+        // Each cycle directory counts the file once, not once per lap.
+        assert_eq!(one.total_bytes, 8);
+        assert_eq!(one.total_entries, 2);
+        let two = aggregated.iter().find(|d| d.id == DirectoryId(2)).unwrap();
+        assert!(two.total_bytes <= 8 && two.total_entries <= 2, "{two:?}");
     }
     use super::*;
     use crate::{DirectoryId, DirectoryRecord, FileAttributes, FileId, FileRecord};

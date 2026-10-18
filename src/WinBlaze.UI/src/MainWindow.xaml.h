@@ -464,6 +464,11 @@ namespace winrt::WinBlaze::UI::implementation
         uint32_t m_tree_rows_shown{ 0 };
         // Root path text whose validation error is showing.
         winrt::hstring m_invalid_root_text;
+        // A command-line scan or import was queued at construction; it loads its
+        // own catalog, so the window must not restore the previous one.
+        bool m_command_line_action_queued{ false };
+        // Bumped per scan; native callbacks from older scans are dropped.
+        std::atomic<uint64_t> m_scan_generation{ 0 };
         bool m_treemap_render_requested{ false };
         bool m_shell_ready{ false };
         bool m_initializing_shell{ true };

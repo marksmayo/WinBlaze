@@ -245,8 +245,22 @@ fn query_volume(file: &File) -> io::Result<VolumeContext> {
     let ntfs: Vec<u16> = "NTFS\0".encode_utf16().collect();
     Ok(VolumeContext {
         serial: id.volume,
-        fills_batches: named && filesystem[..ntfs.len()] == ntfs[..],
+        // A share reports its server's filesystem name ("NTFS") but the
+        // redirector need not fill batches, so remote volumes never skip the
+        // end-of-directory request.
+        fills_batches: named && filesystem[..ntfs.len()] == ntfs[..] && !is_remote(file),
     })
+}
+
+/// Whether `file` was opened through a network redirector: FILE_REMOTE_PROTOCOL_INFO
+/// (class 13) is only answered for remote handles.
+fn is_remote(file: &File) -> bool {
+    let mut info = [0u64; 16];
+    // SAFETY: live handle; the buffer is writable and larger than the 116-byte
+    // FILE_REMOTE_PROTOCOL_INFO the call fills.
+    unsafe {
+        GetFileInformationByHandleEx(file.as_raw_handle(), 13, info.as_mut_ptr().cast(), 116) != 0
+    }
 }
 
 impl Drop for DirectoryMetadataIterator {

@@ -13,8 +13,8 @@ $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $definitions = @(
     @{ name = 'WinBlaze'; path = [IO.Path]::GetFullPath($WinBlazeAppPath); arguments = '' },
-    @{ name = 'WinDirStat'; path = 'C:\Program Files\WinDirStat\WinDirStat.exe'; arguments = '' },
-    @{ name = 'WizTree'; path = 'C:\Program Files\WizTree\WizTree64.exe'; arguments = '/admin=0' }
+    @{ name = 'WinDirStat'; path = $(if ($env:WINBLAZE_BENCH_WINDIRSTAT) { $env:WINBLAZE_BENCH_WINDIRSTAT } else { 'C:\Program Files\WinDirStat\WinDirStat.exe' }); arguments = '' },
+    @{ name = 'WizTree'; path = $(if ($env:WINBLAZE_BENCH_WIZTREE) { $env:WINBLAZE_BENCH_WIZTREE } else { 'C:\Program Files\WizTree\WizTree64.exe' }); arguments = '/admin=0' }
 )
 # Added products (scan-adapters.ps1). Everything gets a private instance with
 # no volumes or folders, so its first-run NTFS indexing prompt never appears.

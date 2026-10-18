@@ -1082,7 +1082,10 @@ impl NativeSession {
         // buffers and individual unusually large records are additional.
         let (controller, rx) = ScanController::recycling_bounded_channel(16);
         let root_path_for_config = root_path.clone();
-        let capacity_scope = crate::capacity_hint::scope_key(&root_path, &rules);
+        // The scope key queries the volume's used space, which can block on a
+        // slow or disconnected network drive: compute it on the worker thread,
+        // not on the caller's (the UI) thread.
+        let (scope_root, scope_rules) = (root_path.clone(), rules.clone());
         let session = Self {
             controller,
             worker: Mutex::new(None),
@@ -1110,6 +1113,7 @@ impl NativeSession {
         let user_data = user_data as usize;
         let index_root = index_storage_root();
         let worker = thread::spawn(move || {
+            let capacity_scope = crate::capacity_hint::scope_key(&scope_root, &scope_rules);
             let _ = forward_events(
                 rx,
                 callback,

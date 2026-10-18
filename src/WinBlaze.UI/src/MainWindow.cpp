@@ -727,6 +727,7 @@ namespace winrt::WinBlaze::UI::implementation
                 ? INVALID_FILE_ATTRIBUTES : GetFileAttributesW(m_startup_scan_path.c_str());
             if (startup_attributes != INVALID_FILE_ATTRIBUTES && !(startup_attributes & FILE_ATTRIBUTE_DIRECTORY)) {
                 // A file argument is a saved scan (CSV/TSV/JSON/MFT), opened like File > Open scan.
+                m_command_line_action_queued = true;
                 DispatcherQueue().TryEnqueue([this]() { OpenSavedScan(m_startup_scan_path, false); });
                 TraceStartup(L"MainWindow queued command-line saved scan");
             } else if (!m_startup_scan_path.empty() && RootPathBox()) {
@@ -734,6 +735,7 @@ namespace winrt::WinBlaze::UI::implementation
                 // trims quotes, normalises slashes and validates the folder.
                 RootPathBox().Text(winrt::hstring(m_startup_scan_path));
                 m_current_root_path = m_startup_scan_path;
+                m_command_line_action_queued = true;
                 DispatcherQueue().TryEnqueue([this]() { BeginScanFromCurrentRoot(false); });
                 TraceStartup(L"MainWindow queued command-line scan");
             } else {
@@ -2232,8 +2234,9 @@ namespace winrt::WinBlaze::UI::implementation
         TraceStartup(L"OnWindowLoaded after search preview");
         // A command-line scan or saved-scan import already in flight loads its
         // own catalog when it finishes; restoring the previous one now would
-        // load the catalog twice and delay the new results.
-        if (m_session_active || m_export_active) {
+        // load the catalog twice and delay the new results. The queued flag
+        // covers a command-line action that has not run yet.
+        if (m_command_line_action_queued || m_session_active || m_export_active) {
             TraceStartup(L"OnWindowLoaded persisted catalog restore skipped: operation in flight");
         } else {
             LoadPersistedCatalogSnapshot();
@@ -3723,7 +3726,13 @@ namespace winrt::WinBlaze::UI::implementation
         NavigateToSection(ShellSection::Overview);
         UpdateBreadcrumbs();
 
-        auto handler = [this](WbEvent const& event) {
+        // Events from an earlier session (a late incremental summary, or a
+        // cancelled scan's terminal event) must not land in this one.
+        const uint64_t scan_generation = ++m_scan_generation;
+        auto handler = [this, scan_generation](WbEvent const& event) {
+            if (scan_generation != m_scan_generation.load()) {
+                return;
+            }
             HandleNativeEvent(event);
         };
         if (!excluded.empty() || !included.empty()) {
@@ -7122,49 +7131,53 @@ namespace winrt::WinBlaze::UI::implementation
         // indices renders identically: skip rebuilding its XAML rows (each
         // rebuild cost 150-240 ms of UI-thread time on a full-folder scan).
         std::vector<size_t> window(rows.begin() + window_start, rows.begin() + window_end);
-        if (m_session_active && m_live_window_shown && window == m_live_window_rows) {
-            return;
-        }
-        m_live_window_rows = std::move(window);
-        m_live_window_shown = m_session_active;
+        // An unchanged live window keeps its XAML rows, but the paging buttons
+        // and row counts below still follow the growing result list.
+        const bool window_unchanged = m_session_active && m_live_window_shown && window == m_live_window_rows;
+        if (!window_unchanged) {
+            m_live_window_rows = std::move(window);
+            m_live_window_shown = m_session_active;
 
-        // Each row is a small XAML tree (~1 ms to build), so a full window
-        // costs hundreds of ms. Show the first rows now and append the rest
-        // on later dispatcher ticks, so results appear and input stays live.
-        static constexpr size_t kTreeRowsFirstChunk = 48;
-        static constexpr size_t kTreeRowsPerTick = 64;
-        const uint64_t generation = ++m_tree_fill_generation;
-        m_tree_selection_updates_suppressed = true;
-        TreeListView().Items().Clear();
-        const size_t first_end = (std::min)(window_end, window_start + kTreeRowsFirstChunk);
-        for (size_t index = window_start; index < first_end; ++index) {
-            TreeListView().Items().Append(CreateTreeNodeListItem(rows[index]));
-        }
-        m_tree_selection_updates_suppressed = false;
-        m_tree_rows_shown = TreeListView().Items().Size();
-        UpdateWindowTitle();
-        if (first_end < window_end) {
-            // Each queued step owns the chunk function; the function itself
-            // holds only a weak reference, so a fill superseded by a newer
-            // generation frees it instead of leaking a self-referencing cycle.
-            auto append_chunk = std::make_shared<std::function<void(size_t)>>();
-            std::weak_ptr<std::function<void(size_t)>> weak_chunk = append_chunk;
-            *append_chunk = [this, generation, window_end, weak_chunk](size_t next) {
-                if (generation != m_tree_fill_generation || !TreeListView()) {
-                    return;
-                }
-                const size_t chunk_end = (std::min)(window_end, next + kTreeRowsPerTick);
-                m_tree_selection_updates_suppressed = true;
-                for (size_t index = next; index < chunk_end && index < m_tree_visible_rows.size(); ++index) {
-                    TreeListView().Items().Append(CreateTreeNodeListItem(m_tree_visible_rows[index]));
-                }
-                m_tree_selection_updates_suppressed = false;
-                if (auto self = weak_chunk.lock(); self && chunk_end < window_end) {
-                    DispatcherQueue().TryEnqueue([self, chunk_end]() { (*self)(chunk_end); });
-                }
-            };
-            DispatcherQueue().TryEnqueue(
-                [append_chunk, first_end]() { (*append_chunk)(first_end); });
+            // Each row is a small XAML tree (~1 ms to build), so a full window
+            // costs hundreds of ms. Show the first rows now and append the rest
+            // on later dispatcher ticks, so results appear and input stays live.
+            static constexpr size_t kTreeRowsFirstChunk = 48;
+            static constexpr size_t kTreeRowsPerTick = 64;
+            const uint64_t generation = ++m_tree_fill_generation;
+            m_tree_selection_updates_suppressed = true;
+            TreeListView().Items().Clear();
+            const size_t first_end = (std::min)(window_end, window_start + kTreeRowsFirstChunk);
+            for (size_t index = window_start; index < first_end; ++index) {
+                TreeListView().Items().Append(CreateTreeNodeListItem(rows[index]));
+            }
+            m_tree_selection_updates_suppressed = false;
+            m_tree_rows_shown = TreeListView().Items().Size();
+            UpdateWindowTitle();
+            if (first_end < window_end) {
+                // Each queued step owns the chunk function; the function itself
+                // holds only a weak reference, so a fill superseded by a newer
+                // generation frees it instead of leaking a self-referencing cycle.
+                auto append_chunk = std::make_shared<std::function<void(size_t)>>();
+                std::weak_ptr<std::function<void(size_t)>> weak_chunk = append_chunk;
+                *append_chunk = [this, generation, window_end, weak_chunk](size_t next) {
+                    if (generation != m_tree_fill_generation || !TreeListView()) {
+                        return;
+                    }
+                    const size_t chunk_end = (std::min)(window_end, next + kTreeRowsPerTick);
+                    m_tree_selection_updates_suppressed = true;
+                    for (size_t index = next; index < chunk_end && index < m_tree_visible_rows.size(); ++index) {
+                        TreeListView().Items().Append(CreateTreeNodeListItem(m_tree_visible_rows[index]));
+                    }
+                    m_tree_selection_updates_suppressed = false;
+                    m_tree_rows_shown = TreeListView().Items().Size();
+                    UpdateWindowTitle();
+                    if (auto self = weak_chunk.lock(); self && chunk_end < window_end) {
+                        DispatcherQueue().TryEnqueue([self, chunk_end]() { (*self)(chunk_end); });
+                    }
+                };
+                DispatcherQueue().TryEnqueue(
+                    [append_chunk, first_end]() { (*append_chunk)(first_end); });
+            }
         }
 
         if (TreeWindowPreviousButton()) {

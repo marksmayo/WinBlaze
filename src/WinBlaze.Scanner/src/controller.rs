@@ -814,7 +814,17 @@ fn inherited_volume(
     attributes: FileAttributes,
     parent: Option<crate::directory_metadata::VolumeContext>,
 ) -> Option<crate::directory_metadata::VolumeContext> {
-    parent.filter(|_| !attributes.is_reparse_point())
+    // Cloud placeholders (RECALL_ON_OPEN / RECALL_ON_DATA_ACCESS) and offline
+    // folders are listed through a filter driver that may return short
+    // batches, so they and their descendants always ask for the end of the
+    // directory instead of trusting a part-filled batch.
+    const FILTERED: u32 = 0x0004_0000 | 0x0040_0000 | 0x0000_1000;
+    parent
+        .filter(|_| !attributes.is_reparse_point())
+        .map(|volume| crate::directory_metadata::VolumeContext {
+            fills_batches: volume.fills_batches && attributes.0 & FILTERED == 0,
+            ..volume
+        })
 }
 
 struct FallbackQueue {
@@ -1383,6 +1393,31 @@ mod tests {
             decision,
             "policy allows following the junction; the ancestor-stack check \
              in evaluate_reparse_descent is what actually breaks the cycle"
+        );
+    }
+
+    #[test]
+    fn cloud_and_offline_folders_do_not_inherit_the_final_batch_shortcut() {
+        let parent = crate::directory_metadata::VolumeContext {
+            serial: 7,
+            fills_batches: true,
+        };
+        let plain = inherited_volume(FileAttributes::DIRECTORY, Some(parent));
+        assert_eq!(plain, Some(parent));
+        // RECALL_ON_OPEN, RECALL_ON_DATA_ACCESS, OFFLINE: a filter driver may
+        // return short batches for these folders and their descendants.
+        for flag in [0x0004_0000u32, 0x0040_0000, 0x0000_1000] {
+            let attributes = FileAttributes(FileAttributes::DIRECTORY.0 | flag);
+            let child = inherited_volume(attributes, Some(parent)).unwrap();
+            assert_eq!(child.serial, 7);
+            assert!(!child.fills_batches, "flag {flag:#x} kept the shortcut");
+        }
+        assert_eq!(
+            inherited_volume(
+                FileAttributes::DIRECTORY | FileAttributes::REPARSE_POINT,
+                Some(parent)
+            ),
+            None
         );
     }
 
