@@ -391,11 +391,8 @@ export function buildMedalTable(data) {
     for (const event of guiRescanEvents(valid(data.guiRescan || []))) add(...event);
     for (const event of guiSessionEvents(valid(data.guiSession || []))) add(...event);
     for (const event of reliabilityEvents(valid(data.reliability || []))) add(...event);
-    // Every created event is listed, even before its first measurement.
-    const footprint = valid(data.footprint || []);
-    add('Install footprint · 64-bit GUI files','MiB',Object.fromEntries(PRODUCTS.map(tool=>[tool,
-        footprint.filter(r=>r.tool===tool).map(r=>r.bytes/1048576)])),
-        'Bytes of the files each product needs to run its 64-bit GUI (measure-footprint.ps1); optional languages and 32-bit builds excluded.',true);
+    // Install footprint is no longer a medal event: on-disk size is not
+    // performance, and the measurement stays available in the report data.
     return {...rankMedalEvents(events), measurementEvents:events,
         exclusions:[
             {name:'Features with equal support', reason:'No feature medals when all three products have the same verified support grade. Equal comparison rows are omitted; equal grades do not imply identical implementations. Excluded: '+(data.features?.rows||[]).filter(row=>hasEqualFeatureSupport(row.support)).map(row=>row.feature).join(', ')+'.'},

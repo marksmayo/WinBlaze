@@ -25,13 +25,6 @@
   ],
   "events": [
     {
-      "name": "Install footprint \u00b7 64-bit GUI files",
-      "unit": "MiB",
-      "scope": "Bytes of the files each product needs to run its 64-bit GUI (measure-footprint.ps1); optional languages and 32-bit builds excluded.",
-      "comparable": true,
-      "observational": false
-    },
-    {
       "name": "Reliability \u00b7 failed scans on hostile datasets",
       "unit": "%",
       "scope": "Standard-user scan/export. Share of 10 scans per run (rotating deep paths, junction maze, access-denied subtree, alternate data streams, Unicode names) that crashed, hung past 120 s, exited non-zero or wrote no root row. Mean over all 100 scans, so a single failure counts.",

@@ -20,26 +20,135 @@ WinBlaze combines a Rust scanning engine (raw NTFS MFT access with a parallel di
 - **Responsive by measurement**: the UI ships its own frame/flush latency counters, and scan-time work is budgeted per frame
 - **Self-updating**: checks GitHub for a newer release on launch (and on demand), then downloads, **SHA-256-verifies**, and installs the update in-app before relaunching — no manual reinstall
 
-## Performance (historical July 2026 snapshot)
+## Benchmark results (October 2026)
 
-Compared against WizTree and WinDirStat on the live `C:\` system volume — **~2.3M files / ~546k directories / 464 GB** — Windows 11, NVMe, warm cache, elevated; timed 2026-07-07. GUI tools were timed launch → scan-complete-and-populated via a CPU-idle probe; WinBlaze uses its own reported scan duration plus UI-idle detection.
+WinBlaze was measured against six other Windows disk analyzers across **80 medal events**: scan speed on 23 datasets (from the full `C:\` drive to adversarial fixtures), CPU, memory, I/O, GUI responsiveness, startup and reliability. Each event takes the median of 10 runs, and medals go to the three best values.
 
-<p align="center">
-  <img src="docs/perf-comparison.svg" alt="Scan to interactive view on a warm C:\ drive (lower is better): WinBlaze engine ~2.4 s, WinBlaze in-app ~4.0 s, WinDirStat 2.6 ~10.5 s, WizTree 4.31 ~14.0 s" width="820" />
-</p>
+### Medal standings
 
-| Tool | Backend | Scan → interactive | Notes |
-|---|---|---|---|
-| **WinBlaze** (engine) | NTFS MFT | **~2.4 s** | scan → summary (`mft_scan_repro`); post-optimization |
-| **WinBlaze** (in-app) | NTFS MFT | **~4.0 s** | Release UI idle→idle, incl. tree + treemap |
-| WinDirStat 2.6.0 | directory walk (multithreaded) | ~10.5 s | modern fork; ~60 s CPU across cores |
-| WizTree 4.31 | NTFS MFT | raw read ~2–3 s; to interactive ~14–55 s | see caveat |
+| Product | 🥇 Gold | 🥈 Silver | 🥉 Bronze |
+|---|---:|---:|---:|
+| **WinBlaze** | **71** | 4 | 3 |
+| WinDirStat | 3 | 39 | 20 |
+| Everything | 3 | 16 | 7 |
+| SpaceSniffer | 3 | 6 | 4 |
+| Directory Report | 2 | 9 | 20 |
+| TreeSize Free | 2 | 0 | 3 |
+| WizTree | 1 | 4 | 22 |
 
-**WizTree caveat:** its raw MFT read is as fast as WinBlaze's, but the GUI materializes the full ~2.9M-file list and treemap up front, so *time to an interactive view* is larger and highly variable (14–55 s observed; the chart shows the best run). Its all-file CLI export took 28–35 s, but that is dominated by writing a 437 MB CSV, not scanning. WinBlaze reaches an interactive view sooner because it pages and caps the UI (8,192-entry catalog, paged tree, deferred snapshot) rather than materializing every file. Single-machine, warm-cache figures — see [benchmarks/perf-overhaul-baselines.md](benchmarks/perf-overhaul-baselines.md) for methodology and raw runs.
+```mermaid
+xychart-beta
+    title "Gold medals out of 80 events"
+    x-axis ["WinBlaze", "WinDirStat", "Everything", "SpaceSniffer", "Directory Report", "TreeSize Free", "WizTree"]
+    y-axis "Gold medals" 0 --> 80
+    bar [71, 3, 3, 3, 2, 2, 1]
+```
 
-The **engine** figure reflects the optimized scanner (sparse MFT read that skips free-record runs, a pipelined parser/emit, and a direct-read reader — ~15% faster than the original 2026-07-07 measurement); the competitor bars are that same dated snapshot and were not re-timed. The scan is now **read-bound at the volume's ~2 GB/s raw-read ceiling**, so sub-2 s is not reachable in software on this hardware — see [docs/ENGINE_SCAN_PERFORMANCE.md](docs/ENGINE_SCAN_PERFORMANCE.md) for the profiling and why.
+### Headline events
 
-Generated-dataset budgets (tiny/fanout/fanout-large/scale) are enforced in CI and locally via `benchmarks\performance-budgets*.json`; competitor methodology notes live in `docs\BENCHMARK_METHODOLOGY.md` and `benchmarks\competitor-report.md`.
+Lower is better in every chart. **WinBlaze is the first bar.**
+
+```mermaid
+xychart-beta
+    title "Full C: drive, scan + CSV export (seconds)"
+    x-axis ["WinBlaze", "WinDirStat", "WizTree", "Everything", "SpaceSniffer", "Directory Report"]
+    y-axis "Seconds" 0 --> 280
+    bar [22.3, 33.3, 45.0, 163.1, 225.4, 265.3]
+```
+
+```mermaid
+xychart-beta
+    title "GUI: full drive scan until results are shown (seconds)"
+    x-axis ["WinBlaze", "WizTree", "TreeSize Free", "WinDirStat", "SpaceSniffer", "Directory Report"]
+    y-axis "Seconds" 0 --> 580
+    bar [39.6, 55.5, 80.2, 85.0, 300.4, 563.6]
+```
+
+```mermaid
+xychart-beta
+    title "1-million-file folder, scan + export (seconds)"
+    x-axis ["WinBlaze", "WinDirStat", "WizTree", "Directory Report", "SpaceSniffer", "Everything"]
+    y-axis "Seconds" 0 --> 60
+    bar [0.68, 3.52, 10.75, 12.77, 33.17, 55.85]
+```
+
+```mermaid
+xychart-beta
+    title "Full-drive scan as a standard user: peak memory (MiB)"
+    x-axis ["WinBlaze", "WinDirStat", "Directory Report", "Everything", "WizTree", "SpaceSniffer"]
+    y-axis "MiB" 0 --> 1000
+    bar [320, 436, 525, 896, 898, 940]
+```
+
+```mermaid
+xychart-beta
+    title "GUI: launch on a 250k-file folder until the first result (ms)"
+    x-axis ["WinBlaze", "WinDirStat", "Everything", "Directory Report", "WizTree"]
+    y-axis "Milliseconds" 0 --> 2400
+    bar [351, 380, 728, 1060, 2323]
+```
+
+```mermaid
+xychart-beta
+    title "Full C: drive, user-mode CPU (CPU-seconds)"
+    x-axis ["WinBlaze", "WinDirStat", "WizTree", "Directory Report", "SpaceSniffer"]
+    y-axis "CPU-seconds" 0 --> 160
+    bar [11.5, 38.8, 87.7, 129.7, 156.7]
+```
+
+| Event | WinBlaze | Next best |
+|---|---:|---:|
+| Full C: drive (3.35M files), scan + CSV export | **22.3 s** | WinDirStat 33.3 s |
+| GUI full drive, scan until results are shown | **39.6 s** | WizTree 55.5 s |
+| 1-million-file folder | **0.68 s** | WinDirStat 3.52 s |
+| Deep long paths | **405 ms** | Everything 445 ms |
+| Standard-user full-drive peak memory | **320 MiB** | WinDirStat 436 MiB |
+| Standard-user full-drive CPU | **80.1 CPU-s** | Everything 83.2 CPU-s |
+| Full C: kernel CPU | **128 CPU-s** | SpaceSniffer 131 CPU-s |
+| Full C: disk bytes read | **2.9 KB** | WinDirStat 4.2 KB |
+| GUI time to first result | **351 ms** | WinDirStat 380 ms |
+| Startup to first idle | **60 ms** | WinDirStat 64 ms |
+| Failed scans on hostile datasets | **0 %** | (tied with four others; Everything 20 %) |
+
+### Where WinBlaze does not win
+
+| Event | WinBlaze | Leader | Why |
+|---|---:|---:|---|
+| GUI · usable-window startup | 160 ms 🥈 | Everything 135 ms | Most of it is the system XAML framework starting up |
+| GUI session · reload saved results | 626 ms 🥈 | Everything 178 ms | Everything reopens its own database |
+| GUI · refresh after a small change | 246 ms 🥈 | Everything 30 ms | Everything is notified of changes and never rescans |
+| Full C: disk bytes written | 517 MiB 🥈 | SpaceSniffer 323 MiB | Almost all of it is the CSV export itself (full paths) |
+| Full C: context switches | 327k 🥉 | SpaceSniffer 225k | Kernel file-system work; reducing thread wake-ups did not change it |
+| GUI full drive · memory with results | 721 MiB 🥉 | TreeSize Free 520 MiB | Holds the complete 3.35M-file index in memory |
+| GUI session · redraw after resize | 66 ms 🥉 | Directory Report 54 ms | XAML relayout. The benchmark samples the screen about every 30 ms, so this is two samples against just under two |
+| GUI full drive · responsiveness p95 | 0.64 ms | TreeSize Free 0.15 ms | All products answer within a millisecond |
+| GUI · memory growth over 10 rescans | +23 MiB | WinDirStat −0.8 MiB | Not a leak: memory is back to its first-scan level about 1 s after each scan. The benchmark samples 300 ms after the last scan |
+
+### What we found this round
+
+**Improvements (each red/green tested and checked with interleaved before/after runs):**
+- **Time to first result: 391 → 351 ms (silver → gold).** A finished scan no longer builds live tree rows that the snapshot reload immediately discards. The post-scan "top 50 of 250k" search selects in a single streaming pass instead of sorting every match (26 → 10.5 ms).
+- **Disk bytes read on a full scan: halved, 5,976 → 2,988 bytes (silver → gold).** The allocation-hint file was the only file a report scan read, and it was read twice.
+- **Exports:** JSON and full-metadata CSV build each record in one reused buffer: 500k files, 85 → 56 ms and 77 → 52 ms, with byte-identical output.
+- **Catalog load:** short names are read without a heap copy, and a 1 MiB read buffer makes a 1M-file catalog load about 17 % faster.
+- **MFT parsing:** names decode straight into inline storage, and DOS 8.3 aliases are validated but never decoded.
+
+**Benchmark fairness fixes (applied to every product):**
+- The resize benchmark now captures only the window's visible frame and parks the mouse pointer away from the window. Before, a hover highlight under the pointer, or a blinking cursor in a window behind, counted as a late redraw for whichever product was being measured.
+- Extended-benchmark timeouts apply equally to every product, and only real timeouts are recorded as failures.
+- Install footprint is no longer a medal event: on-disk size isn't performance.
+
+**Bugs found by benchmarking:**
+- A code-review fix had silently broken the Release build step that generates the shipping OS XAML host. The benchmark then measured the slower WinUI build: startup memory went 14 → 37 MiB. The fix restores the patched code, and the local gate now validates the host patches (about 1 s), so this cannot ship again.
+
+**Tried and reverted (no measurable gain):** waking one walker thread per new task instead of all of them (no fewer context switches, slower walk); showing the window maximized in one step; rendering the treemap immediately on resize.
+
+### Method
+
+- **Machine:** Windows 11 (build 26300), Intel CPU with 20 logical processors, NVMe `C:` (≈ 488 GB, 3.35 M files), Balanced power plan, warm file cache, screen unlocked.
+- **Competitors:** latest releases as of October 2026: WinDirStat 2.9.3, WizTree 4.33, TreeSize Free 4.8.1, Everything 1.4.1, SpaceSniffer 2.2.0, Directory Report 80. Each competitor's best result over all recorded runs is kept, and those bests can only improve.
+- **What's measured:** standard-user runs unless an event says Administrator. CLI events time process start to finished CSV, with exact kernel counters. GUI events use window-title, `WM_NULL` and pixel-settle probes.
+- **Where:** the harness lives in `benchmarks/`, and generating the datasets is described under [Benchmarking](#benchmarking).
 
 ## Project Stats
 
@@ -95,7 +204,7 @@ The CLI writes only the requested report. Add `--keep-catalog` before the other 
 
 Duplicate detection compares complete bytes and excludes hard-link aliases from reclaimable copies. ACL reports include errors for inaccessible entries and exclude privileged audit SACLs. Allocation uses actual Windows storage; logical totals retain hard-link names while physical storage is counted once.
 
-The current offline benchmark dashboard is [CURRENT_COMPARISON.html](benchmarks/CURRENT_COMPARISON.html), with ten repeats per workload, binary/version provenance, feature-support medals and explicit timing scopes. The performance snapshot above is historical.
+Current results are summarized under [Benchmark results](#benchmark-results-october-2026). The benchmark scripts also generate a full per-event dashboard locally (`benchmarks/CURRENT_COMPARISON.html`), with ten repeats per workload, binary and version provenance, and explicit timing scopes.
 
 ### Keyboard Shortcuts
 

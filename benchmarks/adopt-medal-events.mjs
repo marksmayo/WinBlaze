@@ -21,7 +21,6 @@ const candidate = name => EXTENDED_TARGETS.some(([, label]) => name === `${label
     || GUI_RESCAN_EVENTS.some(([eventName]) => name === eventName)
     || GUI_SESSION_EVENTS.some(([eventName]) => name === eventName)
     || name === RELIABILITY_EVENT
-    || name === 'Install footprint · 64-bit GUI files'
     || name === 'Administrator · full-drive private memory';
 // Adoption needs every core product; other products join when measured.
 const products = CORE;
