@@ -111,6 +111,9 @@ fn entry(tree: &TreeIndex, key: (bool, usize)) -> TreeEntry<'_> {
         TreeEntry::File(&tree.files()[key.1])
     }
 }
+/// Pages ending within this many results are selected in one streaming pass.
+const STREAMED_PAGE_LIMIT: usize = 1024;
+
 pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<SearchPage<'a>> {
     if options
         .min_logical
@@ -186,55 +189,56 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
         .map(|index| (true, index))
         .chain((0..tree.files().len()).map(|index| (false, index)));
     let mut scratch = String::new();
-    let mut matches: Vec<_> = keys
-        .filter(|&key| {
-            if (key.0 && !options.include_directories) || (!key.0 && !options.include_files) {
-                return false;
-            }
-            let item = entry(tree, key);
-            let (logical, modified) = match item {
-                TreeEntry::Directory { rollup, .. } => {
-                    (rollup.logical_bytes, rollup.modified_utc_max)
-                }
-                TreeEntry::File(file) => (file.size_bytes, file.modified_utc()),
-            };
-            let modified = modified.map(crate::export::unix_seconds);
-            if options.min_logical.is_some_and(|min| logical < min)
-                || options.max_logical.is_some_and(|max| logical > max)
-                || options
-                    .min_allocated
-                    .is_some_and(|min| item.physical_bytes() < min)
-                || options
-                    .max_allocated
-                    .is_some_and(|max| item.physical_bytes() > max)
-                || options
-                    .modified_after
-                    .is_some_and(|min| modified.is_none_or(|value| value < min))
-                || options
-                    .modified_before
-                    .is_some_and(|max| modified.is_none_or(|value| value >= max))
-                || (!extensions.is_empty()
-                    && (key.0
-                        || !name(item).rsplit_once('.').is_some_and(|(_, ext)| {
-                            extensions.iter().any(|value| {
-                                if ext.is_ascii() {
-                                    ext.eq_ignore_ascii_case(value)
-                                } else {
-                                    ext.to_lowercase() == *value
-                                }
-                            })
-                        })))
-            {
-                return false;
-            }
-            pattern.is_empty()
-                || matches_text(name(item))
-                || matches_text(path_text(tree, item, &mut scratch))
-        })
-        .collect();
+    let mut matches_filters = |key: (bool, usize)| {
+        if (key.0 && !options.include_directories) || (!key.0 && !options.include_files) {
+            return false;
+        }
+        let item = entry(tree, key);
+        let (logical, modified) = match item {
+            TreeEntry::Directory { rollup, .. } => (rollup.logical_bytes, rollup.modified_utc_max),
+            TreeEntry::File(file) => (file.size_bytes, file.modified_utc()),
+        };
+        let modified = modified.map(crate::export::unix_seconds);
+        if options.min_logical.is_some_and(|min| logical < min)
+            || options.max_logical.is_some_and(|max| logical > max)
+            || options
+                .min_allocated
+                .is_some_and(|min| item.physical_bytes() < min)
+            || options
+                .max_allocated
+                .is_some_and(|max| item.physical_bytes() > max)
+            || options
+                .modified_after
+                .is_some_and(|min| modified.is_none_or(|value| value < min))
+            || options
+                .modified_before
+                .is_some_and(|max| modified.is_none_or(|value| value >= max))
+            || (!extensions.is_empty()
+                && (key.0
+                    || !name(item).rsplit_once('.').is_some_and(|(_, ext)| {
+                        extensions.iter().any(|value| {
+                            if ext.is_ascii() {
+                                ext.eq_ignore_ascii_case(value)
+                            } else {
+                                ext.to_lowercase() == *value
+                            }
+                        })
+                    })))
+        {
+            return false;
+        }
+        pattern.is_empty()
+            || matches_text(name(item))
+            || matches_text(path_text(tree, item, &mut scratch))
+    };
+    let key_name = |key: (bool, usize)| -> &str {
+        if key.0 {
+            &tree.directories()[key.1].name
+        } else {
+            &tree.files()[key.1].name
+        }
+    };
     let compare = |&left: &(bool, usize), &right: &(bool, usize)| {
-        let left_entry = entry(tree, left);
-        let right_entry = entry(tree, right);
         let logical = |entry| match entry {
             TreeEntry::Directory { rollup, .. } => rollup.logical_bytes,
             TreeEntry::File(file) => file.size_bytes,
@@ -243,16 +247,22 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
             TreeEntry::Directory { rollup, .. } => rollup.modified_utc_max,
             TreeEntry::File(file) => file.modified_utc(),
         };
+        // Name order (the default) needs no rollup lookup per comparison.
         let order = match options.sort {
-            SearchSort::Logical => logical(left_entry).cmp(&logical(right_entry)),
-            SearchSort::Allocated => left_entry
-                .physical_bytes()
-                .cmp(&right_entry.physical_bytes()),
-            SearchSort::Kind => left.0.cmp(&right.0),
-            SearchSort::Modified => modified(left_entry).cmp(&modified(right_entry)),
             SearchSort::Name => std::cmp::Ordering::Equal,
+            SearchSort::Kind => left.0.cmp(&right.0),
+            sort => {
+                let (left_entry, right_entry) = (entry(tree, left), entry(tree, right));
+                match sort {
+                    SearchSort::Logical => logical(left_entry).cmp(&logical(right_entry)),
+                    SearchSort::Allocated => left_entry
+                        .physical_bytes()
+                        .cmp(&right_entry.physical_bytes()),
+                    _ => modified(left_entry).cmp(&modified(right_entry)),
+                }
+            }
         }
-        .then_with(|| cmp_lowercase(name(left_entry), name(right_entry)))
+        .then_with(|| cmp_lowercase(key_name(left), key_name(right)))
         .then_with(|| left.cmp(&right));
         if options.descending {
             order.reverse()
@@ -260,6 +270,43 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
             order
         }
     };
+    let wanted = options.offset.saturating_add(options.limit);
+    if options.limit != 0 && wanted <= STREAMED_PAGE_LIMIT {
+        // A small page (the post-scan preview asks for 50 of every entry):
+        // keep only the best `wanted` keys while counting matches, so most
+        // candidates cost one comparison and no key vector is collected.
+        // The order is total (ties break on the key), so this equals sorting
+        // every match and slicing.
+        let mut total = 0;
+        let mut best: Vec<(bool, usize)> = Vec::with_capacity(wanted.min(4096) + 1);
+        for key in keys {
+            if !matches_filters(key) {
+                continue;
+            }
+            total += 1;
+            if best.len() == wanted && compare(&key, &best[wanted - 1]).is_ge() {
+                continue;
+            }
+            let position = best
+                .binary_search_by(|kept| compare(kept, &key))
+                .unwrap_or_else(|position| position);
+            best.insert(position, key);
+            best.truncate(wanted);
+        }
+        let hits = best
+            .into_iter()
+            .skip(options.offset)
+            .map(|key| {
+                let entry = entry(tree, key);
+                SearchResult {
+                    path: path(tree, entry),
+                    entry,
+                }
+            })
+            .collect();
+        return Ok(SearchPage { total, hits });
+    }
+    let mut matches: Vec<_> = keys.filter(|&key| matches_filters(key)).collect();
     let total = matches.len();
     let end = options.offset.saturating_add(options.limit).min(total);
     if options.limit == 0 || options.offset >= total {

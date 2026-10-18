@@ -11,7 +11,9 @@ param(
 #   first_result_ms  launch with the dataset until the first result row is on screen (#4)
 #   reload_ms   launch with the product's own saved scan until its loaded-results signal
 #   resize_ms   with those results shown, resize 1200x800 -> 1600x1000 until the window's
-#               pixels last change before 400 ms without change (gui-settle.ps1, #53)
+#               pixels last change before 400 ms without change (gui-settle.ps1, #53);
+#               only the visible frame is captured and the pointer is parked off
+#               the window, so neither what is behind it nor hover visuals count
 # Saved scans are made untimed once per binary: WinDirStat /SaveTo, WizTree /export,
 # winblaze-cli CSV export. Loaded-results signals: WinDirStat's title becomes
 # "WinDirStat <version> - <target>"; WizTree's becomes "[<csv>] - WizTree" (two spaces
@@ -166,7 +168,7 @@ function Measure-GuiProductSession([string]$tool, $identity, [int]$run) {
         }
         $hwnd = Get-GuiProductWindow $session
         [WinBlazeBench.GuiSettle]::Place($hwnd, 40, 40, 1200, 800)
-        [void][WinBlazeBench.GuiSettle]::MeasureSettle({}, 40, 40, 1600, 1000, 1000, 15000)
+        [void][WinBlazeBench.GuiSettle]::SettleWindow($hwnd, 40, 40, 1200, 800, 1000, 15000)
         $resize = [WinBlazeBench.GuiSettle]::MeasureResize($hwnd, 40, 40, 1200, 800, 1600, 1000, 400, 15000)
         [WinBlazeBench.GuiSettle]::Release($hwnd)
         if ($resize -lt 0) { throw "$tool did not settle after resizing" }
@@ -222,7 +224,7 @@ foreach ($tool in $Tools) {
             if ($null -eq $reload) { throw "$tool did not reload within $TimeoutSeconds s" }
             $process.Refresh(); $hwnd = (Get-AppWindow $process)
             [WinBlazeBench.GuiSettle]::Place($hwnd, 40, 40, 1200, 800)
-            [void][WinBlazeBench.GuiSettle]::MeasureSettle({}, 40, 40, 1600, 1000, 1000, 15000)
+            [void][WinBlazeBench.GuiSettle]::SettleWindow($hwnd, 40, 40, 1200, 800, 1000, 15000)
             $resize = [WinBlazeBench.GuiSettle]::MeasureResize($hwnd, 40, 40, 1200, 800, 1600, 1000, 400, 15000)
             [WinBlazeBench.GuiSettle]::Release($hwnd)
             if ($resize -lt 0) { throw "$tool did not settle after resizing" }

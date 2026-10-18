@@ -5240,7 +5240,11 @@ namespace winrt::WinBlaze::UI::implementation
             }
         }
 
-        if (!pending.live_directories.empty()) {
+        // A finished scan reloads its snapshot below, and LoadTreeSnapshot
+        // discards the live tree; building live rows first only delayed the
+        // final results (28 ms for a 250k-file folder).
+        const bool reloading_now = pending.reload_snapshot && !m_session_active;
+        if (!pending.live_directories.empty() && !reloading_now) {
             TimedFlushSection(L"live directories", [&] { ApplyLiveDirectories(std::move(pending.live_directories)); });
         }
 
