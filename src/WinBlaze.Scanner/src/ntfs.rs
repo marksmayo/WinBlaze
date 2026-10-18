@@ -12,8 +12,8 @@ use std::{
 use winblaze_core::{IdHashMap, IdHashSet};
 
 use winblaze_core::{
-    aggregate_directory_records, DirectoryId, DirectoryRecord, FileAttributes, FileId, FileRecord,
-    FileSystemKind, ScanEvent, ScanProgress, ScanSummary, VolumeId, VolumeRecord,
+    aggregate_directory_records, DirectoryId, DirectoryRecord, FileAttributes, FileId, FileName,
+    FileRecord, FileSystemKind, ScanEvent, ScanProgress, ScanSummary, VolumeId, VolumeRecord,
 };
 
 const FILE_RECORD_SIGNATURE: &[u8; 4] = b"FILE";
@@ -372,7 +372,7 @@ impl NtfsStreamState {
         on_event(ScanEvent::FileFound(FileRecord {
             id: entry.file_id,
             parent_directory_id: DirectoryId(entry.parent_directory_id.unwrap_or(NTFS_ROOT_RECORD)),
-            name: name.into(),
+            name,
             full_path: String::new().into(),
             size_bytes: entry.size_bytes,
             allocation_bytes: entry.allocation_bytes,
@@ -414,7 +414,7 @@ impl NtfsStreamState {
                 parent_directory_id: DirectoryId(
                     entry.parent_directory_id.unwrap_or(NTFS_ROOT_RECORD),
                 ),
-                name: entry.name.clone().into(),
+                name: entry.name.clone(),
                 full_path: String::new().into(),
                 size_bytes: entry.size_bytes,
                 allocation_bytes: entry.allocation_bytes,
@@ -446,7 +446,7 @@ impl NtfsStreamState {
     /// have a resolved parent except during `finish`, where a missing parent
     /// deliberately falls back to the root path.
     fn drain_cascade(&mut self, on_event: &mut dyn FnMut(ScanEvent)) {
-        while let Some(mut entry) = self.cascade.pop() {
+        while let Some(entry) = self.cascade.pop() {
             let file_id = entry.file_id.0;
             let parent = normalized_parent(&entry);
             let full_path = {
@@ -457,7 +457,7 @@ impl NtfsStreamState {
                     .unwrap_or(self.root_text.as_str());
                 join_path(parent_path, &entry.name)
             };
-            let name = std::mem::take(&mut entry.name);
+            let name = String::from(&*entry.name);
             self.directories_seen = self.directories_seen.saturating_add(1);
             on_event(ScanEvent::DirectoryFound(DirectoryRecord {
                 id: DirectoryId(file_id),
@@ -2017,7 +2017,7 @@ fn parse_entries(
     entries.entry(5).or_insert_with(|| ParsedNtfsEntry {
         file_id: FileId(5),
         parent_directory_id: None,
-        name: String::from(""),
+        name: FileName::default(),
         is_directory: true,
         has_attribute_list: false,
         size_bytes: 0,
@@ -2075,7 +2075,7 @@ fn parse_entries(
                 } else {
                     entry.parent_directory_id.map(DirectoryId)
                 },
-                name: entry.name.clone(),
+                name: String::from(&*entry.name),
                 full_path,
                 direct_bytes: 0,
                 total_bytes: 0,
@@ -2090,7 +2090,7 @@ fn parse_entries(
             let file = FileRecord {
                 id: FileId(entry.file_id.0),
                 parent_directory_id: DirectoryId(entry.parent_directory_id.unwrap_or(5)),
-                name: entry.name.clone().into(),
+                name: entry.name.clone(),
                 full_path: String::new().into(),
                 size_bytes: entry.size_bytes,
                 allocation_bytes: entry.allocation_bytes,
@@ -2144,7 +2144,8 @@ fn parse_entries(
 struct ParsedNtfsEntry {
     file_id: FileId,
     parent_directory_id: Option<u64>,
-    name: String,
+    /// Short names (most files) live inline: no heap allocation per record.
+    name: FileName,
     is_directory: bool,
     has_attribute_list: bool,
     size_bytes: u64,
@@ -2299,7 +2300,7 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
     Ok(ParsedRecordOutcome::Entry(ParsedNtfsEntry {
         file_id: FileId(file_index),
         parent_directory_id: file_name.parent_reference,
-        name: file_name.name,
+        name: decode_file_name(file_name.name),
         is_directory,
         has_attribute_list,
         size_bytes,
@@ -2312,16 +2313,18 @@ fn parse_record(record: &[u8]) -> Result<ParsedRecordOutcome, NtfsEnumerationErr
 }
 
 #[derive(Clone, Debug)]
-struct FileNameAttribute {
+struct FileNameAttribute<'a> {
     parent_reference: Option<u64>,
     created_utc: i64,
     modified_utc: i64,
     accessed_utc: i64,
     namespace: u8,
-    name: String,
+    /// Validated UTF-16LE name bytes. Decoded only for the record's chosen
+    /// name, so a DOS 8.3 alias that loses to its long name costs no String.
+    name: &'a [u8],
 }
 
-impl FileNameAttribute {
+impl FileNameAttribute<'_> {
     /// Preference order for picking among a record's $FILE_NAME attributes:
     /// Win32 (1) and Win32&DOS (3) carry the long name, POSIX (0) is rare
     /// but real, and DOS (2) is the 8.3 alias nobody wants to see.
@@ -2334,7 +2337,7 @@ impl FileNameAttribute {
     }
 }
 
-fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute, NtfsEnumerationError> {
+fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute<'_>, NtfsEnumerationError> {
     if bytes.len() < 66 {
         return Err(NtfsEnumerationError::InvalidRecord(String::from(
             "file name attribute too small",
@@ -2356,22 +2359,13 @@ fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute, NtfsEnumerationErr
         )));
     }
 
-    // Decode UTF-16 straight into the output String instead of buffering a
-    // Vec<u16> first: one allocation per name rather than two, across ~2.85M
-    // records.
-    let units = bytes[name_offset..name_offset + name_bytes]
-        .chunks_exact(2)
-        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]));
-    let mut name = String::with_capacity(name_length);
-    for unit in char::decode_utf16(units) {
-        match unit {
-            Ok(ch) => name.push(ch),
-            Err(_) => {
-                return Err(NtfsEnumerationError::InvalidRecord(String::from(
-                    "invalid utf-16 file name",
-                )))
-            }
-        }
+    // Every name is validated (an invalid one still rejects the record), but
+    // only the chosen one is decoded; see decode_file_name.
+    let name = &bytes[name_offset..name_offset + name_bytes];
+    if char::decode_utf16(utf16_units(name)).any(|unit| unit.is_err()) {
+        return Err(NtfsEnumerationError::InvalidRecord(String::from(
+            "invalid utf-16 file name",
+        )));
     }
 
     Ok(FileNameAttribute {
@@ -2382,6 +2376,29 @@ fn parse_file_name(bytes: &[u8]) -> Result<FileNameAttribute, NtfsEnumerationErr
         namespace,
         name,
     })
+}
+
+fn utf16_units(bytes: &[u8]) -> impl Iterator<Item = u16> + '_ {
+    bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+}
+
+/// Decodes a name `parse_file_name` already validated. UTF-8 is built on
+/// the stack (255 UTF-16 units encode to at most 765 bytes), so a short name
+/// lands inline in the FileName and a long one costs one exact allocation.
+fn decode_file_name(bytes: &[u8]) -> FileName {
+    let mut buffer = [0u8; 3 * 255];
+    let mut length = 0;
+    for unit in char::decode_utf16(utf16_units(bytes)) {
+        let ch = unit.unwrap_or(char::REPLACEMENT_CHARACTER);
+        if length + ch.len_utf8() > buffer.len() {
+            break;
+        }
+        length += ch.encode_utf8(&mut buffer[length..]).len();
+    }
+    // Only whole chars were encoded above, so the prefix is valid UTF-8.
+    FileName::from(std::str::from_utf8(&buffer[..length]).unwrap_or_default())
 }
 
 fn resolve_entry_path(
@@ -2990,7 +3007,7 @@ mod tests {
         ParsedNtfsEntry {
             file_id: FileId(id),
             parent_directory_id: Some(parent),
-            name: name.to_string(),
+            name: name.into(),
             is_directory,
             has_attribute_list: false,
             size_bytes: size,

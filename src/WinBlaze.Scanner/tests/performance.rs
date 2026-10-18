@@ -462,3 +462,114 @@ fn empty_duplicates_still_validate_metadata_and_allocate_no_content_buffers() {
         "empty duplicate analysis allocated {bytes} bytes"
     );
 }
+
+fn mft_record(index: u32, directory: bool, parent: u64, names: &[(&str, u8)]) -> Vec<u8> {
+    let mut attributes = Vec::new();
+    for &(name, namespace) in names {
+        let mut value = parent.to_le_bytes().to_vec();
+        value.resize(64, 0);
+        let utf16: Vec<u16> = name.encode_utf16().collect();
+        value.push(utf16.len() as u8);
+        value.push(namespace);
+        for unit in utf16 {
+            value.extend_from_slice(&unit.to_le_bytes());
+        }
+        attributes.extend_from_slice(&0x30u32.to_le_bytes());
+        attributes.extend_from_slice(&(24 + value.len() as u32).to_le_bytes());
+        attributes.extend_from_slice(&[0; 8]);
+        attributes.extend_from_slice(&(value.len() as u32).to_le_bytes());
+        attributes.extend_from_slice(&24u16.to_le_bytes());
+        attributes.extend_from_slice(&[0; 2]);
+        attributes.extend_from_slice(&value);
+    }
+    attributes.extend_from_slice(&u32::MAX.to_le_bytes());
+    let mut record = vec![0u8; 1024];
+    record[..4].copy_from_slice(b"FILE");
+    record[0x14..0x16].copy_from_slice(&0x30u16.to_le_bytes());
+    let flags: u16 = if directory { 3 } else { 1 };
+    record[0x16..0x18].copy_from_slice(&flags.to_le_bytes());
+    record[0x1C..0x20].copy_from_slice(&1024u32.to_le_bytes());
+    record[0x2C..0x30].copy_from_slice(&index.to_le_bytes());
+    record[0x30..0x30 + attributes.len()].copy_from_slice(&attributes);
+    record
+}
+
+#[test]
+fn mft_parse_stores_short_file_names_inline_without_a_temporary_copy() {
+    const FILES: u32 = 4_000;
+    let mut image = vec![0u8; 16 * 1024];
+    image[5 * 1024..6 * 1024].copy_from_slice(&mft_record(5, true, 5, &[(".", 3)]));
+    for index in 16..16 + FILES {
+        image.extend_from_slice(&mft_record(
+            index,
+            false,
+            5,
+            &[(&format!("file-{index:05}.bin"), 3)],
+        ));
+    }
+    let (result, bytes) = measured(|| {
+        winblaze_scanner::ntfs::parse_mft_records(std::path::Path::new("C:\\"), &image)
+    });
+    let result = result.unwrap();
+    assert_eq!(result.files.len(), FILES as usize);
+    assert!(result
+        .files
+        .iter()
+        .all(|file| file.name.starts_with("file-")));
+    eprintln!("MFT parse allocated {bytes} bytes");
+    assert!(bytes < 2_550_000, "MFT parse allocated {bytes} bytes");
+}
+
+#[test]
+fn mft_parse_decodes_only_the_chosen_file_name_of_aliased_records() {
+    const FILES: u32 = 4_000;
+    let mut image = vec![0u8; 16 * 1024];
+    image[5 * 1024..6 * 1024].copy_from_slice(&mft_record(5, true, 5, &[(".", 3)]));
+    let mut long_names = Vec::new();
+    for index in 16..16 + FILES {
+        let long = format!("long-document-name-{index:05}.docx");
+        let short = format!("LONG-D~{}.DOC", index % 10);
+        image.extend_from_slice(&mft_record(index, false, 5, &[(&short, 2), (&long, 1)]));
+        long_names.push(long);
+    }
+    let (result, aliased) = measured(|| {
+        winblaze_scanner::ntfs::parse_mft_records(std::path::Path::new("C:\\"), &image)
+    });
+    let result = result.unwrap();
+    let names: Vec<&str> = result.files.iter().map(|file| file.name.as_ref()).collect();
+    assert_eq!(names, long_names);
+    let mut single = vec![0u8; 16 * 1024];
+    single[5 * 1024..6 * 1024].copy_from_slice(&mft_record(5, true, 5, &[(".", 3)]));
+    for (index, long) in (16..).zip(&long_names) {
+        single.extend_from_slice(&mft_record(index, false, 5, &[(long, 1)]));
+    }
+    let (result, plain) = measured(|| {
+        winblaze_scanner::ntfs::parse_mft_records(std::path::Path::new("C:\\"), &single)
+    });
+    assert_eq!(result.unwrap().files.len(), FILES as usize);
+    assert_eq!(
+        aliased, plain,
+        "8.3 aliases were decoded into discarded names"
+    );
+}
+
+#[test]
+fn mft_parse_still_rejects_records_with_any_invalid_file_name() {
+    let mut image = vec![0u8; 16 * 1024];
+    image[5 * 1024..6 * 1024].copy_from_slice(&mft_record(5, true, 5, &[(".", 3)]));
+    let mut bad = mft_record(
+        16,
+        false,
+        5,
+        &[("BADNAM~1.TXT", 2), ("good-long-name.txt", 1)],
+    );
+    // Turn the alias's first UTF-16 unit into an unpaired high surrogate.
+    let first_unit = 0x30 + 24 + 66;
+    bad[first_unit..first_unit + 2].copy_from_slice(&0xD800u16.to_le_bytes());
+    image.extend_from_slice(&bad);
+    image.extend_from_slice(&mft_record(17, false, 5, &[("kept.txt", 1)]));
+    let result =
+        winblaze_scanner::ntfs::parse_mft_records(std::path::Path::new("C:\\"), &image).unwrap();
+    let names: Vec<&str> = result.files.iter().map(|file| file.name.as_ref()).collect();
+    assert_eq!(names, ["kept.txt"]);
+}

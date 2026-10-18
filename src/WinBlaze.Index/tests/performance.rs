@@ -13,6 +13,7 @@ thread_local! {
     static ENABLED: Cell<bool> = const { Cell::new(false) };
     static BYTES: Cell<usize> = const { Cell::new(0) };
     static LIVE: Cell<isize> = const { Cell::new(0) };
+    static COUNT: Cell<usize> = const { Cell::new(0) };
 }
 // SAFETY: every request is forwarded unchanged to System. The thread-local
 // counters never allocate; measurement excludes fixture construction.
@@ -20,6 +21,7 @@ unsafe impl GlobalAlloc for MeasuredAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         if ENABLED.try_with(Cell::get).unwrap_or(false) {
             let _ = BYTES.try_with(|bytes| bytes.set(bytes.get().saturating_add(layout.size())));
+            let _ = COUNT.try_with(|count| count.set(count.get() + 1));
             let _ = LIVE.try_with(|bytes| bytes.set(bytes.get() + layout.size() as isize));
         }
         unsafe { System.alloc(layout) }
@@ -51,6 +53,7 @@ fn measured<T>(operation: impl FnOnce() -> T) -> (T, usize) {
     }
     BYTES.set(0);
     LIVE.set(0);
+    COUNT.set(0);
     ENABLED.set(true);
     let reset = Reset;
     let result = operation();
@@ -695,4 +698,71 @@ fn source_path_matching_preserves_legacy_unicode_and_prefix_rules() {
             }
         }
     }
+}
+#[derive(Default)]
+struct CountingWriter {
+    writes: usize,
+    bytes: Vec<u8>,
+}
+impl std::io::Write for CountingWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.writes += 1;
+        self.bytes.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+#[test]
+fn json_and_metadata_csv_exports_write_each_record_once() {
+    let tree = TreeIndex::build(fixture(2_000));
+    let records = tree.files().len() + tree.directories().len();
+    let mut json = CountingWriter::default();
+    winblaze_index::export::write_json(&tree, &mut json).unwrap();
+    assert!(
+        json.writes <= records + 4,
+        "JSON export issued {} writes for {records} records",
+        json.writes
+    );
+    let mut csv = CountingWriter::default();
+    winblaze_index::export::write_csv_with_metadata(&tree, &mut csv, |_| Ok(None)).unwrap();
+    assert!(
+        csv.writes <= records + 4,
+        "metadata CSV export issued {} writes for {records} records",
+        csv.writes
+    );
+}
+#[test]
+fn tree_search_matches_paths_without_a_string_per_candidate() {
+    let tree = TreeIndex::build(fixture(20_000));
+    let options = winblaze_index::tree_search::SearchOptions {
+        pattern: "no-such-name".into(),
+        ..Default::default()
+    };
+    let (page, bytes) = measured(|| winblaze_index::tree_search::search(&tree, &options));
+    assert_eq!(page.unwrap().total, 0);
+    assert!(
+        bytes < 64 * 1024,
+        "non-matching search allocated {bytes} bytes"
+    );
+}
+#[test]
+fn snapshot_load_reads_short_file_names_without_heap_copies() {
+    use winblaze_index::{IndexBackend, IndexRepository, SqliteIndexRepository};
+    let root = std::env::temp_dir().join(format!("winblaze-name-load-{}", std::process::id()));
+    let files = fixture(20_000).snapshot_files();
+    SqliteIndexRepository::open_empty(&root, IndexBackend::BinaryCache)
+        .persist_sorted_records(&[], &[], &[], &files, &[], &[])
+        .unwrap();
+    let (reopened, _) = measured(|| SqliteIndexRepository::open(&root, IndexBackend::BinaryCache));
+    let allocations = COUNT.get();
+    let loaded = reopened.snapshot_files();
+    std::fs::remove_dir_all(&root).unwrap();
+    assert_eq!(loaded, files);
+    assert!(
+        allocations < files.len() / 10,
+        "snapshot load made {allocations} allocations for {} short names",
+        files.len()
+    );
 }

@@ -393,88 +393,112 @@ pub fn write_json_with_metadata(
     output.write_all(b"{\"schema_version\":1,\"entries\":[")?;
     let root = tree.root().map(|(directory, _)| directory);
     let root_id = root.map(|directory| directory.id);
-    let mut separator = false;
+    // Each entry is built in one reused buffer and written once: integer
+    // formatting and many small writes per record dominated large exports.
+    let mut row = Vec::with_capacity(512);
     for directory in root
         .into_iter()
         .chain(tree.directories().iter().filter(|d| Some(d.id) != root_id))
     {
-        if separator {
-            output.write_all(b",")?;
+        if !row.is_empty() {
+            output.write_all(&row)?;
+            row.clear();
+            row.push(b',');
         }
-        separator = true;
         let totals = tree.rollup_for(directory.id.0).copied().unwrap_or_default();
-        output.write_all(b"{\"Path\":")?;
-        json_string(output, &directory.full_path)?;
-        write!(output, ",\"Kind\":\"Directory\",\"LogicalBytes\":{},\"AllocatedBytes\":{},\"Files\":{},\"Directories\":{},\"ModifiedUnixSeconds\":",
-            totals.logical_bytes, totals.physical_bytes, totals.file_count, totals.item_count.saturating_sub(totals.file_count))?;
-        if let Some(time) = totals.modified_utc_max {
-            write!(output, "{}", unix_seconds(time))?;
-        } else {
-            output.write_all(b"null")?;
-        }
-        output.write_all(b"}")?;
+        row.extend_from_slice(b"{\"Path\":");
+        json_string(&mut row, &directory.full_path)?;
+        row.extend_from_slice(b",\"Kind\":\"Directory\",\"LogicalBytes\":");
+        csv_integer(&mut row, totals.logical_bytes);
+        row.extend_from_slice(b",\"AllocatedBytes\":");
+        csv_integer(&mut row, totals.physical_bytes);
+        row.extend_from_slice(b",\"Files\":");
+        csv_integer(&mut row, totals.file_count);
+        row.extend_from_slice(b",\"Directories\":");
+        csv_integer(
+            &mut row,
+            totals.item_count.saturating_sub(totals.file_count),
+        );
+        row.extend_from_slice(b",\"ModifiedUnixSeconds\":");
+        json_seconds(&mut row, totals.modified_utc_max);
+        row.push(b'}');
     }
     for file in tree.files() {
-        if separator {
-            output.write_all(b",")?;
+        if !row.is_empty() {
+            output.write_all(&row)?;
+            row.clear();
+            row.push(b',');
         }
-        separator = true;
-        output.write_all(b"{\"Path\":")?;
+        row.extend_from_slice(b"{\"Path\":");
         if !file.full_path.is_empty() {
-            json_string(output, &file.full_path)?;
+            json_string(&mut row, &file.full_path)?;
         } else {
-            output.write_all(b"\"")?;
+            row.push(b'"');
             if let Some(parent) = tree
                 .directory_full_path(file.parent_directory_id.0)
                 .filter(|p| !p.is_empty())
             {
-                json_escaped(output, parent.trim_end_matches('\\'))?;
-                output.write_all(b"\\\\")?;
+                json_escaped(&mut row, parent.trim_end_matches('\\'))?;
+                row.extend_from_slice(b"\\\\");
             }
-            json_escaped(output, &file.name)?;
-            output.write_all(b"\"")?;
+            json_escaped(&mut row, &file.name)?;
+            row.push(b'"');
         }
-        write!(output, ",\"Kind\":\"File\",\"LogicalBytes\":{},\"AllocatedBytes\":{},\"Files\":0,\"Directories\":0,\"ModifiedUnixSeconds\":", file.size_bytes, file.allocation_bytes)?;
-        if let Some(time) = file.modified_utc() {
-            write!(output, "{}", unix_seconds(time))?;
-        } else {
-            output.write_all(b"null")?;
-        }
-        write!(
-            output,
-            ",\"Attributes\":{},\"CreatedUnixSeconds\":",
-            file.attributes.0
-        )?;
-        if let Some(time) = file.created_utc() {
-            write!(output, "{}", unix_seconds(time))?;
-        } else {
-            output.write_all(b"null")?;
-        }
-        output.write_all(b",\"AccessedUnixSeconds\":")?;
-        if let Some(time) = file.accessed_utc() {
-            write!(output, "{}", unix_seconds(time))?;
-        } else {
-            output.write_all(b"null")?;
-        }
+        row.extend_from_slice(b",\"Kind\":\"File\",\"LogicalBytes\":");
+        csv_integer(&mut row, file.size_bytes);
+        row.extend_from_slice(b",\"AllocatedBytes\":");
+        csv_integer(&mut row, file.allocation_bytes);
+        row.extend_from_slice(b",\"Files\":0,\"Directories\":0,\"ModifiedUnixSeconds\":");
+        json_seconds(&mut row, file.modified_utc());
+        row.extend_from_slice(b",\"Attributes\":");
+        csv_integer(&mut row, u64::from(file.attributes.0));
+        row.extend_from_slice(b",\"CreatedUnixSeconds\":");
+        json_seconds(&mut row, file.created_utc());
+        row.extend_from_slice(b",\"AccessedUnixSeconds\":");
+        json_seconds(&mut row, file.accessed_utc());
         if let Some(metadata) = metadata(file)? {
             for (name, value) in [
-                ("Owner", &metadata.owner),
-                ("VolumeIdentity", &metadata.volume_identity),
-                ("FileIdentity", &metadata.file_identity),
+                (&b",\"Owner\":"[..], &metadata.owner),
+                (&b",\"VolumeIdentity\":"[..], &metadata.volume_identity),
+                (&b",\"FileIdentity\":"[..], &metadata.file_identity),
             ] {
                 if let Some(value) = value {
-                    write!(output, ",\"{name}\":")?;
-                    json_string(output, value)?;
+                    row.extend_from_slice(name);
+                    json_string(&mut row, value)?;
                 }
             }
             if let Some(count) = metadata.link_count {
-                write!(output, ",\"LinkCount\":{count}")?;
+                row.extend_from_slice(b",\"LinkCount\":");
+                csv_integer(&mut row, u64::from(count));
             }
         }
-        output.write_all(b"}")?;
+        row.push(b'}');
     }
+    output.write_all(&row)?;
     output.write_all(b"]}\n")?;
     output.flush()
+}
+
+/// Unix seconds for a FILETIME tick count, or `null` when absent.
+fn json_seconds(row: &mut Vec<u8>, value: Option<i64>) {
+    match value {
+        Some(value) => signed_integer(row, unix_seconds(value)),
+        None => row.extend_from_slice(b"null"),
+    }
+}
+
+/// Unix seconds for a FILETIME tick count; nothing when absent.
+fn optional_seconds(row: &mut Vec<u8>, value: Option<i64>) {
+    if let Some(value) = value {
+        signed_integer(row, unix_seconds(value));
+    }
+}
+
+fn signed_integer(row: &mut Vec<u8>, value: i64) {
+    if value < 0 {
+        row.push(b'-');
+    }
+    csv_integer(row, value.unsigned_abs());
 }
 
 pub(crate) fn unix_seconds(ticks: i64) -> i64 {
@@ -493,59 +517,61 @@ pub fn write_csv_with_metadata(
     output.write_all(b"Path,Kind,LogicalBytes,AllocatedBytes,Files,Directories,ModifiedUnixSeconds,Attributes,CreatedUnixSeconds,AccessedUnixSeconds,Owner,VolumeIdentity,FileIdentity,LinkCount\r\n")?;
     let root = tree.root().map(|(directory, _)| directory);
     let root_id = root.map(|directory| directory.id);
+    // One reused buffer and one write per row, as in the plain CSV export.
+    let mut row = Vec::with_capacity(512);
     for directory in root
         .into_iter()
         .chain(tree.directories().iter().filter(|d| Some(d.id) != root_id))
     {
         let totals = tree.rollup_for(directory.id.0).copied().unwrap_or_default();
-        quoted(output, &directory.full_path)?;
-        write!(
-            output,
-            ",Directory,{},{},{},{},",
+        row.clear();
+        quoted(&mut row, &directory.full_path)?;
+        row.extend_from_slice(b",Directory,");
+        for number in [
             totals.logical_bytes,
             totals.physical_bytes,
             totals.file_count,
-            totals.item_count.saturating_sub(totals.file_count)
-        )?;
-        if let Some(time) = totals.modified_utc_max {
-            write!(output, "{}", unix_seconds(time))?;
+            totals.item_count.saturating_sub(totals.file_count),
+        ] {
+            csv_integer(&mut row, number);
+            row.push(b',');
         }
-        output.write_all(b",,,,,,,\r\n")?;
+        optional_seconds(&mut row, totals.modified_utc_max);
+        row.extend_from_slice(b",,,,,,,\r\n");
+        output.write_all(&row)?;
     }
     for file in tree.files() {
-        file_path(output, tree, file)?;
-        write!(
-            output,
-            ",File,{},{},0,0,",
-            file.size_bytes, file.allocation_bytes
-        )?;
-        if let Some(time) = file.modified_utc() {
-            write!(output, "{}", unix_seconds(time))?;
-        }
-        write!(output, ",{},", file.attributes.0)?;
-        if let Some(time) = file.created_utc() {
-            write!(output, "{}", unix_seconds(time))?;
-        }
-        output.write_all(b",")?;
-        if let Some(time) = file.accessed_utc() {
-            write!(output, "{}", unix_seconds(time))?;
-        }
+        row.clear();
+        file_path(&mut row, tree, file)?;
+        row.extend_from_slice(b",File,");
+        csv_integer(&mut row, file.size_bytes);
+        row.push(b',');
+        csv_integer(&mut row, file.allocation_bytes);
+        row.extend_from_slice(b",0,0,");
+        optional_seconds(&mut row, file.modified_utc());
+        row.push(b',');
+        csv_integer(&mut row, u64::from(file.attributes.0));
+        row.push(b',');
+        optional_seconds(&mut row, file.created_utc());
+        row.push(b',');
+        optional_seconds(&mut row, file.accessed_utc());
         let extras = metadata(file)?.unwrap_or_default();
         for value in [
             &extras.owner,
             &extras.volume_identity,
             &extras.file_identity,
         ] {
-            output.write_all(b",")?;
+            row.push(b',');
             if let Some(value) = value {
-                quoted(output, value)?;
+                quoted(&mut row, value)?;
             }
         }
-        output.write_all(b",")?;
+        row.push(b',');
         if let Some(count) = extras.link_count {
-            write!(output, "{count}")?;
+            csv_integer(&mut row, u64::from(count));
         }
-        output.write_all(b"\r\n")?;
+        row.extend_from_slice(b"\r\n");
+        output.write_all(&row)?;
     }
     output.flush()
 }

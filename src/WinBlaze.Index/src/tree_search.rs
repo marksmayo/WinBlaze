@@ -83,6 +83,28 @@ fn path(tree: &TreeIndex, entry: TreeEntry<'_>) -> String {
         TreeEntry::File(file) => tree.file_display_path(file),
     }
 }
+/// `path` for matching: stored paths are borrowed and derived file paths are
+/// built in `scratch`, so filtering allocates nothing per candidate.
+fn path_text<'s>(tree: &'s TreeIndex, entry: TreeEntry<'s>, scratch: &'s mut String) -> &'s str {
+    match entry {
+        TreeEntry::Directory { record, .. } => &record.full_path,
+        TreeEntry::File(file) if !file.full_path.is_empty() => &file.full_path,
+        TreeEntry::File(file) => {
+            scratch.clear();
+            match tree.directory_full_path(file.parent_directory_id.0) {
+                Some(parent) => {
+                    scratch.push_str(parent);
+                    if !parent.is_empty() && !parent.ends_with('\\') {
+                        scratch.push('\\');
+                    }
+                    scratch.push_str(&file.name);
+                }
+                None => scratch.push_str(&file.name),
+            }
+            scratch
+        }
+    }
+}
 fn entry(tree: &TreeIndex, key: (bool, usize)) -> TreeEntry<'_> {
     if key.0 {
         let record = &tree.directories()[key.1];
@@ -168,6 +190,7 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
     let keys = (0..tree.directories().len())
         .map(|index| (true, index))
         .chain((0..tree.files().len()).map(|index| (false, index)));
+    let mut scratch = String::new();
     let mut matches: Vec<_> = keys
         .filter(|&key| {
             if (key.0 && !options.include_directories) || (!key.0 && !options.include_files) {
@@ -209,7 +232,9 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
             {
                 return false;
             }
-            pattern.is_empty() || matches_text(name(item)) || matches_text(&path(tree, item))
+            pattern.is_empty()
+                || matches_text(name(item))
+                || matches_text(path_text(tree, item, &mut scratch))
         })
         .collect();
     let compare = |&left: &(bool, usize), &right: &(bool, usize)| {
