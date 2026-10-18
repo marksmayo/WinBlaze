@@ -14,9 +14,9 @@ pub use ffi::{WbCStringView, WbError, WbProgress};
 pub use hashing::{BuildIdHasher, IdHashMap, IdHashSet};
 pub use model::{
     aggregate_directory_records, derive_file_path, detect_file_lineage_change, diff_file_records,
-    join_path, DirectoryAggregation, DirectoryId, DirectoryRecord, FileAttributes, FileChangeKind,
-    FileChangeRecord, FileChangeSet, FileId, FileLineageRecord, FileRecord, FileSystemKind,
-    FileTimestamps, ScanSession, ScanSummary, VolumeId, VolumeRecord,
+    join_path, push_join_path, DirectoryAggregation, DirectoryId, DirectoryRecord, FileAttributes,
+    FileChangeKind, FileChangeRecord, FileChangeSet, FileId, FileLineageRecord, FileRecord,
+    FileSystemKind, FileTimestamps, ScanSession, ScanSummary, VolumeId, VolumeRecord,
 };
 pub use name::{FileName, RecordPath};
 pub use query::{

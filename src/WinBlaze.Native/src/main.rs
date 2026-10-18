@@ -34,16 +34,26 @@ fn view(text: &str) -> WbCStringView {
         len: text.len(),
     }
 }
+/// Reports only by default; `--keep-catalog` before the root and output
+/// arguments (on either side of the mode) also saves the scan for the GUI.
+/// The final two arguments are always positional, so a root or output file
+/// literally named `--keep-catalog` is not taken as the flag.
+fn take_keep_catalog(args: &mut Vec<String>) -> bool {
+    let options_end = args.len().saturating_sub(2).max(1);
+    match args[1.min(args.len())..options_end.min(args.len())]
+        .iter()
+        .position(|arg| arg == "--keep-catalog")
+    {
+        Some(index) => {
+            args.remove(index + 1);
+            true
+        }
+        None => false,
+    }
+}
 fn main() {
     let mut args: Vec<String> = std::env::args().collect();
-    // Reports only by default; `--keep-catalog` (anywhere after the program
-    // name) also saves the scan for the GUI.
-    let keep_catalog = args.iter().skip(1).any(|arg| arg == "--keep-catalog");
-    if keep_catalog {
-        let program = args.remove(0);
-        args.retain(|arg| arg != "--keep-catalog");
-        args.insert(0, program);
-    }
+    let keep_catalog = take_keep_catalog(&mut args);
     let (mode, root, output) = match args.as_slice() {
         [_, root, output] => ("--scan", root, output),
         [_, mode, root, output]
@@ -125,6 +135,36 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn keep_catalog_is_an_option_never_a_positional_argument() {
+        let parse = |line: &str| {
+            let mut args: Vec<String> = line.split(' ').map(String::from).collect();
+            let keep = take_keep_catalog(&mut args);
+            (keep, args.join(" "))
+        };
+        assert_eq!(
+            parse("cli --keep-catalog C:\\x out.csv"),
+            (true, "cli C:\\x out.csv".into())
+        );
+        assert_eq!(
+            parse("cli --scan --keep-catalog C:\\x out.csv"),
+            (true, "cli --scan C:\\x out.csv".into())
+        );
+        assert_eq!(
+            parse("cli --keep-catalog --scan C:\\x out.csv"),
+            (true, "cli --scan C:\\x out.csv".into())
+        );
+        // As the output or root it stays positional.
+        assert_eq!(
+            parse("cli --scan C:\\x --keep-catalog"),
+            (false, "cli --scan C:\\x --keep-catalog".into())
+        );
+        assert_eq!(
+            parse("cli C:\\x out.csv"),
+            (false, "cli C:\\x out.csv".into())
+        );
+        assert_eq!(parse("cli"), (false, "cli".into()));
+    }
     #[test]
     fn cli_terminal_callback_notifies_waiter_without_polling() {
         for (kind, success) in [

@@ -4,6 +4,7 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 use std::collections::HashMap;
 
 use crate::scan::{ScanProgress, ScanState};
+use crate::{IdHashMap, IdHashSet};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FileId(pub u64);
@@ -162,12 +163,17 @@ impl FileRecord {
 pub fn join_path(parent: &str, name: &str) -> String {
     let separator = !parent.is_empty() && !parent.ends_with('\\');
     let mut path = String::with_capacity(parent.len() + usize::from(separator) + name.len());
+    push_join_path(&mut path, parent, name);
+    path
+}
+
+/// [`join_path`] appended to an existing buffer, so callers can reuse one.
+pub fn push_join_path(path: &mut String, parent: &str, name: &str) {
     path.push_str(parent);
-    if separator {
+    if !parent.is_empty() && !parent.ends_with('\\') {
         path.push('\\');
     }
     path.push_str(name);
-    path
 }
 
 /// Resolves a file's full path: the stored path when present (records from
@@ -270,18 +276,24 @@ pub fn aggregate_directory_records(
     directories: &[DirectoryRecord],
     files: &[FileRecord],
 ) -> Vec<DirectoryRecord> {
-    let parent_map: HashMap<DirectoryId, Option<DirectoryId>> = directories
-        .iter()
-        .map(|directory| (directory.id, directory.parent_directory_id))
-        .collect();
+    let mut parent_map: IdHashMap<DirectoryId, Option<DirectoryId>> =
+        IdHashMap::with_capacity_and_hasher(directories.len(), Default::default());
+    parent_map.extend(
+        directories
+            .iter()
+            .map(|directory| (directory.id, directory.parent_directory_id)),
+    );
 
-    let mut aggregates: HashMap<DirectoryId, DirectoryAggregation> = directories
-        .iter()
-        .map(|directory| (directory.id, DirectoryAggregation::default()))
-        .collect();
+    let mut aggregates: IdHashMap<DirectoryId, DirectoryAggregation> =
+        IdHashMap::with_capacity_and_hasher(directories.len(), Default::default());
+    aggregates.extend(
+        directories
+            .iter()
+            .map(|directory| (directory.id, DirectoryAggregation::default())),
+    );
 
     // Corrupt or crafted metadata can link directories into parent cycles;
-    // walks stop at the first directory on one so each counts once.
+    // walks go once around a cycle so each member counts content once.
     let cyclic = cyclic_directories(&parent_map);
 
     for directory in directories {
@@ -291,6 +303,7 @@ pub fn aggregate_directory_records(
                 &parent_map,
                 &cyclic,
                 parent_directory_id,
+                Some(directory.id),
                 |aggregate, direct| {
                     if direct {
                         aggregate.direct_entries = aggregate.direct_entries.saturating_add(1);
@@ -307,6 +320,7 @@ pub fn aggregate_directory_records(
             &parent_map,
             &cyclic,
             file.parent_directory_id,
+            None,
             |aggregate, direct| {
                 if direct {
                     aggregate.direct_bytes = aggregate.direct_bytes.saturating_add(file.size_bytes);
@@ -332,24 +346,30 @@ pub fn aggregate_directory_records(
 }
 
 /// Applies `apply` to `start` and each ancestor (the first call with
-/// `direct = true`), stopping at a directory on a parent cycle.
+/// `direct = true`). On a parent cycle the walk goes round once, and it never
+/// reaches `origin` (the directory whose entry is being counted), so no
+/// directory becomes its own descendant.
 fn walk_ancestors(
-    aggregates: &mut HashMap<DirectoryId, DirectoryAggregation>,
-    parent_map: &HashMap<DirectoryId, Option<DirectoryId>>,
-    cyclic: &std::collections::HashSet<DirectoryId>,
+    aggregates: &mut IdHashMap<DirectoryId, DirectoryAggregation>,
+    parent_map: &IdHashMap<DirectoryId, Option<DirectoryId>>,
+    cyclic: &IdHashSet<DirectoryId>,
     mut current: DirectoryId,
+    origin: Option<DirectoryId>,
     mut apply: impl FnMut(&mut DirectoryAggregation, bool),
 ) {
     let mut direct = true;
+    let mut cycle_entry = None;
     while let Some(aggregate) = aggregates.get_mut(&current) {
         apply(aggregate, direct);
         direct = false;
-        if !cyclic.is_empty() && cyclic.contains(&current) {
-            break;
+        if cycle_entry.is_none() && !cyclic.is_empty() && cyclic.contains(&current) {
+            cycle_entry = Some(current);
         }
         match parent_map.get(&current).and_then(|value| *value) {
-            Some(parent) => current = parent,
-            None => break,
+            Some(parent) if Some(parent) != origin && Some(parent) != cycle_entry => {
+                current = parent;
+            }
+            _ => break,
         }
     }
 }
@@ -357,12 +377,13 @@ fn walk_ancestors(
 /// Directories that lie on a parent cycle. Each directory has at most one
 /// parent, so one coloring pass over the chains finds every cycle in O(n).
 fn cyclic_directories(
-    parent_map: &HashMap<DirectoryId, Option<DirectoryId>>,
-) -> std::collections::HashSet<DirectoryId> {
+    parent_map: &IdHashMap<DirectoryId, Option<DirectoryId>>,
+) -> IdHashSet<DirectoryId> {
     const IN_PROGRESS: u8 = 1;
     const DONE: u8 = 2;
-    let mut state: HashMap<DirectoryId, u8> = HashMap::with_capacity(parent_map.len());
-    let mut cyclic = std::collections::HashSet::new();
+    let mut state: IdHashMap<DirectoryId, u8> =
+        IdHashMap::with_capacity_and_hasher(parent_map.len(), Default::default());
+    let mut cyclic = IdHashSet::default();
     let mut path = Vec::new();
     for &start in parent_map.keys() {
         let mut current = start;
@@ -519,8 +540,11 @@ mod tests {
         // Each cycle directory counts the file once, not once per lap.
         assert_eq!(one.total_bytes, 8);
         assert_eq!(one.total_entries, 2);
+        // Every cycle member sees content under any member exactly once, and
+        // no directory counts itself as its own descendant.
         let two = aggregated.iter().find(|d| d.id == DirectoryId(2)).unwrap();
-        assert!(two.total_bytes <= 8 && two.total_entries <= 2, "{two:?}");
+        assert_eq!((two.direct_entries, two.total_entries), (1, 2), "{two:?}");
+        assert_eq!((two.direct_bytes, two.total_bytes), (0, 8), "{two:?}");
     }
     use super::*;
     use crate::{DirectoryId, DirectoryRecord, FileAttributes, FileId, FileRecord};

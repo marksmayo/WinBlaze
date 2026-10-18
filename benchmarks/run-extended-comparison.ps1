@@ -152,6 +152,9 @@ foreach ($targetName in $Targets) {
                     $measured = Invoke-MeasuredProcess -Executable $executables[$tool] -Arguments (Get-Arguments $tool $target.path $csv) -TimeoutSeconds $limit -MemoryLimitBytes $memoryLimit -MeasureEnergy:($baseName -eq 'full')
                 }
             } catch {
+                # Only a timeout is a product result; a launch failure (bad
+                # path, missing binary) is a broken benchmark and must stop it.
+                if ($_.Exception.Message -notmatch ' timed out after \d+ s$') { throw }
                 if ($plan) { Remove-ScanOutputs $plan } else { Remove-Item -LiteralPath $csv -ErrorAction SilentlyContinue }
                 $rows.Add([pscustomobject][ordered]@{ target = $targetName; tool = $tool; run = $run; binary = $identity
                     started_utc = $started.ToString('o'); elevation = $elevation; condition = $condition

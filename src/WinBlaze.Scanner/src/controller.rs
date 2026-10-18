@@ -578,7 +578,7 @@ fn walk_directory_tree(
                         fast_enumeration,
                         scan_root,
                         rules,
-                        inherited_volume(attributes, child_volume),
+                        inherited_volume(attributes, entry.cloud_folder, child_volume),
                     );
                 }
                 ReparseDecision::SkippedCycle => {
@@ -812,17 +812,20 @@ struct FallbackTask {
 /// (junctions, mount points, symlinks) may cross volumes, so they query.
 fn inherited_volume(
     attributes: FileAttributes,
+    cloud_folder: bool,
     parent: Option<crate::directory_metadata::VolumeContext>,
 ) -> Option<crate::directory_metadata::VolumeContext> {
-    // Cloud placeholders (RECALL_ON_OPEN / RECALL_ON_DATA_ACCESS) and offline
-    // folders are listed through a filter driver that may return short
-    // batches, so they and their descendants always ask for the end of the
-    // directory instead of trusting a part-filled batch.
-    const FILTERED: u32 = 0x0004_0000 | 0x0040_0000 | 0x0000_1000;
+    // Cloud placeholders (by reparse tag, even when pinned or hydrated) and
+    // recall/offline folders are listed through a filter driver that may
+    // return short batches, so they and their descendants always ask for the
+    // end of the directory instead of trusting a part-filled batch.
+    use crate::directory_metadata::FILTERED_DIRECTORY_ATTRIBUTES;
     parent
         .filter(|_| !attributes.is_reparse_point())
         .map(|volume| crate::directory_metadata::VolumeContext {
-            fills_batches: volume.fills_batches && attributes.0 & FILTERED == 0,
+            fills_batches: volume.fills_batches
+                && !cloud_folder
+                && attributes.0 & FILTERED_DIRECTORY_ATTRIBUTES == 0,
             ..volume
         })
 }
@@ -1143,7 +1146,7 @@ fn process_fallback_directory(
                         path: entry_path,
                         directory_id,
                         ancestors,
-                        volume: inherited_volume(attributes, child_volume),
+                        volume: inherited_volume(attributes, entry.cloud_folder, child_volume),
                     });
                 }
                 ReparseDecision::SkippedCycle => {
@@ -1402,19 +1405,24 @@ mod tests {
             serial: 7,
             fills_batches: true,
         };
-        let plain = inherited_volume(FileAttributes::DIRECTORY, Some(parent));
+        let plain = inherited_volume(FileAttributes::DIRECTORY, false, Some(parent));
         assert_eq!(plain, Some(parent));
+        // A pinned or hydrated cloud folder has no recall bits but is still
+        // listed through the cloud filter.
+        let cloud = inherited_volume(FileAttributes::DIRECTORY, true, Some(parent)).unwrap();
+        assert!(!cloud.fills_batches, "cloud folder kept the shortcut");
         // RECALL_ON_OPEN, RECALL_ON_DATA_ACCESS, OFFLINE: a filter driver may
         // return short batches for these folders and their descendants.
         for flag in [0x0004_0000u32, 0x0040_0000, 0x0000_1000] {
             let attributes = FileAttributes(FileAttributes::DIRECTORY.0 | flag);
-            let child = inherited_volume(attributes, Some(parent)).unwrap();
+            let child = inherited_volume(attributes, false, Some(parent)).unwrap();
             assert_eq!(child.serial, 7);
             assert!(!child.fills_batches, "flag {flag:#x} kept the shortcut");
         }
         assert_eq!(
             inherited_volume(
                 FileAttributes::DIRECTORY | FileAttributes::REPARSE_POINT,
+                false,
                 Some(parent)
             ),
             None

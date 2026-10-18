@@ -96,6 +96,8 @@ pub struct FindEntry {
     pub created_utc: u64,
     pub modified_utc: u64,
     pub accessed_utc: u64,
+    /// See `DirectoryEntry::cloud_folder`.
+    pub cloud_folder: bool,
 }
 
 pub struct FindIterator {
@@ -236,6 +238,10 @@ impl Iterator for FindIterator {
                 created_utc: filetime(data.ftCreationTime),
                 modified_utc: filetime(data.ftLastWriteTime),
                 accessed_utc: filetime(data.ftLastAccessTime),
+                cloud_folder: crate::directory_metadata::is_cloud_folder(
+                    data.dwFileAttributes,
+                    data.dwReserved0,
+                ),
             }));
         }
     }
@@ -348,6 +354,7 @@ impl Iterator for DirEntries {
                     created_utc: entry.created_utc,
                     modified_utc: entry.modified_utc,
                     accessed_utc: entry.accessed_utc,
+                    cloud_folder: entry.cloud_folder,
                 })
             }),
             DirEntries::Fast(entries) => entries.next(),
@@ -394,6 +401,9 @@ impl Iterator for DirEntries {
                     created_utc: metadata.creation_time(),
                     modified_utc: metadata.last_write_time(),
                     accessed_utc: metadata.last_access_time(),
+                    // The standard-library fallback has no reparse tag; it
+                    // never uses the final-batch shortcut either.
+                    cloud_folder: false,
                 })
             }),
         }

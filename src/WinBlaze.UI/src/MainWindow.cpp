@@ -728,7 +728,10 @@ namespace winrt::WinBlaze::UI::implementation
             if (startup_attributes != INVALID_FILE_ATTRIBUTES && !(startup_attributes & FILE_ATTRIBUTE_DIRECTORY)) {
                 // A file argument is a saved scan (CSV/TSV/JSON/MFT), opened like File > Open scan.
                 m_command_line_action_queued = true;
-                DispatcherQueue().TryEnqueue([this]() { OpenSavedScan(m_startup_scan_path, false); });
+                DispatcherQueue().TryEnqueue([this]() {
+                    OpenSavedScan(m_startup_scan_path, false);
+                    FinishCommandLineAction();
+                });
                 TraceStartup(L"MainWindow queued command-line saved scan");
             } else if (!m_startup_scan_path.empty() && RootPathBox()) {
                 // Same path handling as a typed root: BeginScanFromCurrentRoot
@@ -736,7 +739,10 @@ namespace winrt::WinBlaze::UI::implementation
                 RootPathBox().Text(winrt::hstring(m_startup_scan_path));
                 m_current_root_path = m_startup_scan_path;
                 m_command_line_action_queued = true;
-                DispatcherQueue().TryEnqueue([this]() { BeginScanFromCurrentRoot(false); });
+                DispatcherQueue().TryEnqueue([this]() {
+                    BeginScanFromCurrentRoot(false);
+                    FinishCommandLineAction();
+                });
                 TraceStartup(L"MainWindow queued command-line scan");
             } else {
                 TraceStartup(L"MainWindow auto scan skipped; waiting for user-selected root");
@@ -2237,6 +2243,8 @@ namespace winrt::WinBlaze::UI::implementation
         // load the catalog twice and delay the new results. The queued flag
         // covers a command-line action that has not run yet.
         if (m_command_line_action_queued || m_session_active || m_export_active) {
+            // A queued action that then fails to start restores it instead.
+            m_catalog_restore_deferred = m_command_line_action_queued;
             TraceStartup(L"OnWindowLoaded persisted catalog restore skipped: operation in flight");
         } else {
             LoadPersistedCatalogSnapshot();
@@ -2253,6 +2261,17 @@ namespace winrt::WinBlaze::UI::implementation
                     PromptForUpdateOnLaunchAsync(xaml_root);
                 }
             }
+        }
+    }
+
+    void MainWindow::FinishCommandLineAction()
+    {
+        m_command_line_action_queued = false;
+        // An invalid folder or unreadable saved scan starts nothing; show the
+        // previous catalog as a plain launch would have.
+        if (m_catalog_restore_deferred && !m_session_active && !m_export_active) {
+            m_catalog_restore_deferred = false;
+            LoadPersistedCatalogSnapshot();
         }
     }
 
@@ -2345,9 +2364,13 @@ namespace winrt::WinBlaze::UI::implementation
         }
         else if (key == winrt::Windows::System::VirtualKey::Escape && m_session_active) {
             TraceStartup(L"Escape key cancels the active scan");
-            auto session = m_session;
-            m_session_active = false;
-            m_session = {};
+            ::WinBlaze::UI::NativeBridge::SessionHandle session{};
+            {
+                std::lock_guard guard(m_pending_ui_mutex);
+                session = m_session;
+                m_session_active = false;
+                m_session = {};
+            }
             UpdateStatus(L"Cancelled.");
             ApplyShellState();
             std::thread([session]() {
@@ -3728,22 +3751,32 @@ namespace winrt::WinBlaze::UI::implementation
 
         // Events from an earlier session (a late incremental summary, or a
         // cancelled scan's terminal event) must not land in this one.
-        const uint64_t scan_generation = ++m_scan_generation;
+        // HandleNativeEvent re-checks under m_pending_ui_mutex before it
+        // touches m_session, so a stale terminal event cannot end this scan.
+        uint64_t scan_generation = 0;
+        {
+            std::lock_guard guard(m_pending_ui_mutex);
+            scan_generation = ++m_scan_generation;
+        }
         auto handler = [this, scan_generation](WbEvent const& event) {
             if (scan_generation != m_scan_generation.load()) {
                 return;
             }
-            HandleNativeEvent(event);
+            HandleNativeEvent(event, scan_generation);
         };
-        if (!excluded.empty() || !included.empty()) {
-            m_session = ::WinBlaze::UI::NativeBridge::StartScanRules(root_path.c_str(),
-                excluded.c_str(), included.c_str(), handler);
-        } else {
-            m_session = incremental
+        const auto session = (!excluded.empty() || !included.empty())
+            ? ::WinBlaze::UI::NativeBridge::StartScanRules(root_path.c_str(),
+                excluded.c_str(), included.c_str(), handler)
+            : incremental
                 ? ::WinBlaze::UI::NativeBridge::StartIncrementalScan(root_path.c_str(), handler)
                 : ::WinBlaze::UI::NativeBridge::StartScan(root_path.c_str(), handler);
+        {
+            // Worker threads read m_session under this lock when a terminal
+            // event ends the scan.
+            std::lock_guard guard(m_pending_ui_mutex);
+            m_session = session;
+            m_session_active = true;
         }
-        m_session_active = true;
         m_title_results_ready = false;
         UpdateStatus(incremental ? L"Incremental rescan..." : L"Scanning...");
         UpdateEventText(incremental ? L"Incremental rescan started." : L"Scan started.");
@@ -3758,9 +3791,13 @@ namespace winrt::WinBlaze::UI::implementation
         }
         TraceStartup(L"Cancel button cancels the active scan");
 
-        auto session = m_session;
-        m_session_active = false;
-        m_session = {};
+        ::WinBlaze::UI::NativeBridge::SessionHandle session{};
+        {
+            std::lock_guard guard(m_pending_ui_mutex);
+            session = m_session;
+            m_session_active = false;
+            m_session = {};
+        }
         UpdateStatus(L"Cancelled.");
         ApplyShellState();
         std::thread([session]() {
@@ -6142,7 +6179,7 @@ namespace winrt::WinBlaze::UI::implementation
             (seconds < 10 ? L"0" : L"") + std::to_wstring(seconds) + L"s";
     }
 
-    void MainWindow::HandleNativeEvent(WbEvent const& event)
+    void MainWindow::HandleNativeEvent(WbEvent const& event, uint64_t scan_generation)
     {
         std::wstring status_text;
         std::wstring event_text;
@@ -6341,6 +6378,11 @@ namespace winrt::WinBlaze::UI::implementation
 
         {
             std::lock_guard guard(m_pending_ui_mutex);
+            // A newer scan started after this event passed the handler's
+            // check: drop it rather than end or update that scan.
+            if (scan_generation != m_scan_generation.load()) {
+                return;
+            }
 
             // m_scan_started_at / m_last_scan_duration_text / the UI timing
             // counters below are also read from the UI thread (FlushPendingUiState,

@@ -114,7 +114,8 @@ namespace winrt::WinBlaze::UI::implementation
         void LoadPersistedCatalogSnapshot();
         void UpdateProgress(double percent, std::wstring const& text);
         std::wstring ScanElapsedText();
-        void HandleNativeEvent(WbEvent const& event);
+        void HandleNativeEvent(WbEvent const& event, uint64_t scan_generation);
+        void FinishCommandLineAction();
         std::wstring FormatSummary(WbEvent const& event) const;
         std::wstring FormatSearchQuery();
         std::wstring SectionName(ShellSection section) const;
@@ -467,6 +468,7 @@ namespace winrt::WinBlaze::UI::implementation
         // A command-line scan or import was queued at construction; it loads its
         // own catalog, so the window must not restore the previous one.
         bool m_command_line_action_queued{ false };
+        bool m_catalog_restore_deferred{ false };
         // Bumped per scan; native callbacks from older scans are dropped.
         std::atomic<uint64_t> m_scan_generation{ 0 };
         bool m_treemap_render_requested{ false };

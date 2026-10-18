@@ -96,6 +96,10 @@ pub struct DirectoryEntry {
     pub created_utc: u64,
     pub modified_utc: u64,
     pub accessed_utc: u64,
+    /// A cloud-files placeholder folder (its reparse bit is dropped from
+    /// `attributes` so it is traversed). Its listing passes through the
+    /// cloud filter, which may return short batches.
+    pub cloud_folder: bool,
 }
 
 /// Facts shared by every directory on one volume. A non-reparse child
@@ -153,10 +157,22 @@ extern "system" {
 const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 
+/// RECALL_ON_OPEN, RECALL_ON_DATA_ACCESS and OFFLINE: folders listed through a
+/// filter driver that may return short batches, so the final-batch shortcut
+/// never applies to them or their descendants.
+pub(crate) const FILTERED_DIRECTORY_ATTRIBUTES: u32 = 0x0004_0000 | 0x0040_0000 | 0x0000_1000;
+
 /// Cloud-files placeholders (OneDrive and other providers) use
 /// IO_REPARSE_TAG_CLOUD or one of its CLOUD_1..CLOUD_F variants.
 pub(crate) fn is_cloud_reparse_tag(tag: u32) -> bool {
     tag & 0xFFFF_0FFF == 0x9000_001A
+}
+
+/// A cloud-files placeholder folder, from its raw attributes and reparse tag.
+pub(crate) fn is_cloud_folder(attributes: u32, reparse_tag: u32) -> bool {
+    attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)
+        == FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT
+        && is_cloud_reparse_tag(reparse_tag)
 }
 
 /// Attributes as the walk should see them. A cloud placeholder folder is a
@@ -164,10 +180,7 @@ pub(crate) fn is_cloud_reparse_tag(tag: u32) -> bool {
 /// symlink it aliases no other tree, so it is traversed like any folder.
 /// Files keep the reparse bit so content features never hydrate them.
 pub(crate) fn traversal_attributes(attributes: u32, reparse_tag: u32) -> u32 {
-    let cloud_folder = attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)
-        == FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT
-        && is_cloud_reparse_tag(reparse_tag);
-    if cloud_folder {
+    if is_cloud_folder(attributes, reparse_tag) {
         attributes & !FILE_ATTRIBUTE_REPARSE_POINT
     } else {
         attributes
@@ -248,8 +261,27 @@ fn query_volume(file: &File) -> io::Result<VolumeContext> {
         // A share reports its server's filesystem name ("NTFS") but the
         // redirector need not fill batches, so remote volumes never skip the
         // end-of-directory request.
-        fills_batches: named && filesystem[..ntfs.len()] == ntfs[..] && !is_remote(file),
+        fills_batches: named
+            && filesystem[..ntfs.len()] == ntfs[..]
+            && !is_remote(file)
+            && !is_filtered_directory(file),
     })
+}
+
+/// Whether the opened directory itself (a scan root or reparse target) is a
+/// cloud placeholder or offline/recall folder; see FILTERED_DIRECTORY_ATTRIBUTES.
+fn is_filtered_directory(file: &File) -> bool {
+    // FILE_ATTRIBUTE_TAG_INFO: file attributes, then the reparse tag.
+    let mut info = [0u32; 2];
+    // SAFETY: live handle; the buffer is writable and exactly the 8-byte
+    // FILE_ATTRIBUTE_TAG_INFO (class 9) the call fills.
+    let queried = unsafe {
+        GetFileInformationByHandleEx(file.as_raw_handle(), 9, info.as_mut_ptr().cast(), 8)
+    } != 0;
+    // An unanswered query keeps the safe path: ask for the end of the listing.
+    !queried
+        || info[0] & FILTERED_DIRECTORY_ATTRIBUTES != 0
+        || (info[0] & FILE_ATTRIBUTE_REPARSE_POINT != 0 && is_cloud_reparse_tag(info[1]))
 }
 
 /// Whether `file` was opened through a network redirector: FILE_REMOTE_PROTOCOL_INFO
@@ -386,6 +418,7 @@ impl DirectoryMetadataIterator {
         let entry = (!matches!(name_units, [46] | [46, 46])).then(|| DirectoryEntry {
             name: EntryName::from_wide(name_units),
             attributes: traversal_attributes(u32_at(56), u32_at(68)),
+            cloud_folder: is_cloud_folder(u32_at(56), u32_at(68)),
             size_bytes: (u64_at(40) as i64).max(0) as u64,
             allocation_bytes: (u64_at(48) as i64).max(0) as u64,
             identity: (

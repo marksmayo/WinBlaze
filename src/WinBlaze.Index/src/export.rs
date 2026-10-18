@@ -340,13 +340,7 @@ fn csv_integer(row: &mut Vec<u8>, mut value: u64) {
 }
 
 fn csv_timestamp(row: &mut Vec<u8>, value: Option<i64>) {
-    if let Some(value) = value {
-        let value = unix_seconds(value);
-        if value < 0 {
-            row.push(b'-');
-        }
-        csv_integer(row, value.unsigned_abs());
-    }
+    optional_seconds(row, value);
     row.extend_from_slice(b"\r\n");
 }
 

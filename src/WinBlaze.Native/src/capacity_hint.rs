@@ -51,9 +51,31 @@ fn usage_bucket(used: u64) -> u32 {
     ((used.max(1) as f64).ln() / 1.02_f64.ln()) as u32
 }
 
+/// `X:\` for a root on a local fixed, removable or RAM drive. Shares and
+/// mapped network drives get no usage bucket: asking a slow or disconnected
+/// server for free space blocks until the redirector times out.
+#[cfg(windows)]
+fn local_drive_root(root: &str) -> Option<String> {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetDriveTypeW(root: *const u16) -> u32;
+    }
+    let path = root.strip_prefix(r"\\?\").unwrap_or(root);
+    let bytes = path.as_bytes();
+    if bytes.len() < 2 || !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' {
+        return None;
+    }
+    let drive = format!(r"{}\", &path[..2]);
+    let wide: Vec<u16> = drive.encode_utf16().chain([0]).collect();
+    // SAFETY: NUL-terminated drive root. DRIVE_REMOVABLE, DRIVE_FIXED and
+    // DRIVE_RAMDISK are local; DRIVE_REMOTE and unknown types are skipped.
+    matches!(unsafe { GetDriveTypeW(wide.as_ptr()) }, 2 | 3 | 6).then_some(drive)
+}
+
 #[cfg(windows)]
 fn volume_used_bytes(root: &str) -> Option<u64> {
     use std::os::windows::ffi::OsStrExt;
+    let root = local_drive_root(root)?;
     #[link(name = "kernel32")]
     extern "system" {
         fn GetDiskFreeSpaceExW(
@@ -63,7 +85,7 @@ fn volume_used_bytes(root: &str) -> Option<u64> {
             free: *mut u64,
         ) -> i32;
     }
-    let wide: Vec<u16> = std::ffi::OsStr::new(root)
+    let wide: Vec<u16> = std::ffi::OsStr::new(&root)
         .encode_wide()
         .chain([0])
         .collect();
@@ -196,7 +218,22 @@ pub fn save_hint(path: &Path, scope: &str, files: usize, directories: usize) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::usage_bucket;
+    use super::{local_drive_root, usage_bucket};
+
+    #[test]
+    fn only_local_drive_roots_are_queried_for_volume_usage() {
+        // A share can block for the redirector timeout; it has no bucket.
+        assert_eq!(local_drive_root(r"\\server\share\folder"), None);
+        assert_eq!(local_drive_root(r"\\?\UNC\server\share"), None);
+        assert_eq!(local_drive_root("relative"), None);
+        let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        let expected = format!(r"{}\", &system[..2]);
+        assert_eq!(
+            local_drive_root(&format!(r"{system}\Windows")),
+            Some(expected.clone())
+        );
+        assert_eq!(local_drive_root(&format!(r"\\?\{system}\")), Some(expected));
+    }
 
     #[test]
     fn usage_buckets_separate_large_changes_but_not_small_drift() {

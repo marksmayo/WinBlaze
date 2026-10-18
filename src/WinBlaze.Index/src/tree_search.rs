@@ -91,14 +91,9 @@ fn path_text<'s>(tree: &'s TreeIndex, entry: TreeEntry<'s>, scratch: &'s mut Str
         TreeEntry::File(file) if !file.full_path.is_empty() => &file.full_path,
         TreeEntry::File(file) => {
             scratch.clear();
+            // Same join as TreeIndex::file_display_path, into the reused buffer.
             match tree.directory_full_path(file.parent_directory_id.0) {
-                Some(parent) => {
-                    scratch.push_str(parent);
-                    if !parent.is_empty() && !parent.ends_with('\\') {
-                        scratch.push('\\');
-                    }
-                    scratch.push_str(&file.name);
-                }
+                Some(parent) => winblaze_core::push_join_path(scratch, parent, &file.name),
                 None => scratch.push_str(&file.name),
             }
             scratch

@@ -232,3 +232,30 @@ fn skipped_end_of_directory_request_never_drops_entries_at_batch_boundaries() {
     assert_eq!(created, 45);
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn an_offline_scan_root_never_takes_the_final_batch_shortcut() {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn SetFileAttributesW(path: *const u16, attributes: u32) -> i32;
+    }
+    const DIRECTORY: u32 = 0x10;
+    const OFFLINE: u32 = 0x1000;
+    let root = std::env::temp_dir().join(format!("winblaze-offline-root-{}", std::process::id()));
+    fs::create_dir_all(&root).unwrap();
+    let wide: Vec<u16> = root.as_os_str().encode_wide().chain(Some(0)).collect();
+    let plain = read_directory(&root).unwrap().volume();
+    // SAFETY: NUL-terminated path to a directory this test owns.
+    let marked = unsafe { SetFileAttributesW(wide.as_ptr(), DIRECTORY | OFFLINE) } != 0;
+    let offline = read_directory(&root).unwrap().volume();
+    // SAFETY: as above; restores normal attributes before removal.
+    unsafe { SetFileAttributesW(wide.as_ptr(), DIRECTORY) };
+    fs::remove_dir_all(&root).unwrap();
+    assert!(marked, "could not mark the fixture offline");
+    assert!(
+        plain.fills_batches,
+        "a local NTFS temp folder should use the shortcut"
+    );
+    assert!(!offline.fills_batches, "an offline root kept the shortcut");
+}
