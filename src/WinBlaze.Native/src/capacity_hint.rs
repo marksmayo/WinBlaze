@@ -103,9 +103,41 @@ fn volume_used_bytes(_root: &str) -> Option<u64> {
 /// Read a bounded advisory cache and return the exact scope's estimate with
 /// 5% room for growth. Missing, corrupt or unknown scopes are cache misses.
 pub fn load_hint(path: &Path, scope: &str) -> Option<CapacityHint> {
-    let hints = read_hints(path)?;
-    let hint = hints.iter().find(|hint| hint.scope == scope)?;
-    estimate(scope, hint.files, hint.directories)
+    HintFile::read(path).hint(scope)
+}
+
+/// The hint file as read once at scan start. The end-of-scan update reuses
+/// it instead of reading the file again: disk bytes read are a measured
+/// cost, and the file was the only file a report scan read. A hint another
+/// process saved in between can be overwritten; hints are advisory only.
+#[derive(Default)]
+pub struct HintFile {
+    hints: Vec<StoredHint>,
+}
+
+impl HintFile {
+    /// Missing or corrupt files read as an empty cache.
+    pub fn read(path: &Path) -> Self {
+        Self {
+            hints: read_hints(path).unwrap_or_default(),
+        }
+    }
+
+    pub fn hint(&self, scope: &str) -> Option<CapacityHint> {
+        let hint = self.hints.iter().find(|hint| hint.scope == scope)?;
+        estimate(scope, hint.files, hint.directories)
+    }
+
+    /// See [`save_hint`]; merges into the hints read at scan start.
+    pub fn save(
+        self,
+        path: &Path,
+        scope: &str,
+        files: usize,
+        directories: usize,
+    ) -> io::Result<()> {
+        write_hints(path, self.hints, scope, files, directories)
+    }
 }
 
 fn read_hints(path: &Path) -> Option<Vec<StoredHint>> {
@@ -177,13 +209,22 @@ fn estimate(scope: &str, files: usize, directories: usize) -> Option<CapacityHin
 /// Invalid input leaves previous hints intact. Advice never determines scan
 /// correctness or export success, so callers may ignore I/O failure.
 pub fn save_hint(path: &Path, scope: &str, files: usize, directories: usize) -> io::Result<()> {
+    HintFile::read(path).save(path, scope, files, directories)
+}
+
+fn write_hints(
+    path: &Path,
+    mut hints: Vec<StoredHint>,
+    scope: &str,
+    files: usize,
+    directories: usize,
+) -> io::Result<()> {
     estimate(scope, files, directories).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
             "invalid or excessive allocation estimate",
         )
     })?;
-    let mut hints = read_hints(path).unwrap_or_default();
     if let Some(position) = hints.iter().position(|hint| hint.scope == scope) {
         // Keep unchanged durable advice without a write or atomic replacement.
         if hints[position].files == files && hints[position].directories == directories {
@@ -218,7 +259,29 @@ pub fn save_hint(path: &Path, scope: &str, files: usize, directories: usize) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::{local_drive_root, usage_bucket};
+    use super::{load_hint, local_drive_root, save_hint, usage_bucket, HintFile};
+
+    #[test]
+    fn a_scan_reads_its_hint_file_once_for_the_estimate_and_the_update() {
+        let path = std::env::temp_dir().join(format!("wb-hint-once-{}.bin", std::process::id()));
+        save_hint(&path, "C:\\a\0rules", 10_000, 100).unwrap();
+        let file = HintFile::read(&path);
+        assert_eq!(file.hint("C:\\a\0rules"), load_hint(&path, "C:\\a\0rules"));
+        assert!(file.hint("C:\\a\0rules").is_some());
+        // Disk bytes read are a benchmarked metric: the update must reuse the
+        // hints read at scan start. A second read would see this corruption
+        // and drop the first scope.
+        std::fs::write(&path, b"not a hint file").unwrap();
+        file.save(&path, "C:\\b\0rules", 20_000, 200).unwrap();
+        let first = load_hint(&path, "C:\\a\0rules");
+        let second = load_hint(&path, "C:\\b\0rules");
+        std::fs::remove_file(&path).unwrap();
+        assert!(first.is_some(), "the update re-read the hint file");
+        assert!(second.is_some());
+        // A missing file is an empty cache: nothing to estimate, saves start fresh.
+        let missing = HintFile::read(&path);
+        assert!(missing.hint("C:\\a\0rules").is_none());
+    }
 
     #[test]
     fn only_local_drive_roots_are_queried_for_volume_usage() {

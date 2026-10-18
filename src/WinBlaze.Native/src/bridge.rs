@@ -1244,6 +1244,8 @@ fn forward_events(
     // count; the split below reflects the typical ~50% files / ~12% dirs share
     // and only over-reserves a bounded amount when a volume skews.
     let mut reserved = false;
+    // Read once at walk start; the end-of-scan update reuses it (see HintFile).
+    let mut hint_file: Option<crate::capacity_hint::HintFile> = None;
 
     let drained = rx.for_each_event_until(deadline.map(|(until, _)| until), |event| {
         log.append_scan_event(&event);
@@ -1254,10 +1256,11 @@ fn forward_events(
                     directory_walk = true;
                     // Previous counts are an allocation estimate only. Every
                     // directory and file is still scanned and indexed anew.
-                    if let Some(hint) = crate::capacity_hint::load_hint(&hint_path, &capacity_scope)
-                    {
+                    let file = crate::capacity_hint::HintFile::read(&hint_path);
+                    if let Some(hint) = file.hint(&capacity_scope) {
                         transaction.reserve(hint.files, hint.directories);
                     }
+                    hint_file = Some(file);
                 }
             }
         }
@@ -1308,7 +1311,10 @@ fn forward_events(
                         // the allocation estimate: without it the next walk's
                         // record maps grow by doubling and commit up to twice
                         // what they use. Unchanged counts skip the write.
-                        let _ = crate::capacity_hint::save_hint(
+                        let file = hint_file
+                            .take()
+                            .unwrap_or_else(|| crate::capacity_hint::HintFile::read(&hint_path));
+                        let _ = file.save(
                             &hint_path,
                             &capacity_scope,
                             model.tree.files().len(),
@@ -1381,12 +1387,17 @@ fn forward_events(
 
     if let Some(deferred) = deferred_persist {
         let save_hint = directory_walk && scan_completed;
+        let hints = save_hint.then(|| {
+            hint_file
+                .take()
+                .unwrap_or_else(|| crate::capacity_hint::HintFile::read(&hint_path))
+        });
         let finish = move || {
             write_deferred_snapshot(
                 &mut repository,
                 &mut log,
                 deferred,
-                save_hint.then_some((hint_path.as_path(), capacity_scope.as_str())),
+                hints.map(|file| (hint_path.as_path(), capacity_scope.as_str(), file)),
             )
         };
         if background_persist {
@@ -1460,7 +1471,7 @@ fn write_deferred_snapshot(
     repository: &mut SqliteIndexRepository,
     log: &mut EventLog,
     (model, sessions, lineages, changes): DeferredPersist,
-    hint: Option<(&std::path::Path, &str)>,
+    hint: Option<(&std::path::Path, &str, crate::capacity_hint::HintFile)>,
 ) {
     let result = repository.persist_sorted_records(
         model.tree.volumes(),
@@ -1471,10 +1482,10 @@ fn write_deferred_snapshot(
         &changes,
     );
     log.append_flush("deferred", result.is_ok());
-    if let (true, Some((hint_path, capacity_scope))) = (result.is_ok(), hint) {
+    if let (true, Some((hint_path, capacity_scope, hints))) = (result.is_ok(), hint) {
         // Optional advisory metadata must never make a successful scan or
         // export fail. Only complete persisted walk catalogs update it.
-        let _ = crate::capacity_hint::save_hint(
+        let _ = hints.save(
             hint_path,
             capacity_scope,
             model.tree.files().len(),
