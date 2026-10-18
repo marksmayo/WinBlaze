@@ -2364,13 +2364,9 @@ namespace winrt::WinBlaze::UI::implementation
         }
         else if (key == winrt::Windows::System::VirtualKey::Escape && m_session_active) {
             TraceStartup(L"Escape key cancels the active scan");
-            ::WinBlaze::UI::NativeBridge::SessionHandle session{};
-            {
-                std::lock_guard guard(m_pending_ui_mutex);
-                session = m_session;
-                m_session_active = false;
-                m_session = {};
-            }
+            auto session = m_session;
+            m_session_active = false;
+            m_session = {};
             UpdateStatus(L"Cancelled.");
             ApplyShellState();
             std::thread([session]() {
@@ -3764,19 +3760,17 @@ namespace winrt::WinBlaze::UI::implementation
             }
             HandleNativeEvent(event, scan_generation);
         };
-        const auto session = (!excluded.empty() || !included.empty())
-            ? ::WinBlaze::UI::NativeBridge::StartScanRules(root_path.c_str(),
-                excluded.c_str(), included.c_str(), handler)
-            : incremental
+        // Kept textually stable: the OS XAML host build wraps this block in
+        // m_pending_ui_mutex (scripts/prepare-os-xaml-ui.ps1).
+        if (!excluded.empty() || !included.empty()) {
+            m_session = ::WinBlaze::UI::NativeBridge::StartScanRules(root_path.c_str(),
+                excluded.c_str(), included.c_str(), handler);
+        } else {
+            m_session = incremental
                 ? ::WinBlaze::UI::NativeBridge::StartIncrementalScan(root_path.c_str(), handler)
                 : ::WinBlaze::UI::NativeBridge::StartScan(root_path.c_str(), handler);
-        {
-            // Worker threads read m_session under this lock when a terminal
-            // event ends the scan.
-            std::lock_guard guard(m_pending_ui_mutex);
-            m_session = session;
-            m_session_active = true;
         }
+        m_session_active = true;
         m_title_results_ready = false;
         UpdateStatus(incremental ? L"Incremental rescan..." : L"Scanning...");
         UpdateEventText(incremental ? L"Incremental rescan started." : L"Scan started.");
@@ -3791,13 +3785,9 @@ namespace winrt::WinBlaze::UI::implementation
         }
         TraceStartup(L"Cancel button cancels the active scan");
 
-        ::WinBlaze::UI::NativeBridge::SessionHandle session{};
-        {
-            std::lock_guard guard(m_pending_ui_mutex);
-            session = m_session;
-            m_session_active = false;
-            m_session = {};
-        }
+        auto session = m_session;
+        m_session_active = false;
+        m_session = {};
         UpdateStatus(L"Cancelled.");
         ApplyShellState();
         std::thread([session]() {
