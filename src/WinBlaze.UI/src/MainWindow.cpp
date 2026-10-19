@@ -2215,10 +2215,37 @@ namespace winrt::WinBlaze::UI::implementation
         };
 
         {
-            // The panes size to the window now (star rows); no outer scroll.
-            Grid::SetRow(shell, 1);
-            Grid::SetColumn(shell, 1);
-            root.Children().Append(shell);
+            // The panes size to the window (star rows, WinDirStat proportions)
+            // whenever it is tall enough. When the scan card plus the rows'
+            // minimum heights do not fit (a short window, or high display
+            // scaling), the content keeps those minimums and scrolls instead
+            // of clipping the treemap row off the bottom.
+            auto shell_scroll = ScrollViewer{};
+            shell_scroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
+            shell_scroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
+            shell_scroll.Content(shell);
+            const std::array<RowDefinition, 7> rows{ shell_r0, shell_r1, shell_r2, shell_r3, shell_r4, shell_r5, shell_r6 };
+            auto fit_shell = [shell, shell_scroll, rows]() {
+                const auto margin = shell.Margin();
+                const double viewport = shell_scroll.ViewportHeight() - margin.Top - margin.Bottom;
+                // Auto rows report their laid-out height; star rows count at
+                // their minimum, so the result is the height below which
+                // content would be clipped.
+                double required = shell.RowSpacing() * static_cast<double>(rows.size() - 1);
+                for (auto const& row : rows) {
+                    required += row.Height().GridUnitType == GridUnitType::Auto ? row.ActualHeight() : row.MinHeight();
+                }
+                const double target = (std::max)(viewport, required);
+                if (target > 0.0 && std::abs(shell.Height() - target) > 0.5) {
+                    shell.Height(target);
+                }
+            };
+            shell_scroll.SizeChanged([fit_shell](auto const&, auto const&) { fit_shell(); });
+            // Auto rows change height when banners or cards appear or hide.
+            shell.LayoutUpdated([fit_shell](auto const&, auto const&) { fit_shell(); });
+            Grid::SetRow(shell_scroll, 1);
+            Grid::SetColumn(shell_scroll, 1);
+            root.Children().Append(shell_scroll);
             Content(root);
         }
         TraceStartup(L"BuildShell stable shell end");
