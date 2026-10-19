@@ -68,7 +68,7 @@ meaningful only for long full-drive runs).
 | 47 | Context switches, full drive | resources | measuring | NtQuerySystemInformation per-thread samples (lower bound) |
 | 48 | Memory per million files | resources | measuring | Measured n=10 for all three (2026-10-11); WinBlaze rerun pending after scanner changes |
 | 49 | GUI GDI and USER objects after scan | GUI | measuring | GetGuiResources at results-ready (run-gui-comparison.ps1) |
-| 50 | On-disk footprint | static | measuring | measure-footprint.ps1: WinBlaze 4.58 MiB (UI exe + native DLL) vs WinDirStat 2.77 MiB vs WizTree 10.51 MiB; fat LTO trimmed the DLL 10%; further size cuts would cost scanner speed |
+| 50 | On-disk footprint | static | removed | No longer a medal event: on-disk size is not performance. The measurement script was retired. |
 | 51 | Expand a 10k-child folder | GUI | planned | |
 | 52 | Sort largest folder by size | GUI | planned | |
 | 53 | Treemap redraw after resize | GUI | measuring | run-gui-session-comparison.ps1 + gui-settle.ps1: pixels last change before 400 ms stable |

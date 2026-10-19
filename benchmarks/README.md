@@ -228,7 +228,7 @@ powershell.exe -ExecutionPolicy Bypass -File benchmarks\write-competitor-report.
 
 `powershell -ExecutionPolicy Bypass -File benchmarks/run-winblaze-refresh.ps1 -Runs 10` rebuilds Release binaries, archives current evidence, refreshes WinBlaze scan/export, startup, engine, feature, GUI, full-cache, incremental, index-memory, and public-operation tests, and regenerates the offline HTML report. Competitor observations retain their original dates and versions; this is not a newly interleaved three-product batch. `-SkipBuild` reuses verified binaries. `-IncludeElevated` requires an administrator terminal and refreshes WinBlaze native/MFT workloads without rerunning competitors.
 
-See `PERFORMANCE_IMPROVEMENTS.md` for the 100-point candidate audit. Nine tested production changes are implemented; other entries explicitly distinguish existing optimizations, measurement improvements, and unqualified ideas. `current-optimization-results.json` records descriptive before/after medians. Live-drive changes and uncontrolled caches prevent attributing every percentage to the code changes.
+`current-optimization-results.json` records descriptive before/after medians. Live-drive changes and uncontrolled caches prevent attributing every percentage to the code changes.
 
 Standard and administrator refresh entry points share a Windows named mutex, so their measurement workloads run sequentially. A canceled administrator prompt leaves the relevant elevated refresh pending; excluded observations do not enter medians.
 
@@ -243,14 +243,14 @@ Run `powershell -NoProfile -File tests/ui/export-features.ps1` in a desktop sess
 
 ### CSV interoperability and complete feature views
 
-WinBlaze's File menu now reopens WinBlaze, WinDirStat and WizTree UTF-8 CSV scans, exports multi-pattern/size/UTC-date filtered CSV, and saves dedicated 1920x1080 treemap PNGs. Completed extension totals include every extension; Cleanup pages through all largest files. Dense treemap tiles preserve positive area and omitted children retain aggregate weight. See [red/green evidence](TDD_FEATURE_PARITY_EVIDENCE.md) for the supported schemas, timezone and rendering limits.
+WinBlaze's File menu now reopens WinBlaze, WinDirStat and WizTree UTF-8 CSV scans, exports multi-pattern/size/UTC-date filtered CSV, and saves dedicated 1920x1080 treemap PNGs. Completed extension totals include every extension; Cleanup pages through all largest files. Dense treemap tiles preserve positive area and omitted children retain aggregate weight.
 
 `feature_catalog csv-import <expected-root> <input.csv> <output.csv>` measures importing and re-exporting without scanning. `advanced-filter` and `largest-files` use the normal three-argument shape. `WinBlaze.UI.exe --treemap-png <output.png>` is the unattended adapter for the same GPU/WIC export path as the File menu, using the persisted scan cache. `run-feature-comparison.ps1 -Tools WinBlaze -Runs 10` creates foreign CSV seeds outside timing and runs 16 validated WinBlaze jobs (160 observations); all products have 25 standard jobs plus two separately gated raw-MFT jobs. Every observation records binary identity and supported resource samples. Refresh entry points share a measurement mutex.
 
 Full GUI refreshes now prune completed generated cache copies between repeats, retaining the final cache for restore measurements. JSON result and version-history updates use atomic replacement so a disk/write failure preserves the last complete file. Older WinBlaze CSV timestamps written as FILETIME ticks are accepted and re-exported as true Unix seconds.
 
 
-UI startup profiling: `pwsh -NoProfile -File benchmarks/run-ui-ready-comparison.ps1 -Runs 10` measures fresh-empty-catalog visible/maximized scan-control readiness separately from the hidden first-idle proxy. It uses isolated per-run app data and includes UI Automation plus 10 ms polling overhead. See `UI_STARTUP_IMPROVEMENTS.md` for the 50-candidate audit. Routine tracing is opt-in with `WINBLAZE_STARTUP_TRACE=1`; failure logging remains always enabled.
+UI startup profiling: `pwsh -NoProfile -File benchmarks/run-ui-ready-comparison.ps1 -Runs 10` measures fresh-empty-catalog visible/maximized scan-control readiness separately from the hidden first-idle proxy. It uses isolated per-run app data and includes UI Automation plus 10 ms polling overhead. Routine tracing is opt-in with `WINBLAZE_STARTUP_TRACE=1`; failure logging remains always enabled.
 
 
 Additional performance medals are derived automatically from accepted `current-workflow-results.json` observations on every render: p90 process completion for quick, scale, dense and full-volume datasets (timing variability was retired; see below), plus sampled CPU, peak working set and private memory for the synthetic datasets. P90 and variability require at least ten valid observations from every product; resource medals require at least three nonmissing telemetry samples per product. Quantiles use R-7 linear interpolation. Run `node benchmarks/verify-performance-metrics.mjs` and `node benchmarks/verify-report.mjs` to check eligibility, formulas, missing values and the visible measurement table. Related events have equal medal weight; the podium is not a statistical proof of overall superiority.
@@ -284,7 +284,7 @@ When using `-SkipBuild`, rebuild **all** benchmark targets first, not only the U
 
 ## Repository speed and memory review
 
-[200 ranked candidates](REPOSITORY_PERFORMANCE_IMPROVEMENTS.md) records 50 implemented source targets with overlapping savings and 150 profiling candidates. [Red/green evidence](TDD_REPOSITORY_PERFORMANCE_EVIDENCE.md) separates allocation budgets from process memory. Reproduce with `pwsh -NoProfile -File benchmarks/run-winblaze-refresh.ps1 -Runs 10`, then `node benchmarks/summarize-repository-performance.mjs`, `node benchmarks/render-report.mjs` and `node benchmarks/verify-repository-performance.mjs`. The original baseline is preserved under the path in `artifacts/repository-performance-baseline-path.txt`. The report lists every medal event and product value without dropdowns, and retains every before/after metric, including slower results.
+Reproduce with `pwsh -NoProfile -File benchmarks/run-winblaze-refresh.ps1 -Runs 10`, then `node benchmarks/summarize-repository-performance.mjs`, `node benchmarks/render-report.mjs` and `node benchmarks/verify-repository-performance.mjs`. The original baseline is preserved under the path in `artifacts/repository-performance-baseline-path.txt`. The report lists every medal event and product value without dropdowns, and retains every before/after metric, including slower results.
 
 ## Detailed parity verification
 
@@ -296,11 +296,11 @@ After the main all-product run, use pwsh -NoProfile -File benchmarks/finish-pari
 
 The expanded standard feature plan contains 34 WinBlaze workloads, four WinDirStat workloads and five WizTree workloads (430 n=10 observations). Detailed JSON/TSV/interchange, four verified-content hashes, regex/allocation search, storage costs, multi-root scans, owned NTFS maintenance and owned VHD compaction have explicit scopes and output checks. Missing three-product measurements or differing scopes earn no performance medal.
 
-Startup resource changes are documented separately in STARTUP_RESOURCE_IMPROVEMENTS.md. Fifty concrete targets share five production changes; per-target savings cannot be added. Benchmark first-idle CPU/memory and visible-ready CPU/memory separately. Do not delay readiness, trim working sets or alter the measurement protocol to improve a score.
+Benchmark first-idle CPU/memory and visible-ready CPU/memory separately. Do not delay readiness, trim working sets or alter the measurement protocol to improve a score.
 
 ### Startup peak working set focus
 
-[Focused report](STARTUP_PEAK_WORKING_SET.html) shows all four first-idle measurements, medals, and every peak-memory observation. [Qualification notes](STARTUP_PEAK_WORKING_SET_PLAN.md) distinguish tested loader changes from unproven memory savings. Run `python benchmarks/verify-startup-import-budget.py` after the Release UI build and `node benchmarks/verify-startup-peak-report.mjs` after recording a current n=10 batch. The focused results do not replace the complete 35-category refresh.
+The focused report (`STARTUP_PEAK_WORKING_SET.html`, generated locally) shows all four first-idle measurements, medals, and every peak-memory observation. Run `python benchmarks/verify-startup-import-budget.py` after the Release UI build and `node benchmarks/verify-startup-peak-report.mjs` after recording a current n=10 batch. The focused results do not replace the complete 35-category refresh.
 
 ### Timing variability (retired)
 
@@ -312,9 +312,9 @@ Timing-variability medals (IQR / median) were removed: dividing a fixed launch j
 
 ### Standard-user full-drive private memory focus
 
-[Focused report](FULL_DRIVE_PRIVATE_MEMORY.html) and [qualification notes](FULL_DRIVE_PRIVATE_MEMORY_PLAN.md) describe the completed n=10 comparison: WinBlaze 479.13 MiB (gold), WinDirStat 542.12 MiB, WizTree 913.07 MiB. All runs, including the cold first run, remain included. Four allocation changes passed red/green tests; the observed WinBlaze baseline reduction is 23.14%, with uncontrolled live-volume/cache differences.
+The focused report (`FULL_DRIVE_PRIVATE_MEMORY.html`, generated locally) describes the completed n=10 comparison: WinBlaze 479.13 MiB (gold), WinDirStat 542.12 MiB, WizTree 913.07 MiB. All runs, including the cold first run, remain included. Four allocation changes passed red/green tests; the observed WinBlaze baseline reduction is 23.14%, with uncontrolled live-volume/cache differences.
 
-Use `node benchmarks/render-full-private-memory-report.mjs benchmarks/full-private-memory-current.json --require-gold` to validate identities and render the focus. Current Quick/Empty/Dense reports use `full-private-memory-current.json`; they show the latest variability regressions rather than earlier gold results. `node benchmarks/verify-medal-sample-count.mjs` checks that each medaled metric has ten valid observations per product. Older UI/feature identities require a separate refresh and receive no fresh-build medals.
+Current Quick/Empty/Dense reports use `full-private-memory-current.json`; they show the latest variability regressions rather than earlier gold results. `node benchmarks/verify-medal-sample-count.mjs` checks that each medaled metric has ten valid observations per product. Older UI/feature identities require a separate refresh and receive no fresh-build medals.
 
 ### Continuous results and competitor records
 

@@ -45,3 +45,19 @@ MultipleQualifiersPerDimensionFound.txt
 *.etl
 *.trace
 logs/
+
+# Benchmark results are generated locally; README.md summarizes them.
+# Harness inputs (budgets, event definitions, templates) stay tracked.
+benchmarks/*.json
+!benchmarks/performance-budgets.json
+!benchmarks/performance-budgets.release.json
+!benchmarks/original-medal-events.json
+!benchmarks/unsupported-events.json
+!benchmarks/feature-comparison.json
+benchmarks/*.csv
+benchmarks/*.html
+!benchmarks/report-template.html
+benchmarks/*.svg
+benchmarks/CURRENT_COMPARISON.md
+benchmarks/competitor-report.md
+benchmarks/performance-calibration-report.md
