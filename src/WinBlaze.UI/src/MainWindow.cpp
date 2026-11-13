@@ -2236,7 +2236,11 @@ namespace winrt::WinBlaze::UI::implementation
                     required += row.Height().GridUnitType == GridUnitType::Auto ? row.ActualHeight() : row.MinHeight();
                 }
                 const double target = (std::max)(viewport, required);
-                if (target > 0.0 && std::abs(shell.Height() - target) > 0.5) {
+                // An unset Height is NaN, and no comparison with NaN is true:
+                // test for it explicitly, or the height is never assigned and
+                // the panes (the whole folder list) measure at unbounded height.
+                const double current = shell.Height();
+                if (target > 0.0 && (std::isnan(current) || std::abs(current - target) > 0.5)) {
                     shell.Height(target);
                 }
             };
