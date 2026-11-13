@@ -41,6 +41,8 @@ namespace
     constexpr int64_t kUnixToFileTimeSeconds = 11'644'473'600LL;
     constexpr size_t kTreeListVirtualizedWindowLimit = 256;
     constexpr size_t kCatalogSnapshotLoadLimit = 8192;
+    // Shortest spacing of treemap redraws: the coalescing timer's period.
+    constexpr std::chrono::milliseconds kTreemapRenderInterval{ 33 };
     constexpr size_t kRecentIssueLimit = 6;
     // Mirrors winblaze_core::ScanIssueKind::FastScanUnavailable's wire code
     // (see WinBlaze.Native/src/bridge.rs); the fast NTFS-MFT reader was
@@ -693,6 +695,15 @@ namespace winrt::WinBlaze::UI::implementation
 
             LocalFree(arguments);
         }
+        const DWORD startup_attributes = m_startup_scan_path.empty()
+            ? INVALID_FILE_ATTRIBUTES : GetFileAttributesW(m_startup_scan_path.c_str());
+        const bool startup_saved_scan = startup_attributes != INVALID_FILE_ATTRIBUTES &&
+            !(startup_attributes & FILE_ATTRIBUTE_DIRECTORY);
+        if (startup_saved_scan) {
+            // Parse the file while XAML builds the shell; OpenSavedScan, queued
+            // below, collects this import instead of starting its own.
+            ::WinBlaze::UI::NativeBridge::PrestartImportCsv(m_startup_scan_path.c_str(), false);
+        }
         try {
             Closed({ this, &MainWindow::OnWindowClosed });
             BuildShell();
@@ -723,9 +734,7 @@ namespace winrt::WinBlaze::UI::implementation
             m_initializing_shell = false;
             ApplyShellState();
             TraceStartup(L"MainWindow after shell ready apply");
-            const DWORD startup_attributes = m_startup_scan_path.empty()
-                ? INVALID_FILE_ATTRIBUTES : GetFileAttributesW(m_startup_scan_path.c_str());
-            if (startup_attributes != INVALID_FILE_ATTRIBUTES && !(startup_attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+            if (startup_saved_scan) {
                 // A file argument is a saved scan (CSV/TSV/JSON/MFT), opened like File > Open scan.
                 m_command_line_action_queued = true;
                 DispatcherQueue().TryEnqueue([this]() {
@@ -738,12 +747,13 @@ namespace winrt::WinBlaze::UI::implementation
                 // trims quotes, normalises slashes and validates the folder.
                 RootPathBox().Text(winrt::hstring(m_startup_scan_path));
                 m_current_root_path = m_startup_scan_path;
-                m_command_line_action_queued = true;
-                DispatcherQueue().TryEnqueue([this]() {
-                    BeginScanFromCurrentRoot(false);
-                    FinishCommandLineAction();
-                });
-                TraceStartup(L"MainWindow queued command-line scan");
+                // Start now, while the window is still being shown: the scan
+                // runs on its own threads, and its events wait for the
+                // message loop. Queuing it behind the first frame left the
+                // scan idle for the whole show.
+                BeginScanFromCurrentRoot(false);
+                FinishCommandLineAction();
+                TraceStartup(L"MainWindow started command-line scan");
             } else {
                 TraceStartup(L"MainWindow auto scan skipped; waiting for user-selected root");
             }
@@ -2259,12 +2269,9 @@ namespace winrt::WinBlaze::UI::implementation
     void MainWindow::OnWindowLoaded(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
         TraceStartup(L"OnWindowLoaded begin");
-        if (!m_composition_rendering_registered) {
-            m_composition_rendering_token = Microsoft::UI::Xaml::Media::CompositionTarget::Rendering(
-                { this, &MainWindow::OnCompositionRendering });
-            m_composition_rendering_registered = true;
-            TraceStartup(L"OnWindowLoaded composition rendering registered");
-        }
+        // Frame statistics subscribe only while the diagnostics panel shows
+        // them (UpdateFrameStatsSubscription): a Rendering handler makes XAML
+        // tick the UI thread on every frame for as long as it is attached.
         UpdateBreadcrumbs();
         TraceStartup(L"OnWindowLoaded after breadcrumbs");
         UpdateSearchPreview(FormatSearchQuery());
@@ -2273,14 +2280,37 @@ namespace winrt::WinBlaze::UI::implementation
         // own catalog when it finishes; restoring the previous one now would
         // load the catalog twice and delay the new results. The queued flag
         // covers a command-line action that has not run yet.
+        bool restore_catalog = false;
         if (m_command_line_action_queued || m_session_active || m_export_active) {
             // A queued action that then fails to start restores it instead.
             m_catalog_restore_deferred = m_command_line_action_queued;
             TraceStartup(L"OnWindowLoaded persisted catalog restore skipped: operation in flight");
         } else {
+            restore_catalog = true;
+        }
+        // Loading the engine, restoring the previous catalog and the update
+        // check wait until this first layout is drawn and pending input has
+        // been served: none of them is needed to show a usable window.
+        const uint64_t generation = m_snapshot_load_generation.load();
+        auto weak = get_weak();
+        const bool queued = Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread().TryEnqueue(
+            Microsoft::UI::Dispatching::DispatcherQueuePriority::Low,
+            [weak, restore_catalog, generation]() {
+                if (auto self = weak.get()) { self->RunDeferredStartupWork(restore_catalog, generation); }
+            });
+        if (!queued) { RunDeferredStartupWork(restore_catalog, generation); }
+        TraceStartup(L"OnWindowLoaded end; engine load and update check deferred");
+    }
+
+    void MainWindow::RunDeferredStartupWork(bool restore_catalog, uint64_t generation)
+    {
+        TraceStartup(L"RunDeferredStartupWork begin");
+        // Skip the restore if anything began loading or scanning meanwhile.
+        if (restore_catalog && !m_session_active && !m_export_active && !m_title_results_ready &&
+            generation == m_snapshot_load_generation.load()) {
             LoadPersistedCatalogSnapshot();
         }
-        TraceStartup(L"OnWindowLoaded after persisted catalog snapshot");
+        TraceStartup(L"RunDeferredStartupWork after persisted catalog snapshot");
 
         // Once per launch, check GitHub for a newer release and (only if one
         // exists) offer an update dialog. Non-blocking; silent when up to date
@@ -2292,6 +2322,30 @@ namespace winrt::WinBlaze::UI::implementation
                     PromptForUpdateOnLaunchAsync(xaml_root);
                 }
             }
+        }
+    }
+
+    void MainWindow::UpdateFrameStatsSubscription()
+    {
+        const bool wanted = m_active_view == AppView::Explorer && m_show_runtime_metrics &&
+            DiagnosticsCard() != nullptr;
+        if (wanted == m_composition_rendering_registered) {
+            return;
+        }
+        if (wanted) {
+            {
+                // Measure frame intervals from now, not from the last time the panel was open.
+                std::lock_guard guard(m_pending_ui_mutex);
+                m_last_composition_frame_time = {};
+            }
+            m_composition_rendering_token = Microsoft::UI::Xaml::Media::CompositionTarget::Rendering(
+                { this, &MainWindow::OnCompositionRendering });
+            m_composition_rendering_registered = true;
+            // The panel's treemap line was not maintained while it was hidden.
+            RefreshTreemapStatusText(m_treemap_render_width, m_treemap_render_height);
+        } else {
+            Microsoft::UI::Xaml::Media::CompositionTarget::Rendering(m_composition_rendering_token);
+            m_composition_rendering_registered = false;
         }
     }
 
@@ -3753,6 +3807,7 @@ namespace winrt::WinBlaze::UI::implementation
         m_live_directory_backlog.clear();
         m_live_backlog_cursor = 0;
         m_last_live_tree_refresh = {};
+        m_live_tree_scan_started = std::chrono::steady_clock::now();
         {
             std::lock_guard guard(m_pending_ui_mutex);
             m_scan_started_at = std::chrono::steady_clock::now();
@@ -4036,19 +4091,67 @@ namespace winrt::WinBlaze::UI::implementation
         winrt::Windows::Foundation::IInspectable const&,
         Microsoft::UI::Xaml::SizeChangedEventArgs const& args)
     {
-        if (!TreemapSurfaceStatusText()) {
+        const auto size = args.NewSize();
+        NotifyTreemapSurfaceResized(size.Width, size.Height);
+    }
+
+    MainWindow::PerformanceProbe MainWindow::PerformanceProbeForTests() const
+    {
+        PerformanceProbe probe;
+        probe.frame_stats_subscribed = m_composition_rendering_registered;
+        probe.treemap_renders = m_total_treemap_render_flush_count;
+        probe.treemap_status_writes = m_treemap_status_write_count;
+        probe.swap_chain_creations = m_swap_chain_creation_count;
+        probe.session_active = m_session_active;
+        probe.catalog_entries = m_tree_catalog.size();
+        probe.rows_at_results_title = m_results_title_probe.rows_at_results_title;
+        probe.catalog_entries_at_results_title = m_results_title_probe.catalog_entries_at_results_title;
+        probe.search_hits_at_results_title = m_results_title_probe.search_hits_at_results_title;
+        probe.treemap_renders_while_results_pending = m_treemap_renders_while_results_pending;
+        return probe;
+    }
+
+    void MainWindow::NotifyTreemapSurfaceResized(double width, double height)
+    {
+        if (!TreemapSurface()) {
             return;
         }
 
-        const auto size = args.NewSize();
         m_treemap_render_dirty = true;
-        ScheduleTreemapRender(L"treemap surface resized");
+        const int pixel_width = (std::max)(1, static_cast<int>(width));
+        const int pixel_height = (std::max)(1, static_cast<int>(height));
+        // An idle window redraws its treemap in the same pass as the resize,
+        // so the new size never shows a stretched old frame for a timer
+        // period. The coalescing timer still serves the first frame (which
+        // creates the render device), scans, and resizes that arrive faster
+        // than a frame, such as a window edge being dragged.
+        const bool draw_now = !m_session_active && m_total_treemap_render_flush_count > 0 && !ResultsApplyPending() &&
+            std::chrono::steady_clock::now() - m_last_treemap_render_completed_at >= kTreemapRenderInterval;
+        if (draw_now) {
+            if (m_treemap_render_timer) {
+                m_treemap_render_timer.Stop();
+            }
+            m_treemap_render_requested = false;
+            RenderTreemapNow(pixel_width, pixel_height);
+        } else {
+            ScheduleTreemapRender(L"treemap surface resized");
+            RefreshTreemapStatusText(pixel_width, pixel_height);
+        }
+    }
+
+    void MainWindow::RefreshTreemapStatusText(int width, int height)
+    {
+        // Shown only in the diagnostics panel; not maintained until it exists.
+        if (!DiagnosticsCard() || !TreemapSurfaceStatusText()) {
+            return;
+        }
+        ++m_treemap_status_write_count;
         TreemapSurfaceStatusText().Text(winrt::hstring(
             L"SwapChainPanel host active: " +
-            std::to_wstring(static_cast<int>(size.Width)) + L"x" +
-            std::to_wstring(static_cast<int>(size.Height)) +
+            std::to_wstring(width) + L"x" +
+            std::to_wstring(height) +
             L" px. " + m_treemap_render_status));
-        UpdatePerformanceCounters(L"treemap surface resized");
+        UpdatePerformanceCounters(L"treemap surface");
     }
 
     bool MainWindow::EnsureTreemapRenderStack(int width, int height)
@@ -4157,12 +4260,33 @@ namespace winrt::WinBlaze::UI::implementation
             m_render_target_bitmap = nullptr;
         }
 
-        // Swapchain + target bitmap: rebuilt only when missing or resized.
-        if (!m_render_swap_chain || width != m_render_swap_width || height != m_render_swap_height) {
-            // Release references to the old back buffer before the swapchain.
+        // Swapchain: created once and bound to the panel once. A resize keeps
+        // it and resizes its buffers; only the D2D target bitmap is rebuilt.
+        if (m_render_swap_chain && (width != m_render_swap_width || height != m_render_swap_height)) {
+            // ResizeBuffers needs every reference to the old back buffer gone.
             m_render_d2d_context->SetTarget(nullptr);
             m_render_target_bitmap = nullptr;
-            m_render_swap_chain = nullptr;
+            winrt::com_ptr<ID3D11DeviceContext> immediate;
+            m_render_d3d_device->GetImmediateContext(immediate.put());
+            if (immediate) {
+                immediate->ClearState();
+                immediate->Flush();
+            }
+            result = m_render_swap_chain->ResizeBuffers(
+                0,
+                static_cast<UINT>((std::max)(1, width)),
+                static_cast<UINT>((std::max)(1, height)),
+                DXGI_FORMAT_UNKNOWN,
+                0);
+            if (FAILED(result)) {
+                // Fall back to a fresh swapchain below.
+                m_render_swap_chain = nullptr;
+            }
+        }
+
+        if (!m_render_swap_chain) {
+            m_render_d2d_context->SetTarget(nullptr);
+            m_render_target_bitmap = nullptr;
 
             winrt::com_ptr<IDXGIDevice> dxgi_device;
             result = m_render_d3d_device->QueryInterface(__uuidof(IDXGIDevice), dxgi_device.put_void());
@@ -4211,8 +4335,26 @@ namespace winrt::WinBlaze::UI::implementation
                 return false;
             }
 
+            auto panel_native = TreemapSurface().try_as<ISwapChainPanelNative>();
+            if (!panel_native) {
+                m_treemap_render_status = L"Treemap render panel interface unavailable.";
+                ResetTreemapRenderStack();
+                return false;
+            }
+            result = panel_native->SetSwapChain(swap_chain.get());
+            if (FAILED(result)) {
+                m_treemap_render_status = L"Treemap render panel bind failed: " + HresultText(result);
+                ResetTreemapRenderStack();
+                return false;
+            }
+
+            ++m_swap_chain_creation_count;
+            m_render_swap_chain = swap_chain;
+        }
+
+        if (!m_render_target_bitmap) {
             winrt::com_ptr<ID3D11Texture2D> back_buffer;
-            result = swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), back_buffer.put_void());
+            result = m_render_swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), back_buffer.put_void());
             if (FAILED(result)) {
                 m_treemap_render_status = L"Treemap render back-buffer failed: " + HresultText(result);
                 ResetTreemapRenderStack();
@@ -4241,26 +4383,10 @@ namespace winrt::WinBlaze::UI::implementation
                 ResetTreemapRenderStack();
                 return false;
             }
-
-            // Bind the swapchain to the panel once, when it is (re)created.
-            auto panel_native = TreemapSurface().try_as<ISwapChainPanelNative>();
-            if (!panel_native) {
-                m_treemap_render_status = L"Treemap render panel interface unavailable.";
-                ResetTreemapRenderStack();
-                return false;
-            }
-            result = panel_native->SetSwapChain(swap_chain.get());
-            if (FAILED(result)) {
-                m_treemap_render_status = L"Treemap render panel bind failed: " + HresultText(result);
-                ResetTreemapRenderStack();
-                return false;
-            }
-
-            m_render_swap_chain = swap_chain;
             m_render_target_bitmap = target_bitmap;
-            m_render_swap_width = width;
-            m_render_swap_height = height;
         }
+        m_render_swap_width = width;
+        m_render_swap_height = height;
 
         return true;
     }
@@ -4801,7 +4927,9 @@ namespace winrt::WinBlaze::UI::implementation
                 m_png_export_result = pngResult;
             }
 
-            result = swap_chain->Present(1, 0);
+            // Sync interval 0: the compositor still shows the frame on its
+            // next refresh, but this thread does not wait for it.
+            result = swap_chain->Present(0, 0);
             if (FAILED(result)) {
                 m_treemap_render_status = L"Treemap probe frame present failed: " + HresultText(result);
                 ResetTreemapRenderStack();
@@ -5054,8 +5182,10 @@ namespace winrt::WinBlaze::UI::implementation
     {
         bool should_start = false;
         bool urgent = false;
+        bool results_ready = false;
         {
             std::lock_guard guard(m_pending_ui_mutex);
+            results_ready = m_pending_ui_state.reload_snapshot;
             urgent = !m_session_active || !m_scan_flush_throttled ||
                 m_pending_ui_state.reload_snapshot || m_pending_ui_state.shell_state_dirty;
             // An urgent request re-arms a timer already waiting on the slow interval.
@@ -5070,7 +5200,12 @@ namespace winrt::WinBlaze::UI::implementation
                 return;
             }
             TraceStartup(L"ScheduleUiFlush requested");
-            DispatcherQueue().TryEnqueue([this, urgent]() {
+            DispatcherQueue().TryEnqueue([this, urgent, results_ready]() {
+                if (results_ready) {
+                    // The scan has ended: nothing further will be coalesced.
+                    FlushPendingUiState();
+                    return;
+                }
                 TraceStartup(L"ScheduleUiFlush timer started");
                 m_ui_flush_timer.Stop();
                 m_ui_flush_timer.Interval(std::chrono::milliseconds(urgent ? 16 : 100));
@@ -5092,7 +5227,7 @@ namespace winrt::WinBlaze::UI::implementation
         m_treemap_render_requested = true;
         if (!m_treemap_render_timer) {
             m_treemap_render_timer = Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread().CreateTimer();
-            m_treemap_render_timer.Interval(std::chrono::milliseconds(33));
+            m_treemap_render_timer.Interval(kTreemapRenderInterval);
             m_treemap_render_timer.IsRepeating(false);
             m_treemap_render_timer.Tick([this](auto const&, auto const&) { OnTreemapRenderTick(); });
         }
@@ -5112,6 +5247,12 @@ namespace winrt::WinBlaze::UI::implementation
         if (!TreemapSurface()) {
             return;
         }
+        // Results about to be applied replace whatever this frame would
+        // show, and applying them schedules the next frame.
+        if (ResultsApplyPending()) {
+            m_treemap_render_dirty = true;
+            return;
+        }
 
         // While a scan streams events, cap treemap redraws: catalog
         // flushes mark the map dirty continuously, and re-laying-out
@@ -5126,24 +5267,25 @@ namespace winrt::WinBlaze::UI::implementation
                 return;
             }
         }
-        ++m_total_treemap_render_flush_count;
-
         const int width = (std::max)(1, static_cast<int>(TreemapSurface().ActualWidth()));
         const int height = (std::max)(1, static_cast<int>(TreemapSurface().ActualHeight()));
+        RenderTreemapNow(width, height);
+    }
+
+    void MainWindow::RenderTreemapNow(int width, int height)
+    {
+        if (ResultsApplyPending()) {
+            ++m_treemap_renders_while_results_pending;
+        }
+        ++m_total_treemap_render_flush_count;
         TimedFlushSection(L"treemap render", [&] { RenderTreemapProbeFrame(width, height); });
         m_last_treemap_render_completed_at = std::chrono::steady_clock::now();
-        if (TreemapSurfaceStatusText()) {
-            TreemapSurfaceStatusText().Text(winrt::hstring(
-                L"SwapChainPanel host active: " +
-                std::to_wstring(width) + L"x" +
-                std::to_wstring(height) +
-                L" px. " + m_treemap_render_status));
-        }
-        {
+
+        if (m_composition_rendering_registered) {
             std::lock_guard guard(m_pending_ui_mutex);
             m_last_composition_frame_time = std::chrono::steady_clock::now();
         }
-        UpdatePerformanceCounters(L"treemap render flush");
+        RefreshTreemapStatusText(width, height);
     }
 
     void MainWindow::FlushPendingUiState()
@@ -6072,33 +6214,69 @@ namespace winrt::WinBlaze::UI::implementation
         // (and therefore `this`) outlives the app's dispatcher queue, which
         // stops running callbacks at shutdown.
         const uint64_t generation = ++m_snapshot_load_generation;
+        m_results_apply_pending = true;
         UpdateStatus(L"Loading catalog snapshot...");
         auto dispatcher = DispatcherQueue();
         std::thread([this, generation, dispatcher]() {
-            auto snapshot = std::make_shared<std::vector<TreeCatalogEntry>>();
-            snapshot->reserve(kCatalogSnapshotLoadLimit);
-            WbIndexSnapshotStats stats{};
-            stats = ::WinBlaze::UI::NativeBridge::LoadCatalogSnapshotWithStats(
-                [&snapshot, this](WbCatalogEntry const& entry) {
-                    if (snapshot->size() < kCatalogSnapshotLoadLimit) {
-                        snapshot->push_back(CatalogEntryFromNative(entry));
-                    }
-                });
-            dispatcher.TryEnqueue([this, generation, stats, snapshot]() {
+            // The counts are enough to show the folder tree, treemap and
+            // title; the flat search catalog (8192 entries with formatted
+            // text) follows on this thread while the UI shows those.
+            const WbIndexSnapshotStats stats = ::WinBlaze::UI::NativeBridge::LoadCatalogSnapshotStats();
+            dispatcher.TryEnqueue([this, generation, stats]() {
                 if (generation != m_snapshot_load_generation.load()) {
                     TraceStartup(L"LoadPersistedCatalogSnapshot stale result dropped");
                     return;
                 }
-                ApplyPersistedCatalogSnapshot(stats, std::move(*snapshot));
+                ApplyPersistedCatalogSnapshot(stats);
             });
+            if (stats.volumes + stats.directories + stats.files == 0) {
+                return;
+            }
+            auto entries = std::make_shared<std::vector<TreeCatalogEntry>>();
+            entries->reserve(kCatalogSnapshotLoadLimit);
+            ::WinBlaze::UI::NativeBridge::LoadCatalogSnapshotWithStats(
+                [&entries, this](WbCatalogEntry const& entry) {
+                    if (entries->size() < kCatalogSnapshotLoadLimit) {
+                        entries->push_back(CatalogEntryFromNative(entry));
+                    }
+                });
+            dispatcher.TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low,
+                [this, generation, entries]() {
+                    if (generation != m_snapshot_load_generation.load()) {
+                        return;
+                    }
+                    ApplyDeferredCatalogEntries(std::move(*entries));
+                });
         }).detach();
     }
 
-    void MainWindow::ApplyPersistedCatalogSnapshot(
-        WbIndexSnapshotStats stats,
-        std::vector<TreeCatalogEntry> snapshot)
+    bool MainWindow::ResultsApplyPending()
+    {
+        if (m_results_apply_pending) {
+            return true;
+        }
+        std::lock_guard guard(m_pending_ui_mutex);
+        return m_pending_ui_state.reload_snapshot;
+    }
+
+    void MainWindow::ApplyDeferredCatalogEntries(std::vector<TreeCatalogEntry> entries)
+    {
+        TraceStartup(L"ApplyDeferredCatalogEntries begin");
+        m_tree_catalog = std::move(entries);
+        m_instant_search_hits = FilterTreeCatalog();
+        UpdateTreeSnapshotPreview(m_instant_search_hits);
+        UpdateSearchResultsPreview(m_instant_search_hits);
+        UpdateCatalogSnapshot();
+        UpdateSummaryText();
+        UpdateRuntimeSnapshot();
+        LoadExtensionStatsSnapshot();
+        TraceStartup(L"ApplyDeferredCatalogEntries end");
+    }
+
+    void MainWindow::ApplyPersistedCatalogSnapshot(WbIndexSnapshotStats stats)
     {
         TraceStartup(L"ApplyPersistedCatalogSnapshot begin");
+        m_results_apply_pending = false;
         m_tree_catalog.clear();
         m_tree_catalog_keys.clear();
         m_instant_search_hits.clear();
@@ -6121,7 +6299,7 @@ namespace winrt::WinBlaze::UI::implementation
             L", files=" + std::to_wstring(stats.files) + L")" +
             (stats.cache_loaded_from_backup != 0 ? L", source=backup" : L", source=primary");
 
-        if (snapshot.empty()) {
+        if (stats.volumes + stats.directories + stats.files == 0) {
             TraceStartup(L"ApplyPersistedCatalogSnapshot empty");
             UpdateTreeSnapshotPreview(std::vector<TreeCatalogEntry>{});
             UpdateSearchResultsPreview(std::vector<TreeCatalogEntry>{});
@@ -6134,33 +6312,20 @@ namespace winrt::WinBlaze::UI::implementation
             UpdateStatus(L"No catalog snapshot available.");
             return;
         }
-        m_tree_catalog = std::move(snapshot);
-
         m_has_results = true;
-        m_instant_search_hits = FilterTreeCatalog();
-        TraceStartup(L"ApplyPersistedCatalogSnapshot after filter");
-        UpdateTreeSnapshotPreview(m_instant_search_hits);
-        TraceStartup(L"ApplyPersistedCatalogSnapshot after tree preview");
-        UpdateSearchResultsPreview(m_instant_search_hits);
-        TraceStartup(L"ApplyPersistedCatalogSnapshot after search preview");
-        UpdateCatalogSnapshot();
         m_treemap_render_dirty = true;
         ScheduleTreemapRender(L"snapshot loaded");
-        UpdateSummaryText();
-        UpdateRuntimeSnapshot();
-        TraceStartup(L"ApplyPersistedCatalogSnapshot after summary");
         // Replace the flat preview in the tree pane with the real expandable
         // folder tree served by the native tree index (hot cache by now).
+        // The search previews, catalog text and extension list follow in
+        // ApplyDeferredCatalogEntries, after the results show.
         LoadTreeSnapshot();
-        // Extension stats spawn another FFI pass plus a ListView rebuild;
-        // run them on the next dispatcher tick so this apply never blocks
-        // the UI thread for one long stretch.
-        DispatcherQueue().TryEnqueue([this]() {
-            LoadExtensionStatsSnapshot();
-        });
         UpdateStatus(!m_multiple_root_paths.empty()
             ? L"Combined live catalog loaded. Warnings: " + std::to_wstring(m_multiple_root_warnings)
             : m_imported_snapshot ? L"Imported scan loaded. Original files were not accessed." : L"Catalog snapshot loaded.");
+        m_results_title_probe.rows_at_results_title = TreeListView() ? TreeListView().Items().Size() : 0;
+        m_results_title_probe.catalog_entries_at_results_title = m_tree_catalog.size();
+        m_results_title_probe.search_hits_at_results_title = m_instant_search_hits.size();
         // The title announces results only once the tree and lists hold them.
         m_title_results_ready = true;
         UpdateWindowTitle();
@@ -6980,7 +7145,9 @@ namespace winrt::WinBlaze::UI::implementation
         // starved for the scan's whole duration. Refresh sparsely — the live
         // view is a progress indicator, not a working surface.
         const auto now = std::chrono::steady_clock::now();
-        if (now - m_last_live_tree_refresh < std::chrono::milliseconds(2000)) {
+        if (!LiveTreeRefreshDue(
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - m_live_tree_scan_started),
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_live_tree_refresh))) {
             return;
         }
         m_last_live_tree_refresh = now;
@@ -7208,7 +7375,7 @@ namespace winrt::WinBlaze::UI::implementation
             // Each row is a small XAML tree (~1 ms to build), so a full window
             // costs hundreds of ms. Show the first rows now and append the rest
             // on later dispatcher ticks, so results appear and input stays live.
-            static constexpr size_t kTreeRowsFirstChunk = 48;
+            static constexpr size_t kTreeRowsFirstChunk = 24;
             static constexpr size_t kTreeRowsPerTick = 64;
             const uint64_t generation = ++m_tree_fill_generation;
             m_tree_selection_updates_suppressed = true;
@@ -7473,6 +7640,7 @@ namespace winrt::WinBlaze::UI::implementation
         SetControlVisibility(m_cleanup_card, m_active_view == AppView::Cleanup);
         SetControlVisibility(m_settings_card, m_active_view == AppView::Settings);
         SetControlVisibility(m_support_card, m_active_view == AppView::Support);
+        UpdateFrameStatsSubscription();
     }
 
     void MainWindow::SwitchView(AppView view)

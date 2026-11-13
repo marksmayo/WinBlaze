@@ -30,8 +30,13 @@ public:
     auto CreateTimer() const { return m_queue.CreateTimer(); }
     bool TryEnqueue(winrt::Windows::System::DispatcherQueueHandler const& handler) const
     {
+        return TryEnqueue(winrt::Windows::System::DispatcherQueuePriority::Normal, handler);
+    }
+    bool TryEnqueue(winrt::Windows::System::DispatcherQueuePriority priority,
+        winrt::Windows::System::DispatcherQueueHandler const& handler) const
+    {
         if (m_closed->load()) return false;
-        return m_queue.TryEnqueue([handler, closed = m_closed] {
+        return m_queue.TryEnqueue(priority, [handler, closed = m_closed] {
             if (!closed->load()) handler();
         });
     }
@@ -169,7 +174,7 @@ struct OsDesktopWindow : winrt::implements<Derived,
     void Title(winrt::hstring const& title) { SetWindowTextW(m_owner, title.c_str()); }
     auto DispatcherQueue() const { return OsHostDispatcher(m_dispatcher, m_dispatch_closed); }
     void Closed(ClosedHandler const& handler) { m_closed = handler; }
-    void Activate() { ShowWindow(m_owner, SW_SHOW); SetForegroundWindow(m_owner); }
+    void Activate(int show = SW_SHOW) { ShowWindow(m_owner, show); SetForegroundWindow(m_owner); }
     bool PreTranslate(MSG const& message)
     {
         BOOL handled{};

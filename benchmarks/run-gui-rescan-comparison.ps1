@@ -11,6 +11,8 @@ param(
 #   rescan_ms             median time of $Rescans full rescans in one session
 #   memory_growth_bytes   working set after the last rescan minus after the first scan
 #   small_change_ms       one added file, then the product's fastest refresh until done
+# working_set_series_bytes / private_bytes_series hold one sample after the
+# first scan and one after each rescan, to tell a plateau from steady growth.
 # Refresh commands: WinDirStat File > Refresh All (32813); WizTree Scan button;
 # WinBlaze "Start scan" / "Incremental rescan" buttons (UI Automation).
 $ErrorActionPreference = 'Stop'
@@ -178,7 +180,10 @@ foreach ($tool in $Tools) {
         $process = Start-Process -FilePath $executables[$tool] -ArgumentList $arguments[$tool] -PassThru
         try {
             $deadline = [DateTime]::UtcNow.AddSeconds(600)
-            $seen = $false
+            # The initial scan is not timed. WinBlaze's title names the target
+            # only once its own scan of it has finished, and a command-line
+            # scan can now finish before a "Scanning" title is ever observable.
+            $seen = $tool -eq 'WinBlaze'
             while (!($seen -and (Test-Ready $tool $process))) {
                 if ([DateTime]::UtcNow -gt $deadline) { throw "$tool initial scan did not finish" }
                 if (Test-Scanning $tool $process) { $seen = $true }
@@ -186,10 +191,12 @@ foreach ($tool in $Tools) {
             }
             Start-Sleep -Milliseconds 500
             $process.Refresh(); $first = $process.WorkingSet64
+            $workingSetSeries = @($first); $privateSeries = @($process.PrivateMemorySize64)
             $times = @()
             for ($i = 1; $i -le $Rescans; $i++) {
                 $times += Measure-Scan $tool $process (Get-RescanAction $tool $process $false)
                 Start-Sleep -Milliseconds 300
+                $process.Refresh(); $workingSetSeries += $process.WorkingSet64; $privateSeries += $process.PrivateMemorySize64
             }
             $process.Refresh(); $last = $process.WorkingSet64
             Set-Content -LiteralPath $marker -Value 'changed'
@@ -201,6 +208,7 @@ foreach ($tool in $Tools) {
                 scope = "GUI session on the $TargetName dataset: $Rescans full rescans, then one added file and the product's fastest refresh"
                 rescan_ms = [math]::Round($median, 2); rescan_times_ms = $times
                 memory_growth_bytes = $last - $first; working_set_first_bytes = $first; working_set_last_bytes = $last
+                working_set_series_bytes = $workingSetSeries; private_bytes_series = $privateSeries
                 small_change_ms = $small
             })
             Write-BenchmarkJson -Path $OutputPath -Value $rows.ToArray()

@@ -1,13 +1,116 @@
 //! Reopen an exported scan without accessing its source filesystem.
 use crate::{BufferedIndexTransaction, TreeIndex};
 use std::{
+    borrow::Cow,
     collections::HashMap,
     io::{self, Read},
 };
 use winblaze_core::{DirectoryId, DirectoryRecord, FileAttributes, FileId, FileRecord};
 
+// Hash-map probes made while linking rows to directories; counted in tests only.
+#[cfg(test)]
+thread_local! {
+    static ANCESTOR_PROBES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static PARENT_PROBES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[inline(always)]
+fn count_ancestor_probe() {
+    #[cfg(test)]
+    ANCESTOR_PROBES.with(|count| count.set(count.get() + 1));
+}
+
+#[inline(always)]
+fn count_parent_probe() {
+    #[cfg(test)]
+    PARENT_PROBES.with(|count| count.set(count.get() + 1));
+}
+
 fn invalid(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+/// Hashes import paths a word at a time. Every row's path is hashed at least
+/// once (the duplicate check, then directory lookups), and SipHash over 250k
+/// long paths was about half of reopening a scan. The seed is random per
+/// process, as for the standard hasher, so a crafted file cannot choose its
+/// collisions in advance.
+#[derive(Clone, Copy)]
+struct PathHashState {
+    seed: u64,
+}
+
+impl PathHashState {
+    fn new() -> Self {
+        use std::hash::{BuildHasher, Hasher};
+        Self {
+            seed: std::collections::hash_map::RandomState::new()
+                .build_hasher()
+                .finish(),
+        }
+    }
+}
+
+impl Default for PathHashState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::hash::BuildHasher for PathHashState {
+    type Hasher = PathHasher;
+    fn build_hasher(&self) -> PathHasher {
+        PathHasher(self.seed)
+    }
+}
+
+struct PathHasher(u64);
+
+impl PathHasher {
+    #[inline]
+    fn mix(&mut self, word: u64) {
+        self.0 = (self.0.rotate_left(23) ^ word).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    }
+}
+
+impl std::hash::Hasher for PathHasher {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        let mut words = bytes.chunks_exact(8);
+        for word in &mut words {
+            self.mix(u64::from_le_bytes(word.try_into().expect("8-byte chunk")));
+        }
+        let rest = words.remainder();
+        let mut last = [0u8; 8];
+        last[..rest.len()].copy_from_slice(rest);
+        self.mix(u64::from_le_bytes(last) ^ ((bytes.len() as u64) << 56));
+    }
+
+    #[inline]
+    fn write_u8(&mut self, value: u8) {
+        self.mix(u64::from(value));
+    }
+
+    #[inline]
+    fn write_u64(&mut self, value: u64) {
+        self.mix(value);
+    }
+
+    #[inline]
+    fn write_usize(&mut self, value: usize) {
+        self.mix(value as u64);
+    }
+
+    #[inline]
+    fn finish(&self) -> u64 {
+        // Murmur3's finalizer: the table uses both the low and the top bits.
+        let mut hash = self.0;
+        hash ^= hash >> 33;
+        hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
+        hash ^= hash >> 33;
+        hash = hash.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
+        hash ^ (hash >> 33)
+    }
 }
 
 /// A path compared as `str::to_lowercase` would, allocating only for non-ASCII
@@ -26,6 +129,13 @@ impl<'a> FoldedPath<'a> {
         }
     }
 
+    fn raw(&self) -> &[u8] {
+        match self {
+            Self::Ascii(path) => path.as_bytes(),
+            Self::Lowered(path) => path.as_bytes(),
+        }
+    }
+
     fn bytes(&self) -> impl Iterator<Item = u8> + '_ {
         let (bytes, fold) = match self {
             Self::Ascii(path) => (path.as_bytes(), true),
@@ -39,25 +149,31 @@ impl<'a> FoldedPath<'a> {
 
 impl std::hash::Hash for FoldedPath<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // Fixed-size chunks: equal paths make identical write sequences.
-        let mut chunk = [0u8; 64];
-        let mut len = 0;
-        for byte in self.bytes() {
-            chunk[len] = byte;
-            len += 1;
-            if len == chunk.len() {
-                state.write(&chunk);
-                len = 0;
-            }
+        // Words of ASCII-lowercased bytes. Lowering is a no-op on the output
+        // of `to_lowercase`, so an ASCII path and a non-ASCII path that fold
+        // to the same text (K and the Kelvin sign) write identical words.
+        let bytes = self.raw();
+        let mut words = bytes.chunks_exact(8);
+        for word in &mut words {
+            let mut folded: [u8; 8] = word.try_into().expect("8-byte chunk");
+            folded.make_ascii_lowercase();
+            state.write_u64(u64::from_le_bytes(folded));
         }
-        state.write(&chunk[..len]);
-        state.write_u8(0xff);
+        let rest = words.remainder();
+        let mut last = [0u8; 8];
+        last[..rest.len()].copy_from_slice(rest);
+        last.make_ascii_lowercase();
+        state.write_u64(u64::from_le_bytes(last));
+        state.write_usize(bytes.len());
     }
 }
 
 impl PartialEq for FoldedPath<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.bytes().eq(other.bytes())
+        match (self, other) {
+            (Self::Ascii(left), Self::Ascii(right)) => left.eq_ignore_ascii_case(right),
+            _ => self.bytes().eq(other.bytes()),
+        }
     }
 }
 
@@ -75,16 +191,32 @@ fn is_descendant(path: &str, parent: &str) -> bool {
         .starts_with(&(parent.to_lowercase() + "\\"))
 }
 
-fn rows(input: &str, delimiter: char) -> io::Result<Vec<Vec<String>>> {
+/// One parsed field: a slice of the input unless unescaping needed a copy.
+type Field<'a> = Cow<'a, str>;
+type Row<'a> = Vec<Field<'a>>;
+
+fn owned_rows(rows: Vec<Row<'_>>) -> Vec<Vec<String>> {
+    rows.into_iter()
+        .map(|row| row.into_iter().map(Cow::into_owned).collect())
+        .collect()
+}
+
+fn field_rows(rows: Vec<Vec<String>>) -> Vec<Row<'static>> {
+    rows.into_iter()
+        .map(|row| row.into_iter().map(Cow::Owned).collect())
+        .collect()
+}
+
+fn rows(input: &str, delimiter: char) -> io::Result<Vec<Row<'_>>> {
     // Byte scanning: the delimiter, quote and line breaks are ASCII, so every
     // split point is a UTF-8 boundary and unquoted fields copy as whole slices.
     let delimiter = u8::try_from(delimiter).map_err(|_| invalid("Unsupported CSV delimiter"))?;
     let bytes = input.as_bytes();
     let mut rows = Vec::new();
-    let mut row: Vec<String> = Vec::with_capacity(7);
+    let mut row: Row = Vec::with_capacity(7);
     let mut at = 0;
     loop {
-        let mut field = String::new();
+        let mut field: Field = Cow::Borrowed("");
         let mut closed = false;
         if bytes.get(at) == Some(&b'"') {
             at += 1;
@@ -92,10 +224,17 @@ fn rows(input: &str, delimiter: char) -> io::Result<Vec<Vec<String>>> {
                 let Some(quote) = bytes[at..].iter().position(|&b| b == b'"') else {
                     return Err(invalid("Unclosed CSV quote"));
                 };
-                field.push_str(&input[at..at + quote]);
+                let piece = &input[at..at + quote];
                 at += quote + 1;
-                if bytes.get(at) == Some(&b'"') {
-                    field.push('"');
+                let escaped = bytes.get(at) == Some(&b'"');
+                if field.is_empty() && !escaped {
+                    // The usual case: the whole quoted field is one input slice.
+                    field = Cow::Borrowed(piece);
+                } else {
+                    field.to_mut().push_str(piece);
+                }
+                if escaped {
+                    field.to_mut().push('"');
                     at += 1;
                 } else {
                     break;
@@ -117,7 +256,7 @@ fn rows(input: &str, delimiter: char) -> io::Result<Vec<Vec<String>>> {
             }
         };
         if !closed {
-            field.push_str(&input[start..at]);
+            field = Cow::Borrowed(&input[start..at]);
         }
         match end_of_row {
             Some(false) => {
@@ -226,7 +365,7 @@ fn read_delimited(
     ];
     if rows
         .first()
-        .is_some_and(|row| row.iter().map(String::as_str).eq(detailed_header))
+        .is_some_and(|row| row.iter().map(|value| &**value).eq(detailed_header))
     {
         for row in rows.iter_mut().skip(1) {
             if row.len() != 14 {
@@ -260,7 +399,7 @@ fn read_delimited(
                     return Err(invalid("Invalid volume identity"));
                 }
                 detailed_metadata.insert(
-                    row[0].clone(),
+                    row[0].to_string(),
                     ImportedMetadata {
                         attributes: Some(
                             row[7].parse().map_err(|_| invalid("Invalid attributes"))?,
@@ -268,7 +407,7 @@ fn read_delimited(
                         created: optional_time(&row[8])?,
                         accessed: optional_time(&row[9])?,
                         export: crate::tree::FileExportMetadata {
-                            owner: (!row[10].is_empty()).then(|| row[10].clone()),
+                            owner: (!row[10].is_empty()).then(|| row[10].to_string()),
                             volume_identity: volume,
                             file_identity: optional_number(&row[12])?,
                             link_count: if row[13].is_empty() {
@@ -332,14 +471,15 @@ fn read_delimited(
         }
     }
     let header = rows.first().ok_or_else(|| invalid("Empty CSV"))?;
-    let foreign_windirstat = header.first().map(String::as_str) == Some("Name")
+    let first_caption = header.first().map(|value| &**value);
+    let foreign_windirstat = first_caption == Some("Name")
         || (matches!(header.len(), 9 | 10)
             && header.iter().any(|caption| caption.contains("WinDirStat"))
             && rows.get(1).and_then(|row| row.get(7)).is_some_and(|flags| {
                 flags.starts_with("0x") && u32::from_str_radix(&flags[2..], 16).is_ok()
             }));
-    if header.first().map(String::as_str) == Some("Path")
-        && !header.iter().map(String::as_str).eq([
+    if first_caption == Some("Path")
+        && !header.iter().map(|value| &**value).eq([
             "Path",
             "Kind",
             "LogicalBytes",
@@ -351,28 +491,21 @@ fn read_delimited(
     {
         return Err(invalid("Invalid WinBlaze CSV header"));
     }
-    if !foreign_windirstat
-        && !matches!(
-            header.first().map(String::as_str),
-            Some("Path" | "Name" | "File Name")
-        )
-    {
+    if !foreign_windirstat && !matches!(first_caption, Some("Path" | "Name" | "File Name")) {
         return Err(invalid("Unsupported CSV schema"));
     }
-    let allow_legacy_ticks = header.first().map(String::as_str) == Some("Path");
-    let metadata = if foreign_windirstat {
-        windirstat_metadata(&rows)
-    } else {
-        detailed_metadata
-    };
-    let rows = if foreign_windirstat {
-        windirstat(rows)?
-    } else if header.first().map(String::as_str) == Some("File Name") {
-        wiztree(rows, &local_to_utc, timezone)?
-    } else {
-        rows
-    };
-    build_import_metadata(rows, allow_legacy_ticks, metadata)
+    let allow_legacy_ticks = first_caption == Some("Path");
+    // Foreign schemas are rewritten row by row; WinBlaze's own rows stay borrowed.
+    if foreign_windirstat {
+        let rows = owned_rows(rows);
+        let metadata = windirstat_metadata(&rows);
+        return build_import_metadata(field_rows(windirstat(rows)?), allow_legacy_ticks, metadata);
+    }
+    if first_caption == Some("File Name") {
+        let rows = wiztree(owned_rows(rows), &local_to_utc, timezone)?;
+        return build_import_metadata(field_rows(rows), allow_legacy_ticks, detailed_metadata);
+    }
+    build_import_metadata(rows, allow_legacy_ticks, detailed_metadata)
 }
 
 #[derive(Default)]
@@ -383,18 +516,26 @@ struct ImportedMetadata {
     export: crate::tree::FileExportMetadata,
 }
 fn build_import_metadata(
-    mut rows: Vec<Vec<String>>,
+    mut rows: Vec<Row<'_>>,
     allow_legacy_ticks: bool,
     metadata: HashMap<String, ImportedMetadata>,
 ) -> io::Result<TreeIndex> {
     for row in rows.iter_mut().skip(1) {
         if row.get(1).is_some_and(|kind| kind == "Directory") {
             let len = row[0].trim_end_matches('\\').len();
-            row[0].truncate(len);
+            match &mut row[0] {
+                Cow::Borrowed(path) => *path = &path[..len],
+                Cow::Owned(path) => path.truncate(len),
+            }
         }
     }
-    let mut directories = HashMap::new();
-    let mut seen = std::collections::HashSet::new();
+    // Read-only from here: directory keys below are slices of these rows.
+    let rows = rows;
+    // Value: the id, and whether this path's ancestors are already registered.
+    let hash_state = PathHashState::new();
+    let mut directories: HashMap<&str, (DirectoryId, bool), PathHashState> =
+        HashMap::with_hasher(hash_state);
+    let mut seen = std::collections::HashSet::with_capacity_and_hasher(rows.len(), hash_state);
     for row in rows.iter().skip(1) {
         if row.len() != 7 {
             return Err(invalid("Wrong number of CSV fields"));
@@ -414,29 +555,28 @@ fn build_import_metadata(
         }
         if row[1] == "Directory" {
             let id = DirectoryId(directories.len() as u64 + 1);
-            directories.insert(row[0].clone(), id);
+            directories.insert(&*row[0], (id, false));
         }
     }
     let multiple = directories.contains_key(crate::multiple_roots::ROOT_PATH);
-    let top_roots: std::collections::HashSet<_> = if multiple {
+    let top_roots: std::collections::HashSet<&str, PathHashState> = if multiple {
         directories
             .keys()
             .filter(|path| {
-                path.as_str() != crate::multiple_roots::ROOT_PATH
+                **path != crate::multiple_roots::ROOT_PATH
                     && !directories.keys().any(|parent| {
-                        parent.as_str() != crate::multiple_roots::ROOT_PATH
-                            && is_descendant(path, parent)
+                        *parent != crate::multiple_roots::ROOT_PATH && is_descendant(path, parent)
                     })
             })
-            .cloned()
+            .copied()
             .collect()
     } else {
-        Default::default()
+        std::collections::HashSet::with_hasher(hash_state)
     };
     // The common containing directory becomes the root for files-only exports.
     let mut parents = rows.iter().skip(1).map(|r| {
         if r[1] == "Directory" {
-            Ok(r[0].as_str())
+            Ok(&*r[0])
         } else {
             r[0].rsplit_once('\\')
                 .map(|(p, _)| p)
@@ -463,16 +603,25 @@ fn build_import_metadata(
             common.truncate(len);
         }
     }
+    let mut linked = "";
     for row in rows.iter().skip(1) {
         let mut path = if row[1] == "Directory" {
-            row[0].as_str()
+            &*row[0]
         } else {
             row[0].rsplit_once('\\').unwrap().0
         };
+        // Consecutive rows usually share a parent that is already linked.
+        if !linked.is_empty() && path == linked {
+            continue;
+        }
+        linked = path;
         loop {
-            if !directories.contains_key(path) {
-                let id = DirectoryId(directories.len() as u64 + 1);
-                directories.insert(path.to_owned(), id);
+            count_ancestor_probe();
+            let next_id = DirectoryId(directories.len() as u64 + 1);
+            let entry = directories.entry(path).or_insert((next_id, false));
+            // A linked directory already registered every ancestor up to the root.
+            if std::mem::replace(&mut entry.1, true) {
+                break;
             }
             if path.eq_ignore_ascii_case(&common) || top_roots.contains(path) {
                 break;
@@ -488,24 +637,24 @@ fn build_import_metadata(
         rows.iter().skip(1).filter(|r| r[1] == "File").count(),
         directories.len(),
     );
-    for (path, id) in &directories {
+    for (&path, &(id, _)) in &directories {
         let parent = path
             .rsplit_once('\\')
             .and_then(|(p, _)| directories.get(p))
-            .copied()
-            .or_else(|| (multiple && path != &common).then(|| directories[&common]));
+            .map(|&(parent, _)| parent)
+            .or_else(|| (multiple && path != common).then(|| directories[common.as_str()].0));
         tx.insert_directory(DirectoryRecord {
-            id: *id,
+            id,
             parent_directory_id: parent,
             name: if top_roots.contains(path) {
-                path.clone()
+                path.to_owned()
             } else {
                 path.rsplit('\\').next().unwrap_or(path).into()
             },
             full_path: if path.len() == 2 && path.ends_with(':') {
                 format!("{path}\\")
             } else {
-                path.clone()
+                path.to_owned()
             },
             direct_bytes: 0,
             total_bytes: 0,
@@ -513,23 +662,36 @@ fn build_import_metadata(
             total_entries: 0,
         });
     }
-    for (ordinal, row) in rows.iter_mut().skip(1).enumerate() {
+    let mut last_parent: Option<(&str, DirectoryId)> = None;
+    for (ordinal, row) in rows.iter().skip(1).enumerate() {
         if row[1] == "Directory" {
             continue;
         }
         if row[1] != "File" {
             return Err(invalid("Unknown record kind"));
         }
-        let path = std::mem::take(&mut row[0]);
-        let (parent, name) = path
+        let path: &str = &row[0];
+        let (parent_path, name) = path
             .rsplit_once('\\')
             .ok_or_else(|| invalid("File has no parent path"))?;
-        let parent = directories
-            .get(parent)
-            .copied()
-            .ok_or_else(|| invalid("Missing parent directory"))?;
-        let name = name.to_owned();
-        let details = metadata.get(&path);
+        // Consecutive files usually share a directory: compare before hashing.
+        let parent = match last_parent {
+            Some((known, id)) if known == parent_path => id,
+            _ => {
+                count_parent_probe();
+                let id = directories
+                    .get(parent_path)
+                    .ok_or_else(|| invalid("Missing parent directory"))?
+                    .0;
+                last_parent = Some((parent_path, id));
+                id
+            }
+        };
+        let details = if metadata.is_empty() {
+            None
+        } else {
+            metadata.get(path)
+        };
         tx.insert_file(FileRecord {
             id: FileId(ordinal as u64 + 1),
             parent_directory_id: parent,
@@ -583,7 +745,7 @@ fn build_import_metadata(
     }
     for row in rows.iter().skip(1).filter(|row| row[1] == "Directory") {
         let totals = tree
-            .rollup_for(directories[&row[0]].0)
+            .rollup_for(directories[&*row[0]].0 .0)
             .ok_or_else(|| invalid("Disconnected directory"))?;
         if totals.logical_bytes != row[2].parse::<u64>().unwrap()
             || totals.physical_bytes != row[3].parse::<u64>().unwrap()
@@ -655,7 +817,7 @@ fn localized_windirstat_json(entries: Vec<OrderedJsonFields>) -> io::Result<Tree
         rows.push(row);
     }
     let metadata = windirstat_metadata(&rows);
-    build_import_metadata(windirstat(rows)?, false, metadata)
+    build_import_metadata(field_rows(windirstat(rows)?), false, metadata)
 }
 
 /// Reopens WinBlaze's versioned JSON or English WinDirStat JSON without filesystem access.
@@ -740,7 +902,7 @@ pub fn read_json(input: impl Read) -> io::Result<TreeIndex> {
                 ]);
             }
             let metadata = windirstat_metadata(&rows);
-            return build_import_metadata(windirstat(rows)?, false, metadata);
+            return build_import_metadata(field_rows(windirstat(rows)?), false, metadata);
         }
     };
     if document.schema_version != 1 {
@@ -790,7 +952,7 @@ pub fn read_json(input: impl Read) -> io::Result<TreeIndex> {
                 .unwrap_or_default(),
         ]);
     }
-    build_import_metadata(rows, false, metadata)
+    build_import_metadata(field_rows(rows), false, metadata)
 }
 
 fn windirstat_metadata(rows: &[Vec<String>]) -> HashMap<String, ImportedMetadata> {
@@ -958,4 +1120,157 @@ fn import_timestamp(text: &str, allow_legacy_ticks: bool) -> io::Result<i64> {
         return Ok(value);
     }
     unix_to_ticks(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HEADER: &str =
+        "Path,Kind,LogicalBytes,AllocatedBytes,Files,Directories,ModifiedUnixSeconds\r\n";
+
+    fn deep_export(depth: usize, files: usize) -> (String, String) {
+        let mut directory = String::from("C:");
+        for level in 0..depth {
+            directory.push_str(&format!("\\level{level}"));
+        }
+        let mut csv = String::from(HEADER);
+        csv.push_str(&format!(
+            "\"C:\",Directory,{files},{files},{files},{depth},\r\n"
+        ));
+        for file in 0..files {
+            csv.push_str(&format!(
+                "\"{directory}\\f{file}.bin\",File,1,1,0,0,1700000000\r\n"
+            ));
+        }
+        (csv, directory)
+    }
+
+    fn reset_probes() {
+        ANCESTOR_PROBES.with(|count| count.set(0));
+        PARENT_PROBES.with(|count| count.set(0));
+    }
+
+    #[test]
+    fn folded_paths_hash_and_compare_like_lowercased_text() {
+        use std::hash::BuildHasher;
+        let state = PathHashState::new();
+        let hash = |path: &str| state.hash_one(FoldedPath::new(path));
+        for (left, right) in [
+            ("C:\\Users\\Me\\Report.TXT", "c:\\users\\me\\report.txt"),
+            ("Z:\\o\\\u{212A}.txt", "Z:\\o\\k.txt"),
+            ("Z:\\EIGHTCHR", "z:\\eightchr"),
+        ] {
+            assert!(
+                FoldedPath::new(left) == FoldedPath::new(right),
+                "{left} vs {right}"
+            );
+            assert_eq!(hash(left), hash(right), "{left} vs {right}");
+        }
+        for (left, right) in [
+            ("C:\\a", "C:\\b"),
+            ("C:\\abcdefgh", "C:\\abcdefgh\\x"),
+            ("C:\\abcdefgh\u{0}", "C:\\abcdefgh"),
+            ("Z:\\o\\\u{c9}.txt", "Z:\\o\\e.txt"),
+        ] {
+            assert!(
+                FoldedPath::new(left) != FoldedPath::new(right),
+                "{left} vs {right}"
+            );
+            assert_ne!(hash(left), hash(right), "{left} vs {right}");
+        }
+    }
+
+    #[test]
+    fn parsed_fields_borrow_the_input_unless_a_quote_is_escaped() {
+        let input = "plain,\"quoted text\",\"say \"\"hi\"\"\"\r\n";
+        let parsed = rows(input, ',').unwrap();
+        let inside = |field: &str| {
+            let start = input.as_ptr() as usize;
+            (start..start + input.len()).contains(&(field.as_ptr() as usize))
+        };
+        assert_eq!(parsed[0].len(), 3);
+        assert_eq!(&*parsed[0][0], "plain");
+        assert_eq!(&*parsed[0][1], "quoted text");
+        assert_eq!(&*parsed[0][2], "say \"hi\"");
+        assert!(
+            inside(&parsed[0][0]),
+            "an unquoted field must not be copied"
+        );
+        assert!(
+            inside(&parsed[0][1]),
+            "a quoted field without escapes must not be copied"
+        );
+        assert!(
+            !inside(&parsed[0][2]),
+            "an escaped quote needs an unescaped copy"
+        );
+    }
+
+    #[test]
+    fn sibling_files_do_not_rewalk_their_shared_ancestors() {
+        let (csv, directory) = deep_export(50, 1000);
+        reset_probes();
+        let tree = read_csv(csv.as_bytes()).unwrap();
+        let probes = ANCESTOR_PROBES.with(|count| count.get());
+        assert_eq!(tree.files().len(), 1000);
+        assert_eq!(tree.directories().len(), 51);
+        assert!(
+            tree.directories().iter().any(|d| d.full_path == directory),
+            "deepest directory must be created from the file paths"
+        );
+        // One walk up the 50 levels, then at most one probe per further row.
+        assert!(probes <= 1000 + 60, "ancestor probes: {probes}");
+    }
+
+    #[test]
+    fn consecutive_files_reuse_their_parent_lookup() {
+        let (csv, _) = deep_export(5, 1000);
+        reset_probes();
+        read_csv(csv.as_bytes()).unwrap();
+        let probes = PARENT_PROBES.with(|count| count.get());
+        assert!(probes <= 2, "parent probes: {probes}");
+    }
+
+    #[test]
+    fn interleaved_parents_still_resolve_each_file_to_its_own_directory() {
+        let mut csv = String::from(HEADER);
+        csv.push_str("\"C:\\r\",Directory,15,15,4,2,\r\n");
+        for (path, bytes) in [("a\\1", 1), ("b\\2", 2), ("a\\3", 4), ("b\\4", 8)] {
+            csv.push_str(&format!("\"C:\\r\\{path}\",File,{bytes},{bytes},0,0,\r\n"));
+        }
+        let tree = read_csv(csv.as_bytes()).unwrap();
+        let bytes = |path: &str| {
+            let directory = tree
+                .directories()
+                .iter()
+                .find(|d| d.full_path == path)
+                .unwrap();
+            tree.rollup_for(directory.id.0).unwrap().logical_bytes
+        };
+        assert_eq!(bytes("C:\\r\\a"), 5);
+        assert_eq!(bytes("C:\\r\\b"), 10);
+        assert_eq!(bytes("C:\\r"), 15);
+    }
+
+    #[test]
+    fn a_directory_row_listed_after_its_files_keeps_its_ancestors() {
+        // The explicit row for "C:\r\a\deep" is registered before any walk, so
+        // a walk that reaches it must still continue up to the root.
+        let mut csv = String::from(HEADER);
+        csv.push_str("\"C:\\r\",Directory,3,3,2,3,\r\n");
+        csv.push_str("\"C:\\r\\a\\deep\\x\\1\",File,1,1,0,0,\r\n");
+        csv.push_str("\"C:\\r\\a\\deep\",Directory,3,3,2,1,\r\n");
+        csv.push_str("\"C:\\r\\a\\deep\\x\\2\",File,2,2,0,0,\r\n");
+        let tree = read_csv(csv.as_bytes()).unwrap();
+        let names: Vec<_> = tree
+            .directories()
+            .iter()
+            .map(|d| d.full_path.as_str())
+            .collect();
+        for path in ["C:\\r", "C:\\r\\a", "C:\\r\\a\\deep", "C:\\r\\a\\deep\\x"] {
+            assert!(names.contains(&path), "missing {path}: {names:?}");
+        }
+        assert_eq!(names.len(), 4);
+    }
 }

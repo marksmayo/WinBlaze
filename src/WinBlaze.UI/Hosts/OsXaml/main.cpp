@@ -1,6 +1,7 @@
 #include "full-os-candidate/MainWindow.xaml.h"
 #include <exception>
 #include "full-os-candidate/StartupTrace.h"
+#include "full-os-candidate/NativeBridge.h"
 #include "DrainBeforeRelease.h"
 
 // Balance only this additional COM initialization after the window and XAML manager release.
@@ -21,11 +22,17 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
     SetUnhandledExceptionFilter(WinBlazeUnhandledExceptionFilter);
     TraceStartup(L"wWinMain begin");
     try {
+        // A saved scan on the command line starts parsing now, on its own
+        // thread, while this thread brings up XAML and builds the window.
+        ::WinBlaze::UI::NativeBridge::PrestartCommandLineImport();
         ScopedNoLegacyDde no_legacy_dde;
         winrt::init_apartment(winrt::apartment_type::single_threaded);
+        TraceStartup(L"wWinMain after apartment");
         // Per-monitor-v2 awareness is established by the embedded manifest.
         auto manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+        TraceStartup(L"wWinMain after XAML manager");
         auto window = winrt::make_self<winrt::WinBlaze::UI::implementation::MainWindow>();
+        TraceStartup(L"wWinMain after window construction");
         auto weak_window = window->get_weak();
         DrainBeforeRelease shutdown(window, [&manager] {
             manager.Close();
@@ -38,8 +45,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         HWND owner{};
         winrt::check_hresult(window.as<IWindowNative>()->get_WindowHandle(&owner));
         window->Title(L"WinBlaze");
-        window->Activate();
-        ShowWindow(owner, SW_MAXIMIZE);
+        // One show: SW_SHOW followed by SW_MAXIMIZE sized, activated and
+        // laid out the window twice before it could answer its first message.
+        window->Activate(SW_SHOWMAXIMIZED);
+        TraceStartup(L"wWinMain window shown; entering message loop");
         MSG message{};
         while (IsWindow(owner) && GetMessageW(&message, nullptr, 0, 0) > 0) {
             if (!window->PreTranslate(message)) {

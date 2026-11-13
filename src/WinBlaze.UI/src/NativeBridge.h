@@ -23,6 +23,14 @@ namespace WinBlaze::UI::NativeBridge
 
     void Initialize();
     uint32_t ImportCsv(const wchar_t* inputPath, bool wiztreeUtc = false);
+    // Begins importing a saved scan on a worker thread, once per launch. The
+    // next ImportCsv call for the same file returns that import's result.
+    void PrestartImportCsv(const wchar_t* inputPath, bool wiztreeUtc);
+    // Prestarts the saved scan named as the only command-line argument, if any.
+    void PrestartCommandLineImport();
+    // Native imports actually run, and imports begun ahead of their request.
+    uint32_t ImportRunCount();
+    uint32_t ImportPrestartCount();
     uint32_t ExportCsv(const wchar_t* outputPath);
     uint32_t PermissionRows(const wchar_t* path, PermissionHandler handler);
     WbDuplicateResult DuplicateResults(uint32_t algorithm, DuplicateHandler handler);
@@ -43,6 +51,8 @@ namespace WinBlaze::UI::NativeBridge
     void CancelScan(SessionHandle handle);
     void DestroyScan(SessionHandle handle);
     WbIndexSnapshotStats LoadCatalogSnapshotWithStats(CatalogHandler handler);
+    // The catalog's counts only: loads the index model, emits no entries.
+    WbIndexSnapshotStats LoadCatalogSnapshotStats();
     void LoadExtensionStatsSnapshot(ExtensionStatHandler handler);
     // Emits the display-tree root; returns false when no index is loaded.
     bool TreeRoot(TreeNodeHandler handler);

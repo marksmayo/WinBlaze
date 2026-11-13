@@ -34,6 +34,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Built app lost usable folder expansion' }
 if ($LASTEXITCODE -ne 0) { throw 'OS XAML host focus contract failed' }
 & (Join-Path $PSScriptRoot 'os-xaml-lazy-panels.ps1') -BuildDirectory $output -OutputDirectory (Join-Path $output 'lazy-panel-contract')
 if ($LASTEXITCODE -ne 0) { throw 'OS XAML lazy panel contract failed' }
+& (Join-Path $PSScriptRoot 'os-xaml-performance.ps1') -BuildDirectory $output -OutputDirectory (Join-Path $output 'performance-contract')
+if ($LASTEXITCODE -ne 0) { throw 'OS XAML performance contract failed' }
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'unattended-png.ps1') -AppPath $app
 if ($LASTEXITCODE -ne 0) { throw 'Built app lost unattended PNG export or normal shutdown' }
 & (Join-Path $PSScriptRoot '../native/cli-console-policy.ps1') -AppPath (Join-Path $output 'full-os-candidate/winblaze-cli.exe') -OutputDirectory (Join-Path $output 'cli-console-contract')

@@ -95,11 +95,45 @@ namespace winrt::WinBlaze::UI::implementation
             Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&);
 
         void SetSection(ShellSection section);
+        // Counters read by tests/native/os-xaml-performance.cpp.
+        struct PerformanceProbe
+        {
+            bool frame_stats_subscribed{};
+            uint64_t treemap_renders{};
+            uint64_t treemap_status_writes{};
+            uint64_t swap_chain_creations{};
+            bool session_active{};
+            size_t catalog_entries{};
+            // Captured when the title announces results.
+            size_t rows_at_results_title{};
+            size_t catalog_entries_at_results_title{};
+            size_t search_hits_at_results_title{};
+            uint64_t treemap_renders_while_results_pending{};
+        };
+        PerformanceProbe PerformanceProbeForTests() const;
+        void NotifyTreemapSurfaceResized(double width, double height);
+        // Whether a running scan should rebuild its live folder rows now.
+        // A scan that ends within moments goes straight to its results; a
+        // long one shows live rows after 400 ms and refreshes them every two
+        // seconds. Measured on the 250k-file dataset (2026-11-13, n=10):
+        // building live rows during short scans and rescans made the first
+        // result slower (median 420 against 392 ms) and tripled working-set
+        // growth over ten rescans (about 20 against 7 MiB).
+        static bool LiveTreeRefreshDue(std::chrono::milliseconds since_scan_start,
+            std::chrono::milliseconds since_last_refresh)
+        {
+            return since_scan_start >= std::chrono::milliseconds(400) &&
+                since_last_refresh >= std::chrono::milliseconds(2000);
+        }
         void ApplyShellState();
         void ScheduleUiFlush();
         void FlushPendingUiState();
         void ScheduleTreemapRender(std::wstring_view reason);
         void OnTreemapRenderTick();
+        void RenderTreemapNow(int width, int height);
+        void RefreshTreemapStatusText(int width, int height);
+        void UpdateFrameStatsSubscription();
+        void RunDeferredStartupWork(bool restore_catalog, uint64_t generation);
         void UpdatePerformanceCounters(std::wstring const& reason);
         void UpdateSummaryText();
         void UpdateRuntimeSnapshot();
@@ -234,7 +268,11 @@ namespace winrt::WinBlaze::UI::implementation
         void PopulateTreeList(std::vector<TreeCatalogEntry> const& entries);
         void LoadTreeSnapshot();
         void ApplyLiveDirectories(std::vector<LiveDirectory> directories);
-        void ApplyPersistedCatalogSnapshot(WbIndexSnapshotStats stats, std::vector<TreeCatalogEntry> snapshot);
+        void ApplyPersistedCatalogSnapshot(WbIndexSnapshotStats stats);
+        void ApplyDeferredCatalogEntries(std::vector<TreeCatalogEntry> entries);
+        // True from a catalog (re)load request until its results are applied.
+        bool ResultsApplyPending();
+        bool m_results_apply_pending{ false };
         void EnsureTreeChildrenLoaded(size_t node_index);
         void RebuildTreeVisibleRows();
         void RefreshTreeListView();
@@ -443,6 +481,7 @@ namespace winrt::WinBlaze::UI::implementation
         std::vector<LiveDirectory> m_live_directory_backlog;
         size_t m_live_backlog_cursor{ 0 };
         std::chrono::steady_clock::time_point m_last_live_tree_refresh{};
+        std::chrono::steady_clock::time_point m_live_tree_scan_started{};
         std::chrono::steady_clock::time_point m_last_treemap_render_completed_at{};
         // Discards stale async snapshot loads (a newer scan superseded them).
         std::atomic<uint64_t> m_snapshot_load_generation{ 0 };
@@ -584,6 +623,10 @@ namespace winrt::WinBlaze::UI::implementation
         D3D_FEATURE_LEVEL m_render_feature_level{};
         uint64_t m_total_treemap_render_request_count{ 0 };
         uint64_t m_total_treemap_render_flush_count{ 0 };
+        uint64_t m_treemap_status_write_count{ 0 };
+        uint64_t m_swap_chain_creation_count{ 0 };
+        PerformanceProbe m_results_title_probe{};
+        uint64_t m_treemap_renders_while_results_pending{ 0 };
         uint64_t m_total_treemap_render_coalesced_count{ 0 };
         std::vector<TreemapTileLayout> m_treemap_tile_layout;
         ::WinBlaze::UI::NativeBridge::SessionHandle m_session{};

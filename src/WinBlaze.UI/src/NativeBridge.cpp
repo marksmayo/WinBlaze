@@ -1,10 +1,14 @@
 ﻿#include "pch.h"
 #include "NativeBridge.h"
 
+#include <atomic>
 #include <stdexcept>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
+#include <shellapi.h>
 
 namespace
 {
@@ -46,6 +50,9 @@ namespace
         VerifyDownloadFn verify_download{ nullptr };
     };
 
+    std::atomic<uint32_t> g_import_runs{ 0 };
+    std::atomic<uint32_t> g_import_prestarts{ 0 };
+
     DllApi& Api()
     {
         static DllApi api;
@@ -86,6 +93,9 @@ namespace
 
     void EnsureLoaded()
     {
+        // A launch-time import may load the engine from a worker thread.
+        static std::mutex load_mutex;
+        std::lock_guard guard(load_mutex);
         auto& api = Api();
         if (api.module != nullptr) {
             return;
@@ -195,13 +205,77 @@ namespace WinBlaze::UI::NativeBridge
         EnsureLoaded();
     }
 
+    namespace
+    {
+        struct PrestartedImport
+        {
+            std::wstring path;
+            bool wiztree_utc{};
+            uint32_t result{ 4 };
+            std::thread worker;
+        };
+        std::mutex g_prestart_mutex;
+        std::unique_ptr<PrestartedImport> g_prestart;
+        bool g_prestart_used{ false };
+
+        uint32_t RunImport(const wchar_t* inputPath, bool wiztreeUtc)
+        {
+            EnsureLoaded();
+            if (!Api().import_csv) { return 4; }
+            const auto utf8 = ToUtf8(inputPath);
+            ++g_import_runs;
+            return Api().import_csv(WbCStringView{ utf8.data(), utf8.size() }, 0U, wiztreeUtc ? 1U : 0U);
+        }
+    }
+
+    void PrestartImportCsv(const wchar_t* inputPath, bool wiztreeUtc)
+    {
+        std::lock_guard guard(g_prestart_mutex);
+        if (g_prestart_used) { return; }
+        g_prestart_used = true;
+        auto job = std::make_unique<PrestartedImport>();
+        job->path = inputPath;
+        job->wiztree_utc = wiztreeUtc;
+        job->worker = std::thread([state = job.get()] {
+            try { state->result = RunImport(state->path.c_str(), state->wiztree_utc); } catch (...) {}
+        });
+        ++g_import_prestarts;
+        g_prestart = std::move(job);
+    }
+
+    void PrestartCommandLineImport()
+    {
+        // Same rule as MainWindow: a single argument that is not an option
+        // and names an existing file is a saved scan to open.
+        int count = 0;
+        auto arguments = CommandLineToArgvW(GetCommandLineW(), &count);
+        if (!arguments) { return; }
+        if (count == 2 && std::wstring_view(arguments[1]).rfind(L"--", 0) != 0) {
+            const DWORD attributes = GetFileAttributesW(arguments[1]);
+            if (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                PrestartImportCsv(arguments[1], false);
+            }
+        }
+        LocalFree(arguments);
+    }
+
     uint32_t ImportCsv(const wchar_t* inputPath, bool wiztreeUtc)
     {
-        EnsureLoaded();
-        if (!Api().import_csv) { return 4; }
-        const auto utf8 = ToUtf8(inputPath);
-        return Api().import_csv(WbCStringView{ utf8.data(), utf8.size() }, 0U, wiztreeUtc ? 1U : 0U);
+        std::unique_ptr<PrestartedImport> job;
+        {
+            std::lock_guard guard(g_prestart_mutex);
+            job = std::move(g_prestart);
+        }
+        if (job) {
+            // Never leave an earlier import running behind a newer one.
+            job->worker.join();
+            if (job->path == inputPath && job->wiztree_utc == wiztreeUtc) { return job->result; }
+        }
+        return RunImport(inputPath, wiztreeUtc);
     }
+
+    uint32_t ImportRunCount() { return g_import_runs.load(); }
+    uint32_t ImportPrestartCount() { return g_import_prestarts.load(); }
 
     uint32_t ExportCsv(const wchar_t* outputPath)
     {
@@ -387,6 +461,12 @@ namespace WinBlaze::UI::NativeBridge
         auto context = std::make_shared<CatalogCallbackContext>();
         context->handler = std::move(handler);
         return Api().load_catalog_snapshot_with_stats(&OnCatalogWithContext, context.get());
+    }
+
+    WbIndexSnapshotStats LoadCatalogSnapshotStats()
+    {
+        EnsureLoaded();
+        return Api().load_catalog_snapshot_with_stats(nullptr, nullptr);
     }
 
     void LoadExtensionStatsSnapshot(ExtensionStatHandler handler)
