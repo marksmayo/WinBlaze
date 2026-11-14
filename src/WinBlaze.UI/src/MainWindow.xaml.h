@@ -109,6 +109,18 @@ namespace winrt::WinBlaze::UI::implementation
             size_t catalog_entries_at_results_title{};
             size_t search_hits_at_results_title{};
             uint64_t treemap_renders_while_results_pending{};
+            uint64_t freed_heap_returns{};
+            uint64_t tree_in_place_refreshes{};
+            uint64_t results_shown{};
+            uint64_t tree_rows{};
+            bool text_inputs_at_results_title{};
+            // Captured when the window first loads, at its first layout.
+            bool window_loaded{};
+            bool text_inputs_at_first_layout{};
+            size_t rows_at_first_layout{};
+            // The path and scan-rule boxes, built after the first frame.
+            bool text_inputs_built{};
+            std::wstring root_path_text;
         };
         PerformanceProbe PerformanceProbeForTests() const;
         void NotifyTreemapSurfaceResized(double width, double height);
@@ -124,6 +136,14 @@ namespace winrt::WinBlaze::UI::implementation
         {
             return since_scan_start >= std::chrono::milliseconds(400) &&
                 since_last_refresh >= std::chrono::milliseconds(2000);
+        }
+        // Whether a running scan's growing catalog should redraw the treemap
+        // now. Each draw is ~16 ms of UI-thread time; on every 100 ms flush
+        // that delayed messages for the first seconds of a full-drive scan.
+        // The finished results always draw.
+        static bool ScanTreemapRenderDue(std::chrono::milliseconds since_last_render)
+        {
+            return since_last_render >= std::chrono::milliseconds(2000);
         }
         void ApplyShellState();
         void ScheduleUiFlush();
@@ -173,6 +193,8 @@ namespace winrt::WinBlaze::UI::implementation
         void SetControlVisibility(Microsoft::UI::Xaml::FrameworkElement const& control, bool visible);
         void FocusSearchBox();
         void FocusRootPathBox();
+        void EnsureTextInputs();
+        void SetRootPathText(winrt::hstring const& text);
         void NavigateToSection(ShellSection section);
         mutable ::WinBlaze::ColorResourceCache<Microsoft::UI::Xaml::Media::SolidColorBrush> m_color_resources;
         Microsoft::UI::Xaml::Media::SolidColorBrush MakeBrush(Windows::UI::Color const& color) const;
@@ -267,6 +289,12 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::ListViewItem CreateTreeListItem(TreeCatalogEntry const& entry) const;
         void PopulateTreeList(std::vector<TreeCatalogEntry> const& entries);
         void LoadTreeSnapshot();
+        bool RefreshTreeSnapshotInPlace(size_t window_offset);
+        bool UpdateTreeRowShare(Microsoft::UI::Xaml::Controls::ListViewItem const& item, size_t node_index);
+        double TreeNodeSharePercent(size_t node_index) const;
+        void UpdateTreeWindowStatus(size_t window_start, size_t window_end);
+        void ClearTreeForLiveScan();
+        void PublishResultsShownCount();
         void ApplyLiveDirectories(std::vector<LiveDirectory> directories);
         void ApplyPersistedCatalogSnapshot(WbIndexSnapshotStats stats);
         void ApplyDeferredCatalogEntries(std::vector<TreeCatalogEntry> entries);
@@ -395,6 +423,9 @@ namespace winrt::WinBlaze::UI::implementation
         Microsoft::UI::Xaml::Controls::TextBox m_scan_excludes{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_scan_includes{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBox m_root_path_box{ nullptr };
+        // Shows the path until EnsureTextInputs builds the boxes (see BuildShell).
+        Microsoft::UI::Xaml::Controls::TextBlock m_root_path_placeholder_text{ nullptr };
+        std::function<void()> m_build_text_inputs;
         Microsoft::UI::Xaml::Controls::Button m_browse_folder_button{ nullptr };
         Microsoft::UI::Xaml::Controls::ComboBox m_drive_box{ nullptr };
         Microsoft::UI::Xaml::Controls::TextBlock m_root_validation_text{ nullptr };
@@ -500,6 +531,12 @@ namespace winrt::WinBlaze::UI::implementation
         // pass); first results and completion still flush within one frame.
         bool m_scan_flush_throttled{ false };
         bool m_ui_flush_urgent{ false };
+        // A flush for finished results is already queued (see ScheduleUiFlush).
+        bool m_ui_flush_results_requested{ false };
+        // An incremental refresh kept the shown tree (see BeginScanFromCurrentRoot).
+        bool m_tree_kept_for_refresh{ false };
+        uint64_t m_tree_in_place_refresh_count{ 0 };
+        uint64_t m_results_shown_count{ 0 };
         // Rows in the results list, shown in the title while scanning.
         uint32_t m_tree_rows_shown{ 0 };
         // Root path text whose validation error is showing.
@@ -624,6 +661,8 @@ namespace winrt::WinBlaze::UI::implementation
         uint64_t m_total_treemap_render_request_count{ 0 };
         uint64_t m_total_treemap_render_flush_count{ 0 };
         uint64_t m_treemap_status_write_count{ 0 };
+        uint64_t m_freed_heap_return_count{ 0 };
+        std::chrono::steady_clock::time_point m_last_scan_treemap_render{};
         uint64_t m_swap_chain_creation_count{ 0 };
         PerformanceProbe m_results_title_probe{};
         uint64_t m_treemap_renders_while_results_pending{ 0 };

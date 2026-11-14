@@ -1,7 +1,9 @@
 ﻿#include "pch.h"
 #include "NativeBridge.h"
+#include "StartupTrace.h"
 
 #include <atomic>
+#include <condition_variable>
 #include <stdexcept>
 #include <filesystem>
 #include <memory>
@@ -214,8 +216,16 @@ namespace WinBlaze::UI::NativeBridge
             uint32_t result{ 4 };
             std::thread worker;
         };
+        // Outlives the job, which ImportCsv collects and destroys.
+        struct PrestartCompletion
+        {
+            std::mutex mutex;
+            std::condition_variable finished;
+            bool done{ false };
+        };
         std::mutex g_prestart_mutex;
         std::unique_ptr<PrestartedImport> g_prestart;
+        std::shared_ptr<PrestartCompletion> g_prestart_completion;
         bool g_prestart_used{ false };
 
         uint32_t RunImport(const wchar_t* inputPath, bool wiztreeUtc)
@@ -236,8 +246,17 @@ namespace WinBlaze::UI::NativeBridge
         auto job = std::make_unique<PrestartedImport>();
         job->path = inputPath;
         job->wiztree_utc = wiztreeUtc;
-        job->worker = std::thread([state = job.get()] {
+        auto completion = std::make_shared<PrestartCompletion>();
+        g_prestart_completion = completion;
+        job->worker = std::thread([state = job.get(), completion] {
+            TraceStartup(L"Prestarted import begin");
             try { state->result = RunImport(state->path.c_str(), state->wiztree_utc); } catch (...) {}
+            TraceStartup(L"Prestarted import end");
+            {
+                std::lock_guard done_guard(completion->mutex);
+                completion->done = true;
+            }
+            completion->finished.notify_all();
         });
         ++g_import_prestarts;
         g_prestart = std::move(job);
@@ -257,6 +276,18 @@ namespace WinBlaze::UI::NativeBridge
             }
         }
         LocalFree(arguments);
+    }
+
+    bool WaitForPrestartedImport(std::chrono::milliseconds limit)
+    {
+        std::shared_ptr<PrestartCompletion> completion;
+        {
+            std::lock_guard guard(g_prestart_mutex);
+            completion = g_prestart_completion;
+        }
+        if (!completion) { return false; }
+        std::unique_lock lock(completion->mutex);
+        return completion->finished.wait_for(lock, limit, [&] { return completion->done; });
     }
 
     uint32_t ImportCsv(const wchar_t* inputPath, bool wiztreeUtc)
@@ -545,6 +576,21 @@ namespace WinBlaze::UI::NativeBridge
         auto context = std::make_shared<TreeNodeCallbackContext>();
         context->handler = std::move(handler);
         return Api().tree_children(parentId, offset, &OnTreeNodeWithContext, context.get());
+    }
+
+    bool LastRefreshTouched(std::vector<uint64_t>& ids)
+    {
+        EnsureLoaded();
+        using Fn = int64_t(__stdcall*)(uint64_t*, size_t);
+        static const auto fn = reinterpret_cast<Fn>(GetProcAddress(Api().module, "wb_last_refresh_touched"));
+        ids.clear();
+        if (!fn) { return false; }
+        const int64_t count = fn(nullptr, 0);
+        if (count < 0) { return false; }
+        ids.resize(static_cast<size_t>(count));
+        const int64_t written = fn(ids.data(), ids.size());
+        if (written != count) { return false; }
+        return true;
     }
 
     WbTreeChildrenResult TreeLargestFilesPage(uint64_t offset, uint64_t limit, TreeNodeHandler handler)

@@ -101,6 +101,10 @@ pub struct ScanRuntimeConfig {
     /// and std fallbacks on open failure. Off uses std plus per-file
     /// allocation/identity queries as the reference implementation.
     pub fast_enumeration: bool,
+    /// Run scan threads below normal priority (see
+    /// `scheduler::enter_scan_thread_priority`). The GUI sets it; the CLI's
+    /// foreground scan keeps normal priority.
+    pub background_priority: bool,
 }
 
 impl Default for ScanRuntimeConfig {
@@ -120,6 +124,7 @@ impl Default for ScanRuntimeConfig {
             reparse_policy: ReparseTraversalPolicy::default(),
             pipeline: ScanPipelineConfig::default(),
             fast_enumeration: true,
+            background_priority: false,
         }
     }
 }

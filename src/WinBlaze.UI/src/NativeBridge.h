@@ -1,8 +1,10 @@
 ﻿#pragma once
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "winblaze_native.h"
 
@@ -28,6 +30,9 @@ namespace WinBlaze::UI::NativeBridge
     void PrestartImportCsv(const wchar_t* inputPath, bool wiztreeUtc);
     // Prestarts the saved scan named as the only command-line argument, if any.
     void PrestartCommandLineImport();
+    // Waits up to `limit` for the prestarted import to finish. False at once
+    // when nothing was prestarted, or when the import is still running.
+    bool WaitForPrestartedImport(std::chrono::milliseconds limit);
     // Native imports actually run, and imports begun ahead of their request.
     uint32_t ImportRunCount();
     uint32_t ImportPrestartCount();
@@ -65,6 +70,9 @@ namespace WinBlaze::UI::NativeBridge
     WbStorageEstimate StorageCost(WbStoragePolicy policy);
     WbSearchResult Search(const wchar_t* pattern, const wchar_t* extensions, WbSearchFilter filter, TreeNodeHandler handler);
     WbTreeChildrenResult TreeChildren(uint64_t parentId, uint64_t offset, TreeNodeHandler handler);
+    // Directory ids whose totals the last refresh patched in place; false
+    // when the published results were replaced since (show them anew).
+    bool LastRefreshTouched(std::vector<uint64_t>& ids);
     // Emits the largest files by allocation size (name = full path).
     WbTreeChildrenResult TreeLargestFilesPage(uint64_t offset, uint64_t limit, TreeNodeHandler handler);
     void TreeLargestFiles(uint64_t limit, TreeNodeHandler handler);

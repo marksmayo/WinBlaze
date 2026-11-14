@@ -7,6 +7,9 @@
 #include <functional>
 #include <iostream>
 #include <string>
+#include <fstream>
+#include <winrt/Windows.UI.Xaml.Automation.Peers.h>
+#include <winrt/Windows.UI.Xaml.Automation.Provider.h>
 
 using namespace winrt::Windows::UI::Xaml;
 using namespace winrt::Windows::UI::Xaml::Controls;
@@ -49,6 +52,8 @@ static CheckBox FindCheckBox(winrt::Windows::Foundation::IInspectable const& val
 static void IdleShellContracts(winrt::com_ptr<AppWindow> const& window)
 {
     using std::chrono::milliseconds;
+    Require(!::WinBlaze::UI::NativeBridge::WaitForPrestartedImport(milliseconds(5000)),
+        "With no saved scan on the command line the host must not wait for an import");
     // A scan starts with its last refresh long ago (a default time point).
     Require(!AppWindow::LiveTreeRefreshDue(milliseconds(150), milliseconds(3600000)),
         "A scan that may finish within moments must not first build and lay out live rows");
@@ -58,6 +63,12 @@ static void IdleShellContracts(winrt::com_ptr<AppWindow> const& window)
         "Live rows must not be rebuilt more often than every two seconds");
     Require(AppWindow::LiveTreeRefreshDue(milliseconds(5000), milliseconds(2000)),
         "Live rows must follow a long scan");
+    Require(AppWindow::ScanTreemapRenderDue(milliseconds(3600000)),
+        "A scan's first catalog may draw the treemap");
+    Require(!AppWindow::ScanTreemapRenderDue(milliseconds(1999)),
+        "During a scan the treemap must not redraw on every 100 ms flush");
+    Require(AppWindow::ScanTreemapRenderDue(milliseconds(2000)),
+        "The treemap must still follow a long scan's catalog");
     auto probe = [&] { return window->PerformanceProbeForTests(); };
     window->OnWindowLoaded(nullptr, nullptr);
     Require(!probe().frame_stats_subscribed,
@@ -118,6 +129,44 @@ static void IdleShellContracts(winrt::com_ptr<AppWindow> const& window)
     std::cout << "PASS: idle shell keeps diagnostics, engine load and treemap timers off the UI thread\n";
 }
 
+// The explorer content's scroll viewer, a direct child of the root grid.
+static ScrollViewer ShellScroll(winrt::com_ptr<AppWindow> const& window)
+{
+    if (auto root = window->Content().try_as<Panel>()) {
+        for (auto child : root.Children()) if (auto scroll = child.try_as<ScrollViewer>()) return scroll;
+    }
+    return nullptr;
+}
+
+// Run before anything pumps messages: results that load before the first
+// layout are laid out at once, and an unbounded first measure of the panes
+// took 700 ms on a 250-folder scan.
+static void ShellBoundedBeforeLayout(winrt::com_ptr<AppWindow> const& window)
+{
+    Require(!window->PerformanceProbeForTests().text_inputs_built,
+        "The path and scan-rule boxes must not be built before the first frame");
+    auto scroll = ShellScroll(window);
+    Require(scroll != nullptr, "The explorer content must sit in a scroll viewer");
+    Require(scroll.VerticalScrollBarVisibility() == ScrollBarVisibility::Disabled,
+        "Before its first layout the explorer content must be bounded to the window");
+}
+
+static void ShellScrollContracts(winrt::com_ptr<AppWindow> const& window)
+{
+    auto scroll = ShellScroll(window);
+    HWND owner{};
+    winrt::check_hresult(window.as<IWindowNative>()->get_WindowHandle(&owner));
+    window->Activate();
+    SetWindowPos(owner, nullptr, 40, 40, 900, 360, SWP_NOZORDER | SWP_NOACTIVATE);
+    Require(PumpUntil([&] { return scroll.ScrollableHeight() > 0.0; }, 5000),
+        "A window too short for the panes' minimum heights must scroll, not clip the treemap");
+    Require(PumpUntil([&] { return window->PerformanceProbeForTests().text_inputs_built; }, 5000),
+        "The path and scan-rule boxes must be built once the first frame is up");
+    Require(!window->PerformanceProbeForTests().root_path_text.empty(),
+        "The path box must start with the default scan root");
+    std::cout << "PASS: explorer content is bounded before its first layout and scrolls when too short\n";
+}
+
 static bool ResultsTitleShown(winrt::com_ptr<AppWindow> const& window)
 {
     HWND owner{};
@@ -144,26 +193,93 @@ static void ResultsFirstContracts(winrt::com_ptr<AppWindow> const& window)
         "No treemap may be drawn for data that is about to be replaced by the results");
     Require(PumpUntil([&] { return window->PerformanceProbeForTests().catalog_entries > 0; }, 15000),
         "The flat search catalog must still load once the results show");
+    // Replaced results are freed by then; the process heap returns their
+    // pages at once instead of up to a second later.
+    Require(PumpUntil([&] { return window->PerformanceProbeForTests().freed_heap_returns >= 1; }, 2000),
+        "Freed heap pages must be returned once the replaced results are released");
 }
 
 static void SavedScanContracts(winrt::com_ptr<AppWindow> const& window)
 {
     namespace Bridge = ::WinBlaze::UI::NativeBridge;
+    // Shown at once, as the host does, so the first layout comes when it would.
+    window->Activate();
     Require(Bridge::ImportPrestartCount() == 1,
         "A saved scan named on the command line must start importing during construction");
+    // The host waits this long after the show so the results land in the first frame.
+    Require(Bridge::WaitForPrestartedImport(std::chrono::milliseconds(30000)),
+        "The prestarted import must report when it has finished");
     Require(PumpUntil([&] { return ResultsTitleShown(window); }, 30000), "The saved scan must finish loading");
     Require(Bridge::ImportRunCount() == 1, "The import begun at launch must be reused, not repeated");
     ResultsFirstContracts(window);
+    // A process's first TextBox costs ~16 ms of one-time text-input setup.
+    const auto probe = window->PerformanceProbeForTests();
+    Require(!probe.text_inputs_at_results_title,
+        "The path and scan-rule boxes must be built after the results show, not before");
+    Require(PumpUntil([&] { return window->PerformanceProbeForTests().window_loaded; }, 10000),
+        "The window must finish its first layout");
+    const auto loaded = window->PerformanceProbeForTests();
+    Require(!loaded.text_inputs_at_first_layout,
+        "The path and scan-rule boxes must not be laid out in the first frame");
+    Require(loaded.rows_at_first_layout >= 1 && loaded.rows_at_first_layout <= 24,
+        "Folder rows past the first screenful must be added after the first frame");
+    Require(PumpUntil([&] { return window->PerformanceProbeForTests().text_inputs_built; }, 5000),
+        "The path and scan-rule boxes must be built once the first frame is up");
+    Require(!window->PerformanceProbeForTests().root_path_text.empty(),
+        "The path box must start with the shown results' root");
     std::cout << "PASS: command-line saved scan imports once, starting before the first frame, results first\n";
 }
 
-static void FolderScanContracts(winrt::com_ptr<AppWindow> const& window)
+static Button FindButton(winrt::Windows::Foundation::IInspectable const& value, std::wstring_view name)
+{
+    if (!value) return nullptr;
+    if (auto button = value.try_as<Button>(); button && Automation::AutomationProperties::GetName(button) == name) return button;
+    auto inspect = [&](auto const& child) { return FindButton(child, name); };
+    if (auto panel = value.try_as<Panel>()) {
+        for (auto child : panel.Children()) if (auto found = inspect(child)) return found;
+    } else if (auto border = value.try_as<Border>()) {
+        return inspect(border.Child());
+    } else if (auto scroll = value.try_as<ScrollViewer>()) {
+        return inspect(scroll.Content());
+    } else if (auto content = value.try_as<ContentControl>()) {
+        return inspect(content.Content());
+    }
+    return nullptr;
+}
+
+// One added file, then "Incremental rescan": the engine patches its model
+// from recorded changes and the tree updates the rows that changed in
+// place, instead of rebuilding every row (a full rebuild of a 250-folder
+// root cost ~30 ms of the refresh).
+static void InPlaceRefreshContracts(winrt::com_ptr<AppWindow> const& window, std::wstring const& root)
+{
+    window->Activate();
+    const auto probe = [&] { return window->PerformanceProbeForTests(); };
+    // The root, 41 folders and one file, once every queued chunk is appended.
+    Require(PumpUntil([&] { return probe().tree_rows == 43; }, 10000), "The fixture's 43 tree rows must be shown");
+    const auto shown = probe().results_shown;
+    const auto added = root + L"\\added.txt";
+    { std::ofstream file(added); file << "added"; }
+    auto button = FindButton(window->Content(), L"Incremental rescan");
+    Require(button != nullptr, "The incremental rescan button must exist");
+    Automation::Peers::ButtonAutomationPeer(button).as<Automation::Provider::IInvokeProvider>().Invoke();
+    Require(PumpUntil([&] { return probe().results_shown > shown; }, 10000), "The refresh must show results");
+    const auto after = probe();
+    DeleteFileW(added.c_str());
+    Require(after.tree_in_place_refreshes == 1,
+        "A refresh the engine patched must update the shown tree in place, not reload it");
+    Require(after.tree_rows == 44, "The added file must appear as one more row");
+}
+
+static void FolderScanContracts(winrt::com_ptr<AppWindow> const& window, std::wstring const& root)
 {
     Require(window->PerformanceProbeForTests().session_active,
         "A folder named on the command line must be scanning when the window has been built");
     Require(PumpUntil([&] { return ResultsTitleShown(window); }, 30000), "The folder scan must finish");
     ResultsFirstContracts(window);
     std::cout << "PASS: command-line folder scan starts during construction, results first\n";
+    InPlaceRefreshContracts(window, root);
+    std::cout << "PASS: a refresh patched from recorded changes updates the tree in place\n";
 }
 
 int wmain(int argc, wchar_t** argv)
@@ -175,10 +291,12 @@ int wmain(int argc, wchar_t** argv)
         auto window = winrt::make_self<AppWindow>();
         if (argc == 2) {
             const DWORD attributes = GetFileAttributesW(argv[1]);
-            if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY)) FolderScanContracts(window);
+            if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY)) FolderScanContracts(window, argv[1]);
             else SavedScanContracts(window);
         } else {
+            ShellBoundedBeforeLayout(window);
             IdleShellContracts(window);
+            ShellScrollContracts(window);
         }
     } catch (std::exception const& error) { std::cerr << "FAIL: " << error.what() << '\n'; status = 1; }
       catch (winrt::hresult_error const& error) { std::wcerr << L"FAIL: " << error.message().c_str() << L'\n'; status = 2; }

@@ -56,6 +56,21 @@ impl TreeEntry<'_> {
     }
 }
 
+/// Why [`TreeIndex::apply_file_changes`] refused a patch (the tree is unchanged).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FilePatchError {
+    /// An added file's id is not above every existing and earlier added id.
+    IdNotIncreasing,
+    /// A file names a parent directory the tree does not have.
+    UnknownParent,
+    /// A modified file's id is not in the tree.
+    UnknownFile,
+    /// A modified file moved to another directory.
+    ParentChanged,
+    /// A modified file's modified time went back, which rollup maxima cannot undo.
+    ModifiedTimeDecreased,
+}
+
 /// Upper bound on the memoized largest-file order (see
 /// [`TreeIndex::for_each_largest_file`]): the cleanup UI never asks for more,
 /// and capping keeps the first query's partial sort cheap.
@@ -363,6 +378,266 @@ impl TreeIndex {
             }
             children
         })
+    }
+
+    /// Largest file id; files are kept sorted by id.
+    pub fn max_file_id(&self) -> Option<u64> {
+        self.files.last().map(|file| file.id.0)
+    }
+
+    /// The file with `id`, found by binary search (files are sorted by id).
+    pub fn file_by_id(&self, id: u64) -> Option<&FileRecord> {
+        let index = self
+            .files
+            .binary_search_by_key(&id, |file| file.id.0)
+            .ok()?;
+        Some(&self.files[index])
+    }
+
+    /// The directory with `id`.
+    pub fn directory_by_id(&self, id: u64) -> Option<&DirectoryRecord> {
+        let index = self.dir_index_by_id.get(&id)? as usize;
+        Some(&self.directories[index])
+    }
+
+    /// Direct child directories and files of `directory_id`, unordered.
+    pub fn direct_children(
+        &self,
+        directory_id: u64,
+    ) -> Option<(Vec<&DirectoryRecord>, Vec<&FileRecord>)> {
+        let index = self.dir_index_by_id.get(&directory_id)? as usize;
+        let node = &self.nodes[index];
+        let directories = self.ordered_directories()
+            [node.dir_children.0 as usize..node.dir_children.1 as usize]
+            .iter()
+            .map(|child| &self.directories[*child as usize])
+            .collect();
+        // Building the memoized order sorts every directory's files (~7 ms
+        // for 250k files); one directory's files are a linear filter.
+        let files = match self.file_children.get() {
+            Some(order) => order[node.file_children.0 as usize..node.file_children.1 as usize]
+                .iter()
+                .map(|child| &self.files[*child as usize])
+                .collect(),
+            None if node.file_children.0 == node.file_children.1 => Vec::new(),
+            None => self
+                .files
+                .iter()
+                .filter(|file| {
+                    self.dir_index_by_id
+                        .get(&file.parent_directory_id.0)
+                        .or(self.root)
+                        == Some(index as u32)
+                })
+                .collect(),
+        };
+        Some((directories, files))
+    }
+
+    /// Builds the memoized child orders now, so the first query that needs
+    /// them (often on the UI thread, right after a refresh) does not.
+    pub fn warm_child_orders(&self) {
+        let _ = self.ordered_directories();
+        let _ = self.ordered_files();
+    }
+
+    /// The parent of directory `index` exactly as [`TreeIndex::build`]
+    /// attached it: its structural parent, else the root.
+    fn parent_index(&self, index: u32) -> Option<u32> {
+        if Some(index) == self.root {
+            return None;
+        }
+        let directory = &self.directories[index as usize];
+        directory
+            .parent_directory_id
+            .filter(|parent| parent.0 != directory.id.0)
+            .and_then(|parent| self.dir_index_by_id.get(&parent.0))
+            .filter(|parent| *parent != index)
+            .or(self.root)
+    }
+
+    /// `index` and its ancestors up to the root. Bounded, so corrupt cyclic
+    /// parent links cannot loop.
+    fn ancestry(&self, index: u32) -> Vec<u32> {
+        let mut chain = vec![index];
+        let mut current = index;
+        while let Some(parent) = self.parent_index(current) {
+            if chain.len() > self.nodes.len() {
+                break;
+            }
+            chain.push(parent);
+            current = parent;
+        }
+        chain
+    }
+
+    /// Patches the tree in place for added and modified files, instead of
+    /// rebuilding it from every record: a refresh that found one new file in
+    /// a 250k-file tree costs microseconds, not a ~13 ms rebuild.
+    ///
+    /// Added files must carry ids above [`TreeIndex::max_file_id`], in
+    /// increasing order, and name an existing parent directory. Modified
+    /// files must keep their id and parent, and must not move their modified
+    /// time back (the rollup maxima only grow here). Anything else is
+    /// refused before the tree is touched; the caller rebuilds instead.
+    ///
+    /// Returns the ids of the directories whose rollups changed: each changed
+    /// file's parent and its ancestors.
+    pub fn apply_file_changes(
+        &mut self,
+        added: Vec<FileRecord>,
+        modified: Vec<FileRecord>,
+    ) -> Result<Vec<u64>, FilePatchError> {
+        // Validate everything first.
+        let mut next_id = self.max_file_id().map_or(0, |id| id.saturating_add(1));
+        let mut added_parents = Vec::with_capacity(added.len());
+        for file in &added {
+            if file.id.0 < next_id {
+                return Err(FilePatchError::IdNotIncreasing);
+            }
+            next_id = file.id.0.saturating_add(1);
+            let parent = self
+                .dir_index_by_id
+                .get(&file.parent_directory_id.0)
+                .ok_or(FilePatchError::UnknownParent)?;
+            added_parents.push(parent);
+        }
+        let mut modified_slots = Vec::with_capacity(modified.len());
+        for file in &modified {
+            let slot = self
+                .files
+                .binary_search_by_key(&file.id.0, |existing| existing.id.0)
+                .map_err(|_| FilePatchError::UnknownFile)?;
+            let existing = &self.files[slot];
+            if existing.parent_directory_id != file.parent_directory_id {
+                return Err(FilePatchError::ParentChanged);
+            }
+            if file.modified_utc() < existing.modified_utc() {
+                return Err(FilePatchError::ModifiedTimeDecreased);
+            }
+            let parent = self
+                .dir_index_by_id
+                .get(&file.parent_directory_id.0)
+                .ok_or(FilePatchError::UnknownParent)?;
+            modified_slots.push((slot, parent));
+        }
+
+        let mut touched: Vec<u32> = Vec::new();
+        let mut resort_files: Vec<u32> = Vec::new();
+
+        for (file, (slot, parent)) in modified.into_iter().zip(modified_slots) {
+            let old = std::mem::replace(&mut self.files[slot], file);
+            let new = &self.files[slot];
+            let (old_logical, old_physical) = (old.size_bytes, old.allocation_bytes);
+            let (new_logical, new_physical, new_modified) =
+                (new.size_bytes, new.allocation_bytes, new.modified_utc());
+            for index in self.ancestry(parent) {
+                let rollup = &mut self.nodes[index as usize].rollup;
+                rollup.logical_bytes = rollup
+                    .logical_bytes
+                    .saturating_sub(old_logical)
+                    .saturating_add(new_logical);
+                rollup.physical_bytes = rollup
+                    .physical_bytes
+                    .saturating_sub(old_physical)
+                    .saturating_add(new_physical);
+                rollup.modified_utc_max = max_option(rollup.modified_utc_max, new_modified);
+                touched.push(index);
+            }
+            resort_files.push(parent);
+        }
+
+        if !added.is_empty() {
+            let first_new = self.files.len() as u32;
+            // New file children per node, then one pass shifting every
+            // node's range past the insertions before it.
+            let mut added_per_node = vec![0u32; self.nodes.len()];
+            for parent in &added_parents {
+                added_per_node[*parent as usize] += 1;
+            }
+            let old_ranges: Vec<(u32, u32)> =
+                self.nodes.iter().map(|node| node.file_children).collect();
+            let mut shift = 0u32;
+            for (node, extra) in self.nodes.iter_mut().zip(&added_per_node) {
+                node.file_children.0 += shift;
+                shift += extra;
+                node.file_children.1 += shift;
+            }
+            if let Some(order) = self.file_children.get_mut() {
+                let mut grown = Vec::with_capacity(order.len() + added.len());
+                let mut pending: Vec<(u32, u32)> = added_parents
+                    .iter()
+                    .enumerate()
+                    .map(|(offset, parent)| (*parent, first_new + offset as u32))
+                    .collect();
+                pending.sort_unstable();
+                let mut cursor = 0;
+                for (index, (start, end)) in old_ranges.iter().enumerate() {
+                    grown.extend_from_slice(&order[*start as usize..*end as usize]);
+                    while cursor < pending.len() && pending[cursor].0 as usize == index {
+                        grown.push(pending[cursor].1);
+                        cursor += 1;
+                    }
+                }
+                *order = grown;
+            }
+            for (file, parent) in added.into_iter().zip(added_parents) {
+                let (logical, physical, modified) =
+                    (file.size_bytes, file.allocation_bytes, file.modified_utc());
+                self.files.push(file);
+                for index in self.ancestry(parent) {
+                    let rollup = &mut self.nodes[index as usize].rollup;
+                    rollup.logical_bytes = rollup.logical_bytes.saturating_add(logical);
+                    rollup.physical_bytes = rollup.physical_bytes.saturating_add(physical);
+                    rollup.file_count += 1;
+                    rollup.item_count += 1;
+                    rollup.modified_utc_max = max_option(rollup.modified_utc_max, modified);
+                    touched.push(index);
+                }
+                resort_files.push(parent);
+            }
+        }
+
+        // Keep the memoized size orders valid for the changed ranges.
+        resort_files.sort_unstable();
+        resort_files.dedup();
+        if let Some(order) = self.file_children.get_mut() {
+            for parent in &resort_files {
+                let (start, end) = self.nodes[*parent as usize].file_children;
+                let files = &self.files;
+                order[start as usize..end as usize].sort_unstable_by(|a, b| {
+                    files[*b as usize]
+                        .allocation_bytes
+                        .cmp(&files[*a as usize].allocation_bytes)
+                });
+            }
+        }
+        touched.sort_unstable();
+        touched.dedup();
+        let mut parents: Vec<u32> = touched
+            .iter()
+            .filter_map(|index| self.parent_index(*index))
+            .collect();
+        parents.sort_unstable();
+        parents.dedup();
+        if let Some(order) = self.dir_children.get_mut() {
+            for parent in parents {
+                let (start, end) = self.nodes[parent as usize].dir_children;
+                let nodes = &self.nodes;
+                order[start as usize..end as usize].sort_unstable_by(|a, b| {
+                    nodes[*b as usize]
+                        .rollup
+                        .physical_bytes
+                        .cmp(&nodes[*a as usize].rollup.physical_bytes)
+                });
+            }
+        }
+        self.largest_files.take();
+
+        Ok(touched
+            .into_iter()
+            .map(|index| self.directories[index as usize].id.0)
+            .collect())
     }
 
     pub fn volumes(&self) -> &[VolumeRecord] {
@@ -859,6 +1134,136 @@ mod tests {
         assert!(tree.root().is_none());
         assert!(tree.rollup_for(5).is_none());
         assert!(tree.for_each_child(5, 0, 10, |_| {}).is_none());
+    }
+
+    /// Everything a reader can observe: every directory's rollup, every
+    /// directory's ordered children, and the largest files.
+    fn observable(tree: &TreeIndex) -> Vec<String> {
+        let mut seen = Vec::new();
+        for directory in tree.directories() {
+            let id = directory.id.0;
+            seen.push(format!("{id}: {:?}", tree.rollup_for(id)));
+            let mut children = Vec::new();
+            tree.for_each_child(id, 0, usize::MAX, |entry| {
+                children.push(match entry {
+                    TreeEntry::Directory { record, rollup } => {
+                        format!("d{}={}", record.id.0, rollup.physical_bytes)
+                    }
+                    TreeEntry::File(file) => {
+                        format!(
+                            "f{}={}/{}",
+                            file.id.0, file.allocation_bytes, file.size_bytes
+                        )
+                    }
+                });
+            });
+            seen.push(format!(
+                "{id} children {children:?} count {:?}",
+                tree.child_count(id)
+            ));
+        }
+        let mut largest = Vec::new();
+        tree.for_each_largest_file(100, |file| largest.push(file.id.0));
+        seen.push(format!("largest {largest:?}"));
+        seen
+    }
+
+    fn patch_tree_dirs() -> Vec<DirectoryRecord> {
+        vec![
+            dir(5, None, ""),
+            dir(10, Some(5), "a"),
+            dir(11, Some(5), "b"),
+            dir(12, Some(10), "a-inner"),
+        ]
+    }
+
+    fn patch_tree_files() -> Vec<FileRecord> {
+        vec![
+            file(1, 10, "a1.bin", 300, 300),
+            file(2, 11, "b1.bin", 200, 200),
+            file(3, 12, "inner.bin", 50, 50),
+            file(4, 5, "top.bin", 70, 70),
+        ]
+    }
+
+    fn assert_patch_matches_rebuild(warm: bool) {
+        let mut tree = build(patch_tree_dirs(), patch_tree_files());
+        if warm {
+            // Initialise every memoized order so the patch must update them.
+            let _ = observable(&tree);
+        }
+        let added = vec![
+            file(20, 5, "new-top.bin", 9, 9),
+            file(21, 11, "b-big.bin", 1000, 1000),
+            file(22, 12, "deep.bin", 5, 5),
+        ];
+        let mut changed = file(2, 11, "b1.bin", 260, 4096);
+        changed.timestamps = winblaze_core::FileTimestamps::new(None, Some(5000), None);
+        let mut touched = tree
+            .apply_file_changes(added.clone(), vec![changed.clone()])
+            .expect("patch applies");
+        touched.sort_unstable();
+        assert_eq!(touched, vec![5, 10, 11, 12]);
+
+        let mut files = patch_tree_files();
+        files[1] = changed;
+        files.extend(added);
+        let rebuilt = build(patch_tree_dirs(), files);
+        assert_eq!(observable(&tree), observable(&rebuilt));
+        assert_eq!(tree.files().len(), rebuilt.files().len());
+        assert_eq!(tree.max_file_id(), Some(22));
+    }
+
+    #[test]
+    fn file_patch_matches_a_rebuild_before_any_query() {
+        assert_patch_matches_rebuild(false);
+    }
+
+    #[test]
+    fn file_patch_matches_a_rebuild_after_queries_memoized_orders() {
+        assert_patch_matches_rebuild(true);
+    }
+
+    #[test]
+    fn file_patch_refuses_what_it_cannot_apply_and_leaves_the_tree_unchanged() {
+        let mut tree = build(patch_tree_dirs(), patch_tree_files());
+        let before = observable(&tree);
+        let cases: Vec<(Vec<FileRecord>, Vec<FileRecord>, FilePatchError)> = vec![
+            (
+                vec![file(4, 5, "reused-id.bin", 1, 1)],
+                vec![],
+                FilePatchError::IdNotIncreasing,
+            ),
+            (
+                vec![file(30, 99, "orphan.bin", 1, 1)],
+                vec![],
+                FilePatchError::UnknownParent,
+            ),
+            (
+                vec![],
+                vec![file(77, 5, "missing.bin", 1, 1)],
+                FilePatchError::UnknownFile,
+            ),
+            (
+                vec![],
+                vec![file(1, 11, "a1.bin", 1, 1)],
+                FilePatchError::ParentChanged,
+            ),
+            (
+                // A valid add before an invalid modification must not apply.
+                vec![file(40, 5, "fine.bin", 1, 1)],
+                vec![{
+                    let mut older = file(1, 10, "a1.bin", 1, 1);
+                    older.timestamps = winblaze_core::FileTimestamps::new(None, Some(1), None);
+                    older
+                }],
+                FilePatchError::ModifiedTimeDecreased,
+            ),
+        ];
+        for (added, modified, expected) in cases {
+            assert_eq!(tree.apply_file_changes(added, modified), Err(expected));
+            assert_eq!(observable(&tree), before);
+        }
     }
 
     #[test]

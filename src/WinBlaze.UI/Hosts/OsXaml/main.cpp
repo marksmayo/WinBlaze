@@ -48,6 +48,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         // One show: SW_SHOW followed by SW_MAXIMIZE sized, activated and
         // laid out the window twice before it could answer its first message.
         window->Activate(SW_SHOWMAXIMIZED);
+        // A saved scan that is nearly parsed goes into the first frame: the
+        // empty shell's first layout would otherwise run first and hold the
+        // results back by as long. A larger file only delays that empty frame.
+        constexpr std::chrono::milliseconds kFirstFrameImportWait{ 75 };
+        ::WinBlaze::UI::NativeBridge::WaitForPrestartedImport(kFirstFrameImportWait);
         TraceStartup(L"wWinMain window shown; entering message loop");
         MSG message{};
         while (IsWindow(owner) && GetMessageW(&message, nullptr, 0, 0) > 0) {

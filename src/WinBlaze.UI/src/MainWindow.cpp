@@ -742,10 +742,10 @@ namespace winrt::WinBlaze::UI::implementation
                     FinishCommandLineAction();
                 });
                 TraceStartup(L"MainWindow queued command-line saved scan");
-            } else if (!m_startup_scan_path.empty() && RootPathBox()) {
+            } else if (!m_startup_scan_path.empty()) {
                 // Same path handling as a typed root: BeginScanFromCurrentRoot
                 // trims quotes, normalises slashes and validates the folder.
-                RootPathBox().Text(winrt::hstring(m_startup_scan_path));
+                SetRootPathText(winrt::hstring(m_startup_scan_path));
                 m_current_root_path = m_startup_scan_path;
                 // Start now, while the window is still being shown: the scan
                 // runs on its own threads, and its events wait for the
@@ -1256,44 +1256,42 @@ namespace winrt::WinBlaze::UI::implementation
             }
             m_drive_box.SelectionChanged([this](auto const&, auto const&) {
                 if (auto selected = m_drive_box.SelectedItem().try_as<ComboBoxItem>()) {
+                    EnsureTextInputs();
                     m_root_path_box.Text(unbox_value<winrt::hstring>(selected.Tag()));
                 }
             });
             address_row.Children().Append(m_drive_box);
 
-            m_root_path_box = TextBox{};
-            m_root_path_box.MinWidth(120);
-            m_root_path_box.MinHeight(40);
-            m_root_path_box.Text(m_current_root_path.c_str());
-            m_root_path_box.TextChanged([this](auto const&, auto const&) {
-                if (auto selected = m_drive_box.SelectedItem().try_as<ComboBoxItem>()) {
-                    if (unbox_value<winrt::hstring>(selected.Tag()) != m_root_path_box.Text()) {
-                        m_drive_box.SelectedIndex(-1);
-                    }
-                }
-                // TextChanged is raised asynchronously: a late event for the text that
-                // just failed validation must not clear its error.
-                if (m_root_validation_text && m_root_path_box.Text() != m_invalid_root_text) {
-                    m_root_validation_text.Text(L"Choose a drive or folder. Enter to scan.");
-                    m_root_validation_text.Foreground(MakeBrush(ActiveShellTheme().text_secondary));
-                }
-                RefreshScanControls();
-            });
-            m_root_path_box.PlaceholderText(L"Folder or drive, e.g. C:\\Users");
-            m_root_path_box.KeyDown([this](auto const&, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args) {
-                if (args.Key() == Windows::System::VirtualKey::Enter) {
-                    args.Handled(true);
-                    BeginScanFromCurrentRoot();
-                }
-            });
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-                m_root_path_box,
-                L"Scan root path");
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
-                m_root_path_box,
-                L"Enter the folder or volume root to scan.");
-            Grid::SetColumn(m_root_path_box, 1);
-            address_row.Children().Append(m_root_path_box);
+            // The path and scan-rule boxes are built just after the first
+            // frame (EnsureTextInputs): a process's first TextBox costs ~16 ms
+            // of one-time text-input setup on this thread, which held back the
+            // first frame and a reopened scan's results. Until then look-alikes
+            // show the path and hints; UI Automation sees only the real boxes.
+            auto make_input_placeholder = [&](std::wstring const& text, bool hint, double min_height) {
+                auto placeholder = Border{};
+                placeholder.MinHeight(min_height);
+                placeholder.BorderThickness(Thickness{ 1.0, 1.0, 1.0, 1.0 });
+                placeholder.CornerRadius(CornerRadius{ 2.0, 2.0, 2.0, 2.0 });
+                placeholder.Padding(Thickness{ 10.0, 5.0, 6.0, 6.0 });
+                placeholder.Background(make_brush(theme.subtle_background));
+                placeholder.BorderBrush(make_brush(theme.subtle_border));
+                auto label = TextBlock{};
+                label.Text(winrt::hstring(text));
+                label.VerticalAlignment(VerticalAlignment::Center);
+                label.TextTrimming(TextTrimming::CharacterEllipsis);
+                label.Foreground(make_brush(hint ? theme.text_secondary : theme.text_primary));
+                placeholder.Child(label);
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetAccessibilityView(
+                    placeholder, Microsoft::UI::Xaml::Automation::Peers::AccessibilityView::Raw);
+                // A click before the boxes exist builds them and focuses the path.
+                placeholder.Tapped([this](auto const&, auto const&) { FocusRootPathBox(); });
+                return std::make_pair(placeholder, label);
+            };
+            auto [path_placeholder, path_placeholder_text] = make_input_placeholder(m_current_root_path, false, 40.0);
+            path_placeholder.MinWidth(120);
+            m_root_path_placeholder_text = path_placeholder_text;
+            Grid::SetColumn(path_placeholder, 1);
+            address_row.Children().Append(path_placeholder);
             m_browse_folder_button = Button{};
             m_browse_folder_button.Content(box_value(L"Browse..."));
             m_browse_folder_button.MinHeight(40);
@@ -1308,19 +1306,68 @@ namespace winrt::WinBlaze::UI::implementation
             auto rules_label = TextBlock{};
             rules_label.Text(L"Optional scan rules");
             rules_panel.Children().Append(rules_label);
-            m_scan_excludes = TextBox{};
-            m_scan_excludes.AcceptsReturn(true);
-            m_scan_excludes.MaxHeight(100);
-            m_scan_excludes.PlaceholderText(L"Excluded paths relative to this root, one per line (e.g. node_modules)");
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_scan_excludes, L"Excluded scan paths");
-            rules_panel.Children().Append(m_scan_excludes);
-            m_scan_includes = TextBox{};
-            m_scan_includes.AcceptsReturn(true);
-            m_scan_includes.MaxHeight(100);
-            m_scan_includes.PlaceholderText(L"Include file-name patterns, one per line (e.g. *.pdf). Empty includes all files.");
-            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_scan_includes, L"Included file patterns");
-            rules_panel.Children().Append(m_scan_includes);
+            static constexpr wchar_t kExcludesHint[] = L"Excluded paths relative to this root, one per line (e.g. node_modules)";
+            static constexpr wchar_t kIncludesHint[] = L"Include file-name patterns, one per line (e.g. *.pdf). Empty includes all files.";
+            auto excludes_placeholder = make_input_placeholder(kExcludesHint, true, 32.0).first;
+            rules_panel.Children().Append(excludes_placeholder);
+            auto includes_placeholder = make_input_placeholder(kIncludesHint, true, 32.0).first;
+            rules_panel.Children().Append(includes_placeholder);
             scan_stack.Children().Append(rules_panel);
+            m_build_text_inputs = [this, path_placeholder = path_placeholder, excludes_placeholder, includes_placeholder]() {
+                auto replace = [](FrameworkElement const& placeholder, UIElement const& box) {
+                    if (auto panel = placeholder.Parent().try_as<Panel>()) {
+                        uint32_t index = 0;
+                        if (panel.Children().IndexOf(placeholder, index)) { panel.Children().SetAt(index, box); }
+                    }
+                };
+                m_root_path_box = TextBox{};
+                m_root_path_box.MinWidth(120);
+                m_root_path_box.MinHeight(40);
+                m_root_path_box.Text(m_root_path_placeholder_text.Text());
+                m_root_path_box.TextChanged([this](auto const&, auto const&) {
+                    if (auto selected = m_drive_box.SelectedItem().try_as<ComboBoxItem>()) {
+                        if (unbox_value<winrt::hstring>(selected.Tag()) != m_root_path_box.Text()) {
+                            m_drive_box.SelectedIndex(-1);
+                        }
+                    }
+                    // TextChanged is raised asynchronously: a late event for the text that
+                    // just failed validation must not clear its error.
+                    if (m_root_validation_text && m_root_path_box.Text() != m_invalid_root_text) {
+                        m_root_validation_text.Text(L"Choose a drive or folder. Enter to scan.");
+                        m_root_validation_text.Foreground(MakeBrush(ActiveShellTheme().text_secondary));
+                    }
+                    RefreshScanControls();
+                });
+                m_root_path_box.PlaceholderText(L"Folder or drive, e.g. C:\\Users");
+                m_root_path_box.KeyDown([this](auto const&, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args) {
+                    if (args.Key() == Windows::System::VirtualKey::Enter) {
+                        args.Handled(true);
+                        BeginScanFromCurrentRoot();
+                    }
+                });
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+                    m_root_path_box,
+                    L"Scan root path");
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
+                    m_root_path_box,
+                    L"Enter the folder or volume root to scan.");
+                Grid::SetColumn(m_root_path_box, 1);
+                replace(path_placeholder, m_root_path_box);
+                m_root_path_placeholder_text = nullptr;
+                m_scan_excludes = TextBox{};
+                m_scan_excludes.AcceptsReturn(true);
+                m_scan_excludes.MaxHeight(100);
+                m_scan_excludes.PlaceholderText(kExcludesHint);
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_scan_excludes, L"Excluded scan paths");
+                replace(excludes_placeholder, m_scan_excludes);
+                m_scan_includes = TextBox{};
+                m_scan_includes.AcceptsReturn(true);
+                m_scan_includes.MaxHeight(100);
+                m_scan_includes.PlaceholderText(kIncludesHint);
+                Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(m_scan_includes, L"Included file patterns");
+                replace(includes_placeholder, m_scan_includes);
+                RefreshScanControls();
+            };
 
 
             auto root_row = StackPanel{};
@@ -2231,7 +2278,11 @@ namespace winrt::WinBlaze::UI::implementation
             // scaling), the content keeps those minimums and scrolls instead
             // of clipping the treemap row off the bottom.
             auto shell_scroll = ScrollViewer{};
-            shell_scroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
+            // Scrolling starts disabled, which bounds the content to the
+            // viewport: an enabled vertical scroll measures it at unbounded
+            // height until fit_shell first runs, after the first layout, and
+            // results already loaded by then took 700 ms to lay out.
+            shell_scroll.VerticalScrollBarVisibility(ScrollBarVisibility::Disabled);
             shell_scroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
             shell_scroll.Content(shell);
             const std::array<RowDefinition, 7> rows{ shell_r0, shell_r1, shell_r2, shell_r3, shell_r4, shell_r5, shell_r6 };
@@ -2253,6 +2304,12 @@ namespace winrt::WinBlaze::UI::implementation
                 if (target > 0.0 && (std::isnan(current) || std::abs(current - target) > 0.5)) {
                     shell.Height(target);
                 }
+                // Scroll only when the panes' minimums do not fit; the
+                // explicit Height then bounds them instead.
+                const auto scrolling = target > viewport + 0.5 ? ScrollBarVisibility::Auto : ScrollBarVisibility::Disabled;
+                if (viewport > 0.0 && shell_scroll.VerticalScrollBarVisibility() != scrolling) {
+                    shell_scroll.VerticalScrollBarVisibility(scrolling);
+                }
             };
             shell_scroll.SizeChanged([fit_shell](auto const&, auto const&) { fit_shell(); });
             // Auto rows change height when banners or cards appear or hide.
@@ -2269,6 +2326,9 @@ namespace winrt::WinBlaze::UI::implementation
     void MainWindow::OnWindowLoaded(winrt::Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
         TraceStartup(L"OnWindowLoaded begin");
+        m_results_title_probe.window_loaded = true;
+        m_results_title_probe.text_inputs_at_first_layout = m_root_path_box != nullptr;
+        m_results_title_probe.rows_at_first_layout = TreeListView() ? TreeListView().Items().Size() : 0;
         // Frame statistics subscribe only while the diagnostics panel shows
         // them (UpdateFrameStatsSubscription): a Rendering handler makes XAML
         // tick the UI thread on every frame for as long as it is attached.
@@ -2293,6 +2353,12 @@ namespace winrt::WinBlaze::UI::implementation
         // been served: none of them is needed to show a usable window.
         const uint64_t generation = m_snapshot_load_generation.load();
         auto weak = get_weak();
+        // The text boxes come first: they are visible, and editable soon after.
+        if (!Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread().TryEnqueue(
+                Microsoft::UI::Dispatching::DispatcherQueuePriority::Low,
+                [weak]() { if (auto self = weak.get()) { self->EnsureTextInputs(); } })) {
+            EnsureTextInputs();
+        }
         const bool queued = Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread().TryEnqueue(
             Microsoft::UI::Dispatching::DispatcherQueuePriority::Low,
             [weak, restore_catalog, generation]() {
@@ -2534,13 +2600,14 @@ namespace winrt::WinBlaze::UI::implementation
         uint32_t result = 4;
         try { result = ::WinBlaze::UI::NativeBridge::ImportCsv(path.c_str(), wiztree_utc); } catch (...) {}
         co_await ui_thread;
+        TraceStartup(L"OpenSavedScan back on the UI thread");
         m_export_active = false;
         if (result == 0) {
             m_imported_snapshot = true;
             m_multiple_root_paths.clear();
             ::WinBlaze::UI::NativeBridge::TreeRoot([this](WbTreeNode const& node) {
                 m_current_root_path = Utf8ToWide(std::string_view{node.name.ptr, node.name.len});
-                RootPathBox().Text(m_current_root_path);
+                SetRootPathText(winrt::hstring(m_current_root_path));
             });
             m_last_scan_duration_text = L"Imported snapshot: " + path;
             LoadPersistedCatalogSnapshot();
@@ -2872,7 +2939,7 @@ namespace winrt::WinBlaze::UI::implementation
             if (m_watch_timer) { m_watch_timer.Stop(); }
             m_watcher.reset();
             m_current_root_path = scan.nodes[0].path;
-            RootPathBox().Text(m_current_root_path);
+            SetRootPathText(winrt::hstring(m_current_root_path));
             m_treemap_logical_size = true;
             if (m_treemap_size_basis) { m_treemap_size_basis.SelectedIndex(1); }
             m_last_scan_duration_text = L"Portable device: " + selected.name + L" | skipped/errors: " +
@@ -3112,7 +3179,7 @@ namespace winrt::WinBlaze::UI::implementation
             if (m_monitor_item) { m_monitor_item.IsChecked(false); }
             RestartMonitoring();
             m_current_root_path = L"WinBlaze:\\Multiple roots";
-            RootPathBox().Text(winrt::hstring(m_current_root_path));
+            SetRootPathText(winrt::hstring(m_current_root_path));
             m_last_scan_duration_text = L"Combined live scan: " + std::to_wstring(result.roots) + L" roots";
             LoadPersistedCatalogSnapshot();
             RefreshScanControls();
@@ -3392,41 +3459,68 @@ namespace winrt::WinBlaze::UI::implementation
     {
         using namespace Microsoft::UI::Xaml;
         using namespace Microsoft::UI::Xaml::Controls;
-        auto editor=TextBox{};
-        editor.Width(240);
-        editor.Visibility(Visibility::Collapsed);
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(editor,L"Inline item name");
-        auto save=Button{};save.Content(box_value(L"Save"));save.Visibility(Visibility::Collapsed);
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(save,L"Save inline rename");
-        auto cancel=Button{};cancel.Content(box_value(L"Cancel"));cancel.Visibility(Visibility::Collapsed);
-        Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(cancel,L"Cancel inline rename");
         auto begin=Button{};begin.Content(box_value(L"Edit name"));
         Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(begin,winrt::hstring((folder?L"Inline rename folder: ":L"Inline rename file: ")+path));
+        // The editor and its Save and Cancel buttons are built on the first
+        // Edit name: a hidden text box and two buttons in every folder and
+        // file row made each row dearer, and the first rows hold back results.
         // Handlers reach the row's controls through weak references: a control
         // whose handler held itself or a sibling strongly formed a cycle that
         // kept every rebuilt tree row alive (~25 KB per folder per rescan).
+        struct Refs {
+            winrt::weak_ref<StackPanel> row; winrt::weak_ref<TextBlock> label; winrt::weak_ref<Button> begin;
+            winrt::weak_ref<TextBox> editor; winrt::weak_ref<Button> save, cancel;
+            bool focus_on_load{};
+        };
+        auto refs=std::make_shared<Refs>();
+        refs->row=winrt::make_weak(row);refs->label=winrt::make_weak(label);refs->begin=winrt::make_weak(begin);
         struct Controls { TextBlock label; TextBox editor; Button save, cancel, begin; };
-        auto weak=[refs=std::make_tuple(winrt::make_weak(label),winrt::make_weak(editor),winrt::make_weak(save),winrt::make_weak(cancel),winrt::make_weak(begin))]()->std::optional<Controls>{
-            Controls c{ std::get<0>(refs).get(),std::get<1>(refs).get(),std::get<2>(refs).get(),std::get<3>(refs).get(),std::get<4>(refs).get() };
+        auto controls=[refs]()->std::optional<Controls>{
+            Controls c{ refs->label.get(),refs->editor.get(),refs->save.get(),refs->cancel.get(),refs->begin.get() };
             if(!c.label||!c.editor||!c.save||!c.cancel||!c.begin)return std::nullopt;
             return c;
         };
-        auto close=[weak](){auto c=weak();if(!c)return;c->label.Visibility(Visibility::Visible);c->editor.Visibility(Visibility::Collapsed);c->save.Visibility(Visibility::Collapsed);c->cancel.Visibility(Visibility::Collapsed);c->begin.IsEnabled(true);};
-        begin.Click([this,path,weak](auto const&,auto const&){
+        auto close=[controls](){auto c=controls();if(!c)return;c->label.Visibility(Visibility::Visible);c->editor.Visibility(Visibility::Collapsed);c->save.Visibility(Visibility::Collapsed);c->cancel.Visibility(Visibility::Collapsed);c->begin.IsEnabled(true);};
+        auto build=[this,path,refs,close](){
+            auto row=refs->row.get();auto begin=refs->begin.get();
+            uint32_t at=0;
+            if(!row||!begin||!row.Children().IndexOf(begin,at))return;
+            auto editor=TextBox{};
+            editor.Width(240);
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(editor,L"Inline item name");
+            auto save=Button{};save.Content(box_value(L"Save"));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(save,L"Save inline rename");
+            auto cancel=Button{};cancel.Content(box_value(L"Cancel"));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(cancel,L"Cancel inline rename");
+            cancel.Click([close](auto const&,auto const&){close();});
+            auto commit=[this,path,editor_ref=winrt::make_weak(editor)](){if(auto editor=editor_ref.get())CommitInlineRename(path,std::wstring(editor.Text()),editor);};
+            save.Click([commit](auto const&,auto const&){commit();});
+            editor.KeyDown([close,commit](auto const&,Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args){
+                if(args.Key()==winrt::Windows::System::VirtualKey::Escape){args.Handled(true);close();}
+                else if(args.Key()==winrt::Windows::System::VirtualKey::Enter){args.Handled(true);commit();}
+            });
+            // A new text box cannot take focus until it is in the live tree.
+            editor.Loaded([refs](auto const&,auto const&){
+                if(!refs->focus_on_load)return;
+                refs->focus_on_load=false;
+                if(auto editor=refs->editor.get()){editor.Focus(FocusState::Programmatic);editor.SelectAll();}
+            });
+            // Same order as before: editor, Edit name, Save, Cancel.
+            row.Children().InsertAt(at,editor);
+            row.Children().InsertAt(at+2,save);
+            row.Children().InsertAt(at+3,cancel);
+            refs->editor=winrt::make_weak(editor);refs->save=winrt::make_weak(save);refs->cancel=winrt::make_weak(cancel);
+            refs->focus_on_load=true;
+        };
+        begin.Click([this,path,refs,controls,build](auto const&,auto const&){
             if(m_session_active||m_export_active)return;
-            auto c=weak();if(!c)return;
+            if(!refs->editor.get())build();
+            auto c=controls();if(!c)return;
             c->editor.Text(winrt::hstring(std::filesystem::path(path).filename().wstring()));
             c->label.Visibility(Visibility::Collapsed);c->editor.Visibility(Visibility::Visible);c->save.Visibility(Visibility::Visible);c->cancel.Visibility(Visibility::Visible);c->begin.IsEnabled(false);
-            c->editor.Focus(FocusState::Programmatic);c->editor.SelectAll();
+            if(c->editor.Focus(FocusState::Programmatic)){refs->focus_on_load=false;c->editor.SelectAll();}
         });
-        cancel.Click([close](auto const&,auto const&){close();});
-        auto commit=[this,path,editor_ref=winrt::make_weak(editor)](){if(auto editor=editor_ref.get())CommitInlineRename(path,std::wstring(editor.Text()),editor);};
-        save.Click([commit](auto const&,auto const&){commit();});
-        editor.KeyDown([close,commit](auto const&,Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args){
-            if(args.Key()==winrt::Windows::System::VirtualKey::Escape){args.Handled(true);close();}
-            else if(args.Key()==winrt::Windows::System::VirtualKey::Enter){args.Handled(true);commit();}
-        });
-        row.Children().Append(editor);row.Children().Append(begin);row.Children().Append(save);row.Children().Append(cancel);
+        row.Children().Append(begin);
     }
 
     winrt::fire_and_forget MainWindow::CommitInlineRename(std::wstring path, std::wstring new_name,
@@ -3723,6 +3817,7 @@ namespace winrt::WinBlaze::UI::implementation
             winrt::check_hresult(folder->GetDisplayName(SIGDN_FILESYSPATH, &chosen));
             const winrt::hstring path(chosen);
             CoTaskMemFree(chosen);
+            EnsureTextInputs();
             m_root_path_box.Text(path);
             FocusRootPathBox();
         } catch (winrt::hresult_error const&) {
@@ -3773,7 +3868,9 @@ namespace winrt::WinBlaze::UI::implementation
                     : L"Choose an existing folder or drive, or use Browse.");
                 m_root_validation_text.Foreground(MakeBrush(Windows::UI::Colors::Salmon()));
             }
-            m_invalid_root_text = RootPathBox() ? RootPathBox().Text() : winrt::hstring{};
+            // Before the box exists its placeholder holds the text it starts with.
+            m_invalid_root_text = RootPathBox() ? RootPathBox().Text()
+                : m_root_path_placeholder_text ? m_root_path_placeholder_text.Text() : winrt::hstring{};
             UpdateStatus(L"Check the scan folder.");
             FocusRootPathBox();
             return;
@@ -3789,9 +3886,15 @@ namespace winrt::WinBlaze::UI::implementation
                 return;
             }
         }
-        if (RootPathBox() && RootPathBox().Text() != root_path) { RootPathBox().Text(root_path); }
+        if (!RootPathBox() || RootPathBox().Text() != root_path) { SetRootPathText(winrt::hstring(root_path)); }
         TraceStartup(std::wstring(incremental ? L"BeginIncrementalScan root=" : L"BeginScanFromCurrentRoot root=") + root_path);
         if (m_imported_snapshot) { incremental = false; }
+        // A refresh of the shown root keeps its tree on screen: a refresh the
+        // engine patches from recorded changes then updates just the rows it
+        // touched. Live folders from a walk replace it (ApplyLiveDirectories).
+        const bool keep_tree = incremental && m_has_results && !m_tree_nodes.empty() &&
+            excluded.empty() && included.empty() && root_path == m_current_root_path &&
+            m_multiple_root_paths.empty();
         m_imported_snapshot = false;
         m_current_root_path = root_path;
         m_multiple_root_paths.clear();
@@ -3800,12 +3903,10 @@ namespace winrt::WinBlaze::UI::implementation
         m_has_error = false;
         // Drop the previous scan's tree; the live tree rebuilds from
         // directory events as the scan discovers them.
-        m_tree_nodes.clear();
-        m_tree_visible_rows.clear();
-        m_tree_node_index_by_id.clear();
-        m_live_orphans.clear();
-        m_live_directory_backlog.clear();
-        m_live_backlog_cursor = 0;
+        m_tree_kept_for_refresh = keep_tree;
+        if (!keep_tree) {
+            ClearTreeForLiveScan();
+        }
         m_last_live_tree_refresh = {};
         m_live_tree_scan_started = std::chrono::steady_clock::now();
         {
@@ -4108,6 +4209,16 @@ namespace winrt::WinBlaze::UI::implementation
         probe.catalog_entries_at_results_title = m_results_title_probe.catalog_entries_at_results_title;
         probe.search_hits_at_results_title = m_results_title_probe.search_hits_at_results_title;
         probe.treemap_renders_while_results_pending = m_treemap_renders_while_results_pending;
+        probe.freed_heap_returns = m_freed_heap_return_count;
+        probe.tree_in_place_refreshes = m_tree_in_place_refresh_count;
+        probe.results_shown = m_results_shown_count;
+        probe.tree_rows = TreeListView() ? TreeListView().Items().Size() : 0;
+        probe.text_inputs_at_results_title = m_results_title_probe.text_inputs_at_results_title;
+        probe.window_loaded = m_results_title_probe.window_loaded;
+        probe.text_inputs_at_first_layout = m_results_title_probe.text_inputs_at_first_layout;
+        probe.rows_at_first_layout = m_results_title_probe.rows_at_first_layout;
+        probe.text_inputs_built = m_root_path_box && m_scan_excludes && m_scan_includes;
+        probe.root_path_text = m_root_path_box ? std::wstring(m_root_path_box.Text()) : std::wstring{};
         return probe;
     }
 
@@ -5160,6 +5271,23 @@ namespace winrt::WinBlaze::UI::implementation
         }
     }
 
+    // Counts each time results are shown, as a window property any process
+    // can read with GetProp (no work on this thread). A refresh patched from
+    // recorded changes can finish before a title poll ever sees "Scanning";
+    // benchmarks wait for this count to change instead.
+    void MainWindow::PublishResultsShownCount()
+    {
+        ++m_results_shown_count;
+        try {
+            HWND owner{};
+            winrt::check_hresult(get_strong().as<::IWindowNative>()->get_WindowHandle(&owner));
+            if (owner) {
+                SetPropW(owner, L"WinBlaze.ResultsShown", reinterpret_cast<HANDLE>(static_cast<uintptr_t>(m_results_shown_count)));
+            }
+        } catch (...) {
+        }
+    }
+
     void MainWindow::ApplyShellState()
     {
         UpdateWindowTitle();
@@ -5189,9 +5317,14 @@ namespace winrt::WinBlaze::UI::implementation
             urgent = !m_session_active || !m_scan_flush_throttled ||
                 m_pending_ui_state.reload_snapshot || m_pending_ui_state.shell_state_dirty;
             // An urgent request re-arms a timer already waiting on the slow interval.
-            should_start = !m_ui_flush_requested || (urgent && !m_ui_flush_urgent);
+            // Finished results flush at once even when an earlier event already
+            // armed the timer: a refresh patched from recorded changes ends
+            // within a millisecond of starting, and waited ~25 ms for that tick.
+            should_start = !m_ui_flush_requested || (urgent && !m_ui_flush_urgent) ||
+                (results_ready && !m_ui_flush_results_requested);
             m_ui_flush_requested = true;
             m_ui_flush_urgent = m_ui_flush_urgent || urgent;
+            m_ui_flush_results_requested = m_ui_flush_results_requested || results_ready;
         }
 
         if (should_start) {
@@ -5312,6 +5445,7 @@ namespace winrt::WinBlaze::UI::implementation
 
             m_ui_flush_requested = false;
             m_ui_flush_urgent = false;
+            m_ui_flush_results_requested = false;
             m_scan_flush_throttled = m_scan_flush_throttled || (has_pending && m_session_active);
             m_ui_flush_timer.Stop();
         }
@@ -5450,7 +5584,14 @@ namespace winrt::WinBlaze::UI::implementation
                 UpdateCatalogSnapshot();
             }
             m_treemap_render_dirty = true;
-            ScheduleTreemapRender(L"catalog flush");
+            const auto now = std::chrono::steady_clock::now();
+            if (!m_session_active || ScanTreemapRenderDue(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_scan_treemap_render))) {
+                if (m_session_active) {
+                    m_last_scan_treemap_render = now;
+                }
+                ScheduleTreemapRender(L"catalog flush");
+            }
         }
 
         if (pending.extension_stats_dirty) {
@@ -6270,6 +6411,14 @@ namespace winrt::WinBlaze::UI::implementation
         UpdateSummaryText();
         UpdateRuntimeSnapshot();
         LoadExtensionStatsSnapshot();
+        // The previous results (their native model, catalog and rows) are
+        // freed by now, but the process heap hands those pages back to
+        // Windows only up to a second later: measured as ~15 MiB still
+        // committed 300 ms after a lognormal rescan, and only sometimes.
+        // Return them now. Only the process heap: the C runtime and the Rust
+        // engine both allocate from it, and it is always serialized.
+        HeapCompact(GetProcessHeap(), 0);
+        ++m_freed_heap_return_count;
         TraceStartup(L"ApplyDeferredCatalogEntries end");
     }
 
@@ -6277,6 +6426,11 @@ namespace winrt::WinBlaze::UI::implementation
     {
         TraceStartup(L"ApplyPersistedCatalogSnapshot begin");
         m_results_apply_pending = false;
+        const bool tree_kept = std::exchange(m_tree_kept_for_refresh, false);
+        const size_t kept_window_offset = m_tree_window_offset;
+        // Freed here, before the new catalog is built: freeing it after the
+        // results show (~3 ms sooner) overlapped the two catalogs and raised
+        // memory growth over ten rescans by ~1.5 MiB.
         m_tree_catalog.clear();
         m_tree_catalog_keys.clear();
         m_instant_search_hits.clear();
@@ -6319,16 +6473,20 @@ namespace winrt::WinBlaze::UI::implementation
         // folder tree served by the native tree index (hot cache by now).
         // The search previews, catalog text and extension list follow in
         // ApplyDeferredCatalogEntries, after the results show.
-        LoadTreeSnapshot();
+        if (!tree_kept || !RefreshTreeSnapshotInPlace(kept_window_offset)) {
+            LoadTreeSnapshot();
+        }
         UpdateStatus(!m_multiple_root_paths.empty()
             ? L"Combined live catalog loaded. Warnings: " + std::to_wstring(m_multiple_root_warnings)
             : m_imported_snapshot ? L"Imported scan loaded. Original files were not accessed." : L"Catalog snapshot loaded.");
         m_results_title_probe.rows_at_results_title = TreeListView() ? TreeListView().Items().Size() : 0;
+        m_results_title_probe.text_inputs_at_results_title = m_root_path_box != nullptr;
         m_results_title_probe.catalog_entries_at_results_title = m_tree_catalog.size();
         m_results_title_probe.search_hits_at_results_title = m_instant_search_hits.size();
         // The title announces results only once the tree and lists hold them.
         m_title_results_ready = true;
         UpdateWindowTitle();
+        PublishResultsShownCount();
         RestartMonitoring();
         TraceStartup(L"ApplyPersistedCatalogSnapshot end");
         if (!m_benchmark_png_path.empty()) {
@@ -6976,6 +7134,187 @@ namespace winrt::WinBlaze::UI::implementation
         }
     }
 
+    // After a refresh the engine patched in place: re-reads only the folders
+    // whose totals it changed, and replaces only the rows that differ. False
+    // when anything is not as expected; the caller then reloads the tree,
+    // which replaces whatever this changed.
+    bool MainWindow::RefreshTreeSnapshotInPlace(size_t window_offset)
+    {
+        if (m_tree_nodes.empty() || !TreeListView() || !m_tree_updates_ready) {
+            return false;
+        }
+        std::vector<uint64_t> touched_ids;
+        if (!::WinBlaze::UI::NativeBridge::LastRefreshTouched(touched_ids)) {
+            return false;
+        }
+        // The rows shown must be the whole window built for these nodes (no
+        // chunk still queued).
+        auto items = TreeListView().Items();
+        if (items.Size() != m_live_window_rows.size()) {
+            return false;
+        }
+        TraceStartup(L"RefreshTreeSnapshotInPlace begin");
+        const std::unordered_set<uint64_t> touched(touched_ids.begin(), touched_ids.end());
+        // Nodes whose own row shows different numbers now.
+        std::unordered_set<size_t> changed;
+        auto take_totals = [](TreeNodeUi& target, WbTreeNode const& node) {
+            const bool same = target.logical_bytes == node.logical_bytes &&
+                target.physical_bytes == node.physical_bytes &&
+                target.file_count == node.file_count && target.item_count == node.item_count &&
+                target.has_modified_utc == (node.has_modified_utc != 0) &&
+                (!target.has_modified_utc || target.modified_utc == node.modified_utc);
+            target.logical_bytes = node.logical_bytes;
+            target.physical_bytes = node.physical_bytes;
+            target.file_count = node.file_count;
+            target.item_count = node.item_count;
+            target.modified_utc = node.modified_utc;
+            target.has_modified_utc = node.has_modified_utc != 0;
+            return !same;
+        };
+        bool root_matches = false;
+        ::WinBlaze::UI::NativeBridge::TreeRoot([&](WbTreeNode const& node) {
+            if (node.id == m_tree_nodes[0].id && (node.is_directory != 0) == m_tree_nodes[0].is_directory) {
+                root_matches = true;
+                if (take_totals(m_tree_nodes[0], node)) {
+                    changed.insert(0);
+                }
+            }
+        });
+        if (!root_matches) {
+            return false;
+        }
+        // Children of every touched folder whose children are loaded. A
+        // touched folder's parent is touched too, so each touched folder's
+        // own totals arrive with its parent's children.
+        auto child_key = [](bool is_directory, uint64_t id) { return (id << 1) | (is_directory ? 1u : 0u); };
+        const size_t loaded_count = m_tree_nodes.size();
+        for (size_t index = 0; index < loaded_count; ++index) {
+            if (!m_tree_nodes[index].is_directory || m_tree_nodes[index].is_more_row ||
+                !m_tree_nodes[index].children_loaded || !touched.count(m_tree_nodes[index].id)) {
+                continue;
+            }
+            std::unordered_map<uint64_t, size_t> known;
+            for (size_t child : m_tree_nodes[index].children) {
+                if (m_tree_nodes[child].is_more_row) {
+                    return false;
+                }
+                known.emplace(child_key(m_tree_nodes[child].is_directory, m_tree_nodes[child].id), child);
+            }
+            const uint64_t parent_id = m_tree_nodes[index].id;
+            const uint32_t child_depth = m_tree_nodes[index].depth + 1;
+            std::vector<size_t> order;
+            order.reserve(known.size() + 1);
+            const auto result = ::WinBlaze::UI::NativeBridge::TreeChildren(parent_id, 0, [&](WbTreeNode const& node) {
+                const auto found = known.find(child_key(node.is_directory != 0, node.id));
+                if (found != known.end()) {
+                    if (take_totals(m_tree_nodes[found->second], node)) {
+                        changed.insert(found->second);
+                    }
+                    order.push_back(found->second);
+                    known.erase(found);
+                    return;
+                }
+                TreeNodeUi child;
+                child.id = node.id;
+                child.is_directory = node.is_directory != 0;
+                child.name = node.name.ptr == nullptr
+                    ? std::wstring{}
+                    : Utf8ToWide(std::string_view{ node.name.ptr, node.name.len });
+                take_totals(child, node);
+                child.depth = child_depth;
+                child.parent = index;
+                changed.insert(m_tree_nodes.size());
+                order.push_back(m_tree_nodes.size());
+                m_tree_nodes.push_back(std::move(child));
+            });
+            // Paged folders and removed children: reload instead.
+            if (result.total > result.emitted || !known.empty()) {
+                return false;
+            }
+            m_tree_nodes[index].children = std::move(order);
+        }
+        RebuildTreeVisibleRows();
+
+        auto const& rows = m_tree_visible_rows;
+        size_t window_start = (std::min)(window_offset, rows.size());
+        if (!rows.empty() && window_start >= rows.size()) {
+            window_start = ((rows.size() - 1) / kTreeListVirtualizedWindowLimit) * kTreeListVirtualizedWindowLimit;
+        }
+        const size_t window_end = (std::min)(window_start + kTreeListVirtualizedWindowLimit, rows.size());
+        std::vector<size_t> window(rows.begin() + window_start, rows.begin() + window_end);
+        const std::vector<size_t> shown = m_live_window_rows;
+        const std::unordered_set<size_t> in_window(window.begin(), window.end());
+        const std::unordered_set<size_t> in_shown(shown.begin(), shown.end());
+
+        m_tree_selection_updates_suppressed = true;
+        size_t position = 0, next = 0, old = 0, replaced = 0;
+        bool reordered = false;
+        while (next < window.size() || old < shown.size()) {
+            if (old < shown.size() && next < window.size() && shown[old] == window[next]) {
+                const size_t node = window[next];
+                const size_t parent = m_tree_nodes[node].parent;
+                if (changed.count(node) ||
+                    (parent != SIZE_MAX && changed.count(parent) &&
+                        !UpdateTreeRowShare(items.GetAt(static_cast<uint32_t>(position)).try_as<Microsoft::UI::Xaml::Controls::ListViewItem>(), node))) {
+                    items.SetAt(static_cast<uint32_t>(position), CreateTreeNodeListItem(node));
+                    ++replaced;
+                }
+                ++position; ++next; ++old;
+            } else if (old < shown.size() && !in_window.count(shown[old])) {
+                items.RemoveAt(static_cast<uint32_t>(position));
+                ++old;
+            } else if (next < window.size() && !in_shown.count(window[next])) {
+                items.InsertAt(static_cast<uint32_t>(position), CreateTreeNodeListItem(window[next]));
+                ++replaced;
+                ++position; ++next;
+            } else {
+                reordered = true;
+                break;
+            }
+        }
+        m_tree_selection_updates_suppressed = false;
+        if (reordered) {
+            // Sizes moved rows past each other: rebuild the window as usual.
+            m_tree_window_offset = window_start;
+            RefreshTreeListView();
+            TraceStartup(L"RefreshTreeSnapshotInPlace end: reordered, window rebuilt");
+            ++m_tree_in_place_refresh_count;
+            return true;
+        }
+        m_live_window_rows = std::move(window);
+        m_tree_window_offset = window_start;
+        m_tree_rows_shown = items.Size();
+        UpdateTreeWindowStatus(window_start, window_end);
+        if (WinBlazeStartupTraceEnabled()) {
+            TraceStartup(L"RefreshTreeSnapshotInPlace end: rows replaced " + std::to_wstring(replaced));
+        }
+        ++m_tree_in_place_refresh_count;
+        return true;
+    }
+
+    // Updates an unchanged row's share of its parent after the parent's
+    // total changed. False when the row is not laid out as expected.
+    bool MainWindow::UpdateTreeRowShare(Microsoft::UI::Xaml::Controls::ListViewItem const& item, size_t node_index)
+    {
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto row = item ? item.Content().try_as<StackPanel>() : nullptr;
+        if (!row || row.Children().Size() < 4) {
+            return false;
+        }
+        auto track = row.Children().GetAt(2).try_as<Border>();
+        auto fill = track ? track.Child().try_as<Border>() : nullptr;
+        auto cell = row.Children().GetAt(3).try_as<TextBlock>();
+        if (!fill || !cell) {
+            return false;
+        }
+        const double percent = TreeNodeSharePercent(node_index);
+        wchar_t percent_text[16]{};
+        swprintf_s(percent_text, L"%.1f%%", percent);
+        fill.Width(1.5 * percent);
+        cell.Text(winrt::hstring(percent_text));
+        return true;
+    }
+
     void MainWindow::LoadTreeSnapshot()
     {
         TraceStartup(L"LoadTreeSnapshot begin");
@@ -7028,8 +7367,24 @@ namespace winrt::WinBlaze::UI::implementation
     // out of order, in which case the orphan is skipped here and appears when
     // the finished tree replaces the live one. Sizes stay pending ("...")
     // until the scan completes and rollups exist.
+    void MainWindow::ClearTreeForLiveScan()
+    {
+        m_tree_nodes.clear();
+        m_tree_visible_rows.clear();
+        m_tree_node_index_by_id.clear();
+        m_live_orphans.clear();
+        m_live_directory_backlog.clear();
+        m_live_backlog_cursor = 0;
+    }
+
     void MainWindow::ApplyLiveDirectories(std::vector<LiveDirectory> directories)
     {
+        // A refresh that kept the shown tree turned out to walk: the live
+        // tree starts from the root it reports.
+        if (m_tree_kept_for_refresh && !directories.empty()) {
+            m_tree_kept_for_refresh = false;
+            ClearTreeForLiveScan();
+        }
         // Accumulate into the backlog and apply a bounded chunk per flush: a
         // fast scan can hand one flush tens of thousands of directories, and
         // splicing them all at once stalls the UI thread.
@@ -7375,6 +7730,9 @@ namespace winrt::WinBlaze::UI::implementation
             // Each row is a small XAML tree (~1 ms to build), so a full window
             // costs hundreds of ms. Show the first rows now and append the rest
             // on later dispatcher ticks, so results appear and input stays live.
+            // The later chunks queue at low priority, after layout and input:
+            // at normal priority all of them ran before the first frame, which
+            // held back a reload's results by ~60 ms plus their layout.
             static constexpr size_t kTreeRowsFirstChunk = 24;
             static constexpr size_t kTreeRowsPerTick = 64;
             const uint64_t generation = ++m_tree_fill_generation;
@@ -7406,14 +7764,21 @@ namespace winrt::WinBlaze::UI::implementation
                     m_tree_rows_shown = TreeListView().Items().Size();
                     UpdateWindowTitle();
                     if (auto self = weak_chunk.lock(); self && chunk_end < window_end) {
-                        DispatcherQueue().TryEnqueue([self, chunk_end]() { (*self)(chunk_end); });
+                        DispatcherQueue().TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low,
+                            [self, chunk_end]() { (*self)(chunk_end); });
                     }
                 };
-                DispatcherQueue().TryEnqueue(
+                DispatcherQueue().TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low,
                     [append_chunk, first_end]() { (*append_chunk)(first_end); });
             }
         }
 
+        UpdateTreeWindowStatus(window_start, window_end);
+    }
+
+    void MainWindow::UpdateTreeWindowStatus(size_t window_start, size_t window_end)
+    {
+        auto const& rows = m_tree_visible_rows;
         if (TreeWindowPreviousButton()) {
             TreeWindowPreviousButton().IsEnabled(window_start > 0);
         }
@@ -7439,6 +7804,19 @@ namespace winrt::WinBlaze::UI::implementation
             }
             TreeListStatusText().Text(winrt::hstring(status));
         }
+    }
+
+    double MainWindow::TreeNodeSharePercent(size_t node_index) const
+    {
+        auto const& node = m_tree_nodes[node_index];
+        double percent = 100.0;
+        if (node.parent != SIZE_MAX && node.parent < m_tree_nodes.size()) {
+            const auto parent_physical = m_tree_nodes[node.parent].physical_bytes;
+            percent = parent_physical > 0
+                ? (static_cast<double>(node.physical_bytes) / static_cast<double>(parent_physical)) * 100.0
+                : 0.0;
+        }
+        return std::clamp(percent, 0.0, 100.0);
     }
 
     Microsoft::UI::Xaml::Controls::ListViewItem MainWindow::CreateTreeNodeListItem(size_t node_index)
@@ -7516,14 +7894,7 @@ namespace winrt::WinBlaze::UI::implementation
         }
 
         // Size-proportion bar and percentage relative to the parent.
-        double percent = 100.0;
-        if (node.parent != SIZE_MAX && node.parent < m_tree_nodes.size()) {
-            const auto parent_physical = m_tree_nodes[node.parent].physical_bytes;
-            percent = parent_physical > 0
-                ? (static_cast<double>(node.physical_bytes) / static_cast<double>(parent_physical)) * 100.0
-                : 0.0;
-        }
-        percent = std::clamp(percent, 0.0, 100.0);
+        const double percent = TreeNodeSharePercent(node_index);
 
         auto track = Border{};
         track.Width(150.0);
@@ -8737,8 +9108,26 @@ namespace winrt::WinBlaze::UI::implementation
         SearchBox().Focus(Microsoft::UI::Xaml::FocusState::Programmatic);
     }
 
+    void MainWindow::EnsureTextInputs()
+    {
+        if (!m_build_text_inputs) { return; }
+        auto build = std::move(m_build_text_inputs);
+        m_build_text_inputs = {};
+        build();
+    }
+
+    void MainWindow::SetRootPathText(winrt::hstring const& text)
+    {
+        if (m_root_path_box) {
+            m_root_path_box.Text(text);
+        } else if (m_root_path_placeholder_text) {
+            m_root_path_placeholder_text.Text(text);
+        }
+    }
+
     void MainWindow::FocusRootPathBox()
     {
+        EnsureTextInputs();
         if (!RootPathBox()) {
             return;
         }

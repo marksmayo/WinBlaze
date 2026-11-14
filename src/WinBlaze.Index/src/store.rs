@@ -479,6 +479,36 @@ impl BufferedIndexTransaction {
         )
     }
 
+    /// Rebuilds a transaction from records a [`crate::tree::TreeIndex`]
+    /// owns. An incremental rescan publishes its tree first and calls this
+    /// for the merge afterwards, so the copy happens off the path the UI
+    /// waits on. Lineage and change sets are not carried: the merge derives
+    /// its own.
+    pub fn from_records(
+        volumes: &[VolumeRecord],
+        sessions: &[ScanSession],
+        directories: &[DirectoryRecord],
+        files: &[FileRecord],
+        committed: bool,
+    ) -> Self {
+        let mut transaction = Self::default();
+        transaction.reserve(files.len(), directories.len());
+        for volume in volumes {
+            transaction.insert_volume(volume.clone());
+        }
+        for session in sessions {
+            transaction.upsert_session(session);
+        }
+        for directory in directories {
+            transaction.insert_directory(directory.clone());
+        }
+        for file in files {
+            transaction.insert_file(file.clone());
+        }
+        transaction.committed = committed;
+        transaction
+    }
+
     /// By-value counterparts to the trait's `upsert_*` methods, for callers
     /// that own the record: skips the per-record clone, which matters when a
     /// scan session inserts millions of records.

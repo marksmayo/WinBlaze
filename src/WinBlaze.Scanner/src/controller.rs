@@ -78,8 +78,10 @@ impl ScanController {
         let directory_walk_worker_count = request.config.directory_walk_worker_count();
         let reparse_policy = request.config.reparse_policy;
         let fast_enumeration = request.config.fast_enumeration;
+        let background_priority = request.config.background_priority;
 
         let join = thread::spawn(move || {
+            crate::scheduler::enter_scan_thread_priority(background_priority);
             let mut pipeline = ScanEventPipeline::with_sender(event_tx, pipeline_config);
             let mut issue_keys = HashSet::new();
             if access_plan.primary_backend == crate::types::ScanBackend::NtfsMft && rules.is_empty()
@@ -626,7 +628,6 @@ fn emit_file_record(
     entry: winfind::FindEntry,
 ) {
     let size_bytes = entry.size_bytes;
-    let attributes = winblaze_core::FileAttributes(entry.attributes);
     let allocation_bytes = entry
         .physical_identity
         .map_or(entry.allocation_bytes, |id| {
@@ -638,24 +639,42 @@ fn emit_file_record(
         .total_allocation_bytes
         .saturating_add(allocation_bytes);
 
-    pipeline.emit_file(winblaze_core::FileRecord {
-        id: winblaze_core::FileId(walk_state.next_file_id()),
+    let id = winblaze_core::FileId(walk_state.next_file_id());
+    pipeline.emit_file(walked_file_record(
+        id,
         parent_directory_id,
-        name: entry.name.into_display(),
-        // Derived on demand from the parent directory (see FileRecord docs);
-        // materializing one String per file dominated scan-time allocation,
-        // index memory, and snapshot size.
-        full_path: String::new().into(),
-        size_bytes,
+        entry,
         allocation_bytes,
-        attributes,
+    ));
+    walk_state.maybe_emit_progress(pipeline, false);
+}
+
+/// The record a directory walk stores for a file entry. Shared by both walk
+/// paths and by [`crate::listing`], so a refreshed directory's records match
+/// the ones a full walk would have produced.
+pub(crate) fn walked_file_record(
+    id: winblaze_core::FileId,
+    parent_directory_id: winblaze_core::DirectoryId,
+    entry: winfind::FindEntry,
+    allocation_bytes: u64,
+) -> winblaze_core::FileRecord {
+    winblaze_core::FileRecord {
+        id,
+        parent_directory_id,
+        size_bytes: entry.size_bytes,
+        attributes: winblaze_core::FileAttributes(entry.attributes),
         timestamps: winblaze_core::FileTimestamps::new(
             filetime_or_none(entry.created_utc),
             filetime_or_none(entry.modified_utc),
             filetime_or_none(entry.accessed_utc),
         ),
-    });
-    walk_state.maybe_emit_progress(pipeline, false);
+        name: entry.name.into_display(),
+        // Derived on demand from the parent directory (see FileRecord docs);
+        // materializing one String per file dominated scan-time allocation,
+        // index memory, and snapshot size.
+        full_path: String::new().into(),
+        allocation_bytes,
+    }
 }
 
 /// UI/display copy of an on-disk name. Path joins must use the original
@@ -995,7 +1014,9 @@ fn run_fallback_worker<'scope, 'env>(
             ) {
                 Ok(_) => {
                     let sender = event_tx.clone();
+                    let priority = crate::scheduler::current_thread_priority();
                     scope.spawn(move || {
+                        crate::scheduler::adopt_thread_priority(priority);
                         run_fallback_worker(
                             scope,
                             shared,
@@ -1231,7 +1252,6 @@ fn emit_file_record_shared(
     totals: &mut FallbackTotals,
 ) {
     let size_bytes = entry.size_bytes;
-    let attributes = winblaze_core::FileAttributes(entry.attributes);
     let allocation_bytes = entry
         .physical_identity
         .map_or(entry.allocation_bytes, |id| {
@@ -1241,21 +1261,12 @@ fn emit_file_record_shared(
     totals.logical = totals.logical.saturating_add(size_bytes);
     totals.physical = totals.physical.saturating_add(allocation_bytes);
 
-    pipeline.emit_file(winblaze_core::FileRecord {
-        id: winblaze_core::FileId(file_id),
+    pipeline.emit_file(walked_file_record(
+        winblaze_core::FileId(file_id),
         parent_directory_id,
-        name: entry.name.into_display(),
-        // Derived on demand from the parent directory (see FileRecord docs).
-        full_path: String::new().into(),
-        size_bytes,
+        entry,
         allocation_bytes,
-        attributes,
-        timestamps: winblaze_core::FileTimestamps::new(
-            filetime_or_none(entry.created_utc),
-            filetime_or_none(entry.modified_utc),
-            filetime_or_none(entry.accessed_utc),
-        ),
-    });
+    ));
     if totals.files >= 512 {
         totals.publish(shared);
         maybe_emit_progress_shared(shared, pipeline);

@@ -43,3 +43,4 @@ pub mod directory_metadata;
 pub mod storage_maintenance;
 
 pub mod hardlinks;
+pub mod listing;

@@ -48,6 +48,12 @@ $fixture = Join-Path $output 'saved scan'
 New-Item -ItemType Directory -Path (Join-Path $fixture 'tree/a') -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $fixture 'tree/a/one.txt') -Value 'one'
 Set-Content -LiteralPath (Join-Path $fixture 'tree/two.txt') -Value 'two'
+# More folders than the first screenful of rows, so some are added later.
+foreach ($index in 1..40) {
+    $folder = Join-Path $fixture ('tree/folder{0:D2}' -f $index)
+    New-Item -ItemType Directory -Path $folder -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $folder 'file.txt') -Value $index
+}
 $csv = Join-Path $fixture 'scan.csv'
 & (Join-Path $candidate 'winblaze-cli.exe') (Join-Path $fixture 'tree') $csv | Out-Null
 if ($LASTEXITCODE -or !(Test-Path -LiteralPath $csv)) { throw 'Could not export the saved-scan fixture' }

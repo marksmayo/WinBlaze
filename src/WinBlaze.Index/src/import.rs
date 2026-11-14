@@ -12,6 +12,13 @@ use winblaze_core::{DirectoryId, DirectoryRecord, FileAttributes, FileId, FileRe
 thread_local! {
     static ANCESTOR_PROBES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     static PARENT_PROBES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static COMMON_PROBES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[inline(always)]
+fn count_common_probe() {
+    #[cfg(test)]
+    COMMON_PROBES.with(|count| count.set(count.get() + 1));
 }
 
 #[inline(always)]
@@ -179,6 +186,170 @@ impl PartialEq for FoldedPath<'_> {
 
 impl Eq for FoldedPath<'_> {}
 
+/// Paths in one equal-hash run past this many go through a SipHash set: a
+/// crafted file cannot turn the pairwise comparison quadratic.
+const PAIRWISE_RUN: usize = 16;
+
+/// Exports with at least this many rows are checked and built in parallel.
+const PARALLEL_ROWS: usize = 16_384;
+
+#[cfg(test)]
+thread_local! {
+    static SINGLE_THREADED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn import_threads(rows: usize) -> usize {
+    #[cfg(test)]
+    if SINGLE_THREADED.with(std::cell::Cell::get) {
+        return 1;
+    }
+    if rows >= PARALLEL_ROWS {
+        std::thread::available_parallelism().map_or(1, |count| count.get().min(4))
+    } else {
+        1
+    }
+}
+
+/// `work(first_index, chunk)` over `threads` contiguous chunks of `items`,
+/// results in order; the first error in item order wins, as in one pass.
+fn in_chunks<'a, T: Sync, R: Send>(
+    items: &'a [T],
+    threads: usize,
+    work: impl Fn(usize, &'a [T]) -> io::Result<R> + Sync,
+) -> io::Result<Vec<R>> {
+    if threads <= 1 || items.len() < 2 {
+        return Ok(vec![work(0, items)?]);
+    }
+    let chunk = items.len().div_ceil(threads);
+    std::thread::scope(|scope| {
+        let work = &work;
+        let workers: Vec<_> = items
+            .chunks(chunk)
+            .enumerate()
+            .map(|(index, part)| scope.spawn(move || work(index * chunk, part)))
+            .collect();
+        workers
+            .into_iter()
+            .map(|worker| {
+                worker
+                    .join()
+                    .unwrap_or_else(|_| Err(invalid("CSV import failed")))
+            })
+            .collect()
+    })
+}
+
+fn row_parent<'r>(row: &'r Row<'_>) -> io::Result<&'r str> {
+    if row[1] == "Directory" {
+        Ok(&row[0])
+    } else {
+        row[0]
+            .rsplit_once('\\')
+            .map(|(parent, _)| parent)
+            .ok_or_else(|| invalid("File has no parent path"))
+    }
+}
+
+/// Shortens `common` to the nearest folder that holds `parent`.
+fn narrow_common(common: &mut String, parent: &str) -> io::Result<()> {
+    while !parent.eq_ignore_ascii_case(common) && !is_descendant(parent, common) {
+        let len = common
+            .rsplit_once('\\')
+            .map(|(p, _)| p.len())
+            .ok_or_else(|| invalid("CSV spans unrelated volumes"))?;
+        common.truncate(len);
+    }
+    Ok(())
+}
+
+/// Each row's parent where it differs from the row before, in row order,
+/// and (when `narrow`) the nearest folder holding every one of them. Common
+/// folders form a chain, so the common folder of chunk results equals that of
+/// all rows.
+fn rows_common<'r>(
+    rows: &'r [Row<'_>],
+    narrow: bool,
+) -> io::Result<(Option<String>, Vec<&'r str>)> {
+    let mut parents = rows.iter().map(row_parent);
+    let Some(first) = parents.next() else {
+        return Ok((None, Vec::new()));
+    };
+    let first = first?;
+    let mut common = narrow.then(|| first.to_owned());
+    let mut changes = vec![first];
+    // Consecutive rows usually share a parent already known to be inside.
+    let mut checked = first;
+    for parent in parents {
+        let parent = parent?;
+        if parent == checked {
+            continue;
+        }
+        checked = parent;
+        changes.push(parent);
+        if let Some(common) = &mut common {
+            count_common_probe();
+            narrow_common(common, parent)?;
+        }
+    }
+    Ok((common, changes))
+}
+
+/// Whether two paths are equal once case-folded. Each thread hashes a chunk
+/// of paths into shards by the hash's top bits, so equal hashes always meet
+/// in one shard; each shard is then sorted and only paths whose hashes match
+/// are compared. A hash-set insert per row was a sixth of reopening a scan.
+fn has_duplicate_path(
+    paths: &[&str],
+    threads: usize,
+    hash: impl Fn(&FoldedPath<'_>) -> u64 + Sync,
+) -> bool {
+    let shards = threads.max(1);
+    let shard_of = |value: u64| ((u128::from(value) * shards as u128) >> 64) as usize;
+    let parts = in_chunks(paths, threads, |start, chunk| {
+        let mut sharded = vec![Vec::with_capacity(chunk.len() / shards + 16); shards];
+        for (offset, path) in chunk.iter().enumerate() {
+            let value = hash(&FoldedPath::new(path));
+            sharded[shard_of(value)].push((value, start + offset));
+        }
+        Ok(sharded)
+    })
+    .expect("path hashing thread");
+    let shard_has_duplicate = |shard: usize| {
+        let mut hashes: Vec<(u64, usize)> = parts
+            .iter()
+            .flat_map(|part| part[shard].iter().copied())
+            .collect();
+        hashes.sort_unstable_by_key(|&(hash, _)| hash);
+        hashes.chunk_by(|left, right| left.0 == right.0).any(|run| {
+            let folded = || run.iter().map(|&(_, index)| FoldedPath::new(paths[index]));
+            if run.len() == 1 {
+                false
+            } else if run.len() <= PAIRWISE_RUN {
+                let folded: Vec<_> = folded().collect();
+                (1..folded.len()).any(|right| folded[..right].contains(&folded[right]))
+            } else {
+                let mut seen = std::collections::HashSet::with_capacity(run.len());
+                folded().any(|path| !seen.insert(path))
+            }
+        })
+    };
+    if shards == 1 {
+        return shard_has_duplicate(0);
+    }
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..shards)
+            .map(|shard| {
+                let shard_has_duplicate = &shard_has_duplicate;
+                scope.spawn(move || shard_has_duplicate(shard))
+            })
+            .collect();
+        // The scope joins any shard still running once one finds a duplicate.
+        workers
+            .into_iter()
+            .any(|worker| worker.join().expect("duplicate check thread"))
+    })
+}
+
 fn is_descendant(path: &str, parent: &str) -> bool {
     if path.is_ascii() && parent.is_ascii() {
         return path
@@ -287,6 +458,62 @@ fn rows(input: &str, delimiter: char) -> io::Result<Vec<Row<'_>>> {
     }
 }
 
+/// Inputs at least this large are parsed in parallel chunks.
+const PARALLEL_PARSE_BYTES: usize = 1 << 20;
+
+/// [`rows`] over `chunks` line-aligned slices on separate threads. A split
+/// that lands inside a quoted line break leaves one chunk with an unclosed
+/// quote and the next starting mid-field, and both fail to parse; any failed
+/// chunk reparses the whole input in one pass, so the result (rows or error)
+/// always equals `rows(input)`.
+fn parallel_rows(input: &str, delimiter: char, chunks: usize) -> io::Result<Vec<Row<'_>>> {
+    let bytes = input.as_bytes();
+    let mut bounds = vec![0];
+    for chunk in 1..chunks.max(1) {
+        let target = (bytes.len() * chunk / chunks).max(*bounds.last().unwrap());
+        match bytes[target..].iter().position(|&b| b == b'\n') {
+            Some(newline) => bounds.push(target + newline + 1),
+            None => break,
+        }
+    }
+    bounds.push(bytes.len());
+    bounds.dedup();
+    if bounds.len() <= 2 {
+        return rows(input, delimiter);
+    }
+    let parts: Vec<io::Result<Vec<Row<'_>>>> = std::thread::scope(|scope| {
+        let workers: Vec<_> = bounds
+            .windows(2)
+            .map(|range| {
+                // Bounds follow a '\n', an ASCII byte, so each is a char boundary.
+                let slice = &input[range[0]..range[1]];
+                scope.spawn(move || rows(slice, delimiter))
+            })
+            .collect();
+        workers
+            .into_iter()
+            .map(|worker| {
+                worker
+                    .join()
+                    .unwrap_or_else(|_| Err(invalid("CSV parse failed")))
+            })
+            .collect()
+    });
+    if parts.iter().any(Result::is_err) {
+        return rows(input, delimiter);
+    }
+    let mut all = Vec::with_capacity(
+        parts
+            .iter()
+            .map(|part| part.as_ref().map_or(0, Vec::len))
+            .sum(),
+    );
+    for part in parts {
+        all.extend(part?);
+    }
+    Ok(all)
+}
+
 /// Imports WinBlaze CSV. Paths and sizes are metadata, never filesystem requests.
 pub fn read_csv(input: impl Read) -> io::Result<TreeIndex> {
     read_csv_with_local_time(input, |_| {
@@ -338,7 +565,13 @@ fn read_delimited(
 ) -> io::Result<TreeIndex> {
     let mut text = String::new();
     input.read_to_string(&mut text)?;
-    let mut rows = rows(text.trim_start_matches('\u{feff}'), delimiter)?;
+    let text = text.trim_start_matches('\u{feff}');
+    let mut rows = if text.len() >= PARALLEL_PARSE_BYTES {
+        let threads = std::thread::available_parallelism().map_or(1, |count| count.get());
+        parallel_rows(text, delimiter, threads.min(4))?
+    } else {
+        rows(text, delimiter)?
+    };
     if rows
         .first()
         .and_then(|r| r.first())
@@ -535,29 +768,45 @@ fn build_import_metadata(
     let hash_state = PathHashState::new();
     let mut directories: HashMap<&str, (DirectoryId, bool), PathHashState> =
         HashMap::with_hasher(hash_state);
-    let mut seen = std::collections::HashSet::with_capacity_and_hasher(rows.len(), hash_state);
-    for row in rows.iter().skip(1) {
-        if row.len() != 7 {
-            return Err(invalid("Wrong number of CSV fields"));
+    let body = &rows[1.min(rows.len())..];
+    let threads = import_threads(body.len());
+    let listed = in_chunks(body, threads, |_, chunk| {
+        let mut listed = Vec::new();
+        for row in chunk {
+            if row.len() != 7 {
+                return Err(invalid("Wrong number of CSV fields"));
+            }
+            if row[0].is_empty() || row[0].contains('\0') {
+                return Err(invalid("Empty or duplicate CSV path"));
+            }
+            for column in &row[2..6] {
+                column
+                    .parse::<u64>()
+                    .map_err(|_| invalid("Invalid byte count or entry count"))?;
+            }
+            if !row[6].is_empty() {
+                row[6]
+                    .parse::<i64>()
+                    .map_err(|_| invalid("Invalid timestamp"))?;
+            }
+            if row[1] == "Directory" {
+                listed.push(&*row[0]);
+            }
         }
-        if row[0].is_empty() || row[0].contains('\0') || !seen.insert(FoldedPath::new(&row[0])) {
-            return Err(invalid("Empty or duplicate CSV path"));
-        }
-        for column in &row[2..6] {
-            column
-                .parse::<u64>()
-                .map_err(|_| invalid("Invalid byte count or entry count"))?;
-        }
-        if !row[6].is_empty() {
-            row[6]
-                .parse::<i64>()
-                .map_err(|_| invalid("Invalid timestamp"))?;
-        }
-        if row[1] == "Directory" {
-            let id = DirectoryId(directories.len() as u64 + 1);
-            directories.insert(&*row[0], (id, false));
-        }
+        Ok(listed)
+    })?;
+    // Listed folders take their ids in row order, as before any are linked.
+    for path in listed.into_iter().flatten() {
+        let id = DirectoryId(directories.len() as u64 + 1);
+        directories.insert(path, (id, false));
     }
+    let paths: Vec<&str> = body.iter().map(|row| &*row[0]).collect();
+    if has_duplicate_path(&paths, threads, |path| {
+        std::hash::BuildHasher::hash_one(&hash_state, path)
+    }) {
+        return Err(invalid("Empty or duplicate CSV path"));
+    }
+    drop(paths);
     let multiple = directories.contains_key(crate::multiple_roots::ROOT_PATH);
     let top_roots: std::collections::HashSet<&str, PathHashState> = if multiple {
         directories
@@ -574,44 +823,29 @@ fn build_import_metadata(
         std::collections::HashSet::with_hasher(hash_state)
     };
     // The common containing directory becomes the root for files-only exports.
-    let mut parents = rows.iter().skip(1).map(|r| {
-        if r[1] == "Directory" {
-            Ok(&*r[0])
-        } else {
-            r[0].rsplit_once('\\')
-                .map(|(p, _)| p)
-                .ok_or_else(|| invalid("File has no parent path"))
-        }
-    });
-    let mut common = parents
-        .next()
-        .ok_or_else(|| invalid("No scan records"))??
-        .to_owned();
-    if multiple {
-        common = crate::multiple_roots::ROOT_PATH.to_owned();
+    if body.is_empty() {
+        return Err(invalid("No scan records"));
     }
-    for parent in parents {
-        let parent = parent?;
-        if multiple {
-            continue;
+    let chunks = in_chunks(body, threads, |_, chunk| rows_common(chunk, !multiple))?;
+    let common = if multiple {
+        crate::multiple_roots::ROOT_PATH.to_owned()
+    } else {
+        let mut commons = chunks.iter().filter_map(|(common, _)| common.as_deref());
+        let mut common = commons
+            .next()
+            .ok_or_else(|| invalid("No scan records"))?
+            .to_owned();
+        for other in commons {
+            narrow_common(&mut common, other)?;
         }
-        while !parent.eq_ignore_ascii_case(&common) && !is_descendant(parent, &common) {
-            let len = common
-                .rsplit_once('\\')
-                .map(|(p, _)| p.len())
-                .ok_or_else(|| invalid("CSV spans unrelated volumes"))?;
-            common.truncate(len);
-        }
-    }
+        common
+    };
+    // Each run of rows sharing a parent links that parent once; a run split
+    // across two chunks links it twice, and the second stops at once.
     let mut linked = "";
-    for row in rows.iter().skip(1) {
-        let mut path = if row[1] == "Directory" {
-            &*row[0]
-        } else {
-            row[0].rsplit_once('\\').unwrap().0
-        };
-        // Consecutive rows usually share a parent that is already linked.
-        if !linked.is_empty() && path == linked {
+    for &parent in chunks.iter().flat_map(|(_, changes)| changes) {
+        let mut path = parent;
+        if path == linked {
             continue;
         }
         linked = path;
@@ -632,11 +866,71 @@ fn build_import_metadata(
                 .0;
         }
     }
+    let directories = directories;
+    // Each record needs only its row and the finished folder map.
+    let file_parts = in_chunks(body, threads, |start, chunk| {
+        let mut files = Vec::with_capacity(chunk.len());
+        let mut last_parent: Option<(&str, DirectoryId)> = None;
+        for (offset, row) in chunk.iter().enumerate() {
+            if row[1] == "Directory" {
+                continue;
+            }
+            if row[1] != "File" {
+                return Err(invalid("Unknown record kind"));
+            }
+            let path: &str = &row[0];
+            let (parent_path, name) = path
+                .rsplit_once('\\')
+                .ok_or_else(|| invalid("File has no parent path"))?;
+            // Consecutive files usually share a directory: compare before hashing.
+            let parent = match last_parent {
+                Some((known, id)) if known == parent_path => id,
+                _ => {
+                    count_parent_probe();
+                    let id = directories
+                        .get(parent_path)
+                        .ok_or_else(|| invalid("Missing parent directory"))?
+                        .0;
+                    last_parent = Some((parent_path, id));
+                    id
+                }
+            };
+            let details = if metadata.is_empty() {
+                None
+            } else {
+                metadata.get(path)
+            };
+            files.push(FileRecord {
+                id: FileId((start + offset) as u64 + 1),
+                parent_directory_id: parent,
+                name: name.into(),
+                // Derived from the parent directory on demand, as for scanned files.
+                full_path: Default::default(),
+                size_bytes: row[2]
+                    .parse()
+                    .map_err(|_| invalid("Invalid logical bytes"))?,
+                allocation_bytes: row[3]
+                    .parse()
+                    .map_err(|_| invalid("Invalid allocated bytes"))?,
+                attributes: details
+                    .and_then(|value| value.attributes)
+                    .map(FileAttributes)
+                    .unwrap_or(FileAttributes::ARCHIVE),
+                timestamps: winblaze_core::FileTimestamps::new(
+                    details.and_then(|value| value.created),
+                    if row[6].is_empty() {
+                        None
+                    } else {
+                        Some(import_timestamp(&row[6], allow_legacy_ticks)?)
+                    },
+                    details.and_then(|value| value.accessed),
+                ),
+            });
+        }
+        Ok(files)
+    })?;
     let mut tx = BufferedIndexTransaction::default();
-    tx.reserve(
-        rows.iter().skip(1).filter(|r| r[1] == "File").count(),
-        directories.len(),
-    );
+    tx.reserve(file_parts.iter().map(Vec::len).sum(), directories.len());
     for (&path, &(id, _)) in &directories {
         let parent = path
             .rsplit_once('\\')
@@ -662,62 +956,8 @@ fn build_import_metadata(
             total_entries: 0,
         });
     }
-    let mut last_parent: Option<(&str, DirectoryId)> = None;
-    for (ordinal, row) in rows.iter().skip(1).enumerate() {
-        if row[1] == "Directory" {
-            continue;
-        }
-        if row[1] != "File" {
-            return Err(invalid("Unknown record kind"));
-        }
-        let path: &str = &row[0];
-        let (parent_path, name) = path
-            .rsplit_once('\\')
-            .ok_or_else(|| invalid("File has no parent path"))?;
-        // Consecutive files usually share a directory: compare before hashing.
-        let parent = match last_parent {
-            Some((known, id)) if known == parent_path => id,
-            _ => {
-                count_parent_probe();
-                let id = directories
-                    .get(parent_path)
-                    .ok_or_else(|| invalid("Missing parent directory"))?
-                    .0;
-                last_parent = Some((parent_path, id));
-                id
-            }
-        };
-        let details = if metadata.is_empty() {
-            None
-        } else {
-            metadata.get(path)
-        };
-        tx.insert_file(FileRecord {
-            id: FileId(ordinal as u64 + 1),
-            parent_directory_id: parent,
-            name: name.into(),
-            // Derived from the parent directory on demand, as for scanned files.
-            full_path: Default::default(),
-            size_bytes: row[2]
-                .parse()
-                .map_err(|_| invalid("Invalid logical bytes"))?,
-            allocation_bytes: row[3]
-                .parse()
-                .map_err(|_| invalid("Invalid allocated bytes"))?,
-            attributes: details
-                .and_then(|value| value.attributes)
-                .map(FileAttributes)
-                .unwrap_or(FileAttributes::ARCHIVE),
-            timestamps: winblaze_core::FileTimestamps::new(
-                details.and_then(|value| value.created),
-                if row[6].is_empty() {
-                    None
-                } else {
-                    Some(import_timestamp(&row[6], allow_legacy_ticks)?)
-                },
-                details.and_then(|value| value.accessed),
-            ),
-        });
+    for file in file_parts.into_iter().flatten() {
+        tx.insert_file(file);
     }
     let mut tree = TreeIndex::build(tx);
     if !metadata.is_empty() {
@@ -1146,9 +1386,195 @@ mod tests {
         (csv, directory)
     }
 
+    #[test]
+    fn duplicates_are_found_however_the_paths_hash() {
+        let paths: Vec<String> = (0..300).map(|index| format!(r"C:\r\f{index}")).collect();
+        let distinct: Vec<&str> = paths.iter().map(String::as_str).collect();
+        let state = PathHashState::new();
+        let real = |path: &FoldedPath<'_>| std::hash::BuildHasher::hash_one(&state, path);
+        let same = |_: &FoldedPath<'_>| 7_u64;
+        let halves = |path: &FoldedPath<'_>| real(path) & 1;
+        let check = |paths: &[&str], expected: bool| {
+            for threads in [1, 3] {
+                assert_eq!(
+                    has_duplicate_path(paths, threads, real),
+                    expected,
+                    "{threads}"
+                );
+                assert_eq!(
+                    has_duplicate_path(paths, threads, same),
+                    expected,
+                    "{threads}"
+                );
+                assert_eq!(
+                    has_duplicate_path(paths, threads, halves),
+                    expected,
+                    "{threads}"
+                );
+            }
+        };
+        check(&distinct, false);
+        check(&[distinct.as_slice(), &[r"C:\R\F123"]].concat(), true);
+        // The Kelvin sign folds to k: a duplicate of k, but not of anything else.
+        check(&[distinct.as_slice(), &["C:\\r\\\u{212A}"]].concat(), false);
+        check(
+            &[distinct.as_slice(), &["C:\\r\\\u{212A}", r"C:\r\k"]].concat(),
+            true,
+        );
+    }
+
+    fn import_both_ways(csv: &str) -> (io::Result<TreeIndex>, io::Result<TreeIndex>) {
+        let parallel = read_csv(csv.as_bytes());
+        SINGLE_THREADED.with(|single| single.set(true));
+        let single = read_csv(csv.as_bytes());
+        SINGLE_THREADED.with(|single| single.set(false));
+        (parallel, single)
+    }
+
+    #[test]
+    fn a_large_export_imports_in_chunks_as_in_one_pass() {
+        // Files only, so the root is the common folder, and every chunk
+        // starts deeper than that root.
+        let mut csv = String::from(HEADER);
+        for index in 0..40_000 {
+            let branch = ["a\\x\\y", "a\\x", "b", "a\\z"][index * 4 / 40_000];
+            csv.push_str(&format!(
+                "\"C:\\r\\{branch}\\d{}\\f{index}\",File,{index},{},0,0,{}\r\n",
+                index % 13,
+                index * 2,
+                1_700_000_000 + index
+            ));
+        }
+        let (parallel, single) = import_both_ways(&csv);
+        let (parallel, single) = (parallel.unwrap(), single.unwrap());
+        assert_eq!(parallel.files().len(), 40_000);
+        assert_eq!(parallel.root().unwrap().0.full_path, r"C:\r");
+        assert_eq!(parallel.files(), single.files());
+        assert_eq!(parallel.directories(), single.directories());
+        // Folders and files listed with their totals, as WinBlaze writes them.
+        let (csv, _) = deep_export(3, 40_000);
+        let (parallel, single) = import_both_ways(&csv);
+        let (parallel, single) = (parallel.unwrap(), single.unwrap());
+        assert_eq!(parallel.files(), single.files());
+        assert_eq!(parallel.directories(), single.directories());
+    }
+
+    #[test]
+    fn a_large_export_fails_in_chunks_as_in_one_pass() {
+        let mut rows = String::new();
+        for index in 0..40_000 {
+            rows.push_str(&format!(
+                "\"C:\\r\\d{}\\f{index}\",File,1,1,0,0,\r\n",
+                index % 7
+            ));
+        }
+        for bad in [
+            "\"D:\\other\\f\",File,1,1,0,0,\r\n",
+            "\"nofolder\",File,1,1,0,0,\r\n",
+            "\"C:\\r\\d1\\g\",Link,1,1,0,0,\r\n",
+            "\"C:\\r\\d1\\g\",File,x,1,0,0,\r\n",
+        ] {
+            let csv = format!("{HEADER}{rows}{bad}");
+            let (parallel, single) = import_both_ways(&csv);
+            assert!(single.is_err(), "{bad}");
+            assert!(parallel.is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_duplicate_far_apart_in_a_large_export_is_rejected() {
+        let mut csv = String::from(HEADER);
+        for index in 0..40_000 {
+            csv.push_str(&format!(
+                "\"C:\\r\\d{}\\f{index}\",File,1,1,0,0,\r\n",
+                index % 7
+            ));
+        }
+        assert!(read_csv(csv.as_bytes()).is_ok());
+        csv.push_str("\"C:\\R\\D3\\F3\",File,1,1,0,0,\r\n");
+        assert!(read_csv(csv.as_bytes()).is_err());
+    }
+
     fn reset_probes() {
         ANCESTOR_PROBES.with(|count| count.set(0));
         PARENT_PROBES.with(|count| count.set(0));
+        COMMON_PROBES.with(|count| count.set(0));
+    }
+
+    #[test]
+    fn duplicate_paths_are_rejected_whatever_their_case() {
+        for (first, second) in [
+            (r"C:\r\a.txt", r"C:\r\a.txt"),
+            (r"C:\r\A.TXT", r"C:\r\a.txt"),
+            (r"C:\r\x\f", r"C:\R\X\F"),
+            (r"C:\r\K", "C:\\r\\\u{212A}"),
+        ] {
+            let mut csv = String::from(HEADER);
+            csv.push_str("\"C:\\r\",Directory,2,2,2,0,\r\n");
+            csv.push_str(&format!("\"{first}\",File,1,1,0,0,\r\n"));
+            csv.push_str(&format!("\"{second}\",File,1,1,0,0,\r\n"));
+            assert!(read_csv(csv.as_bytes()).is_err(), "{first} / {second}");
+        }
+        let mut csv = String::from(HEADER);
+        csv.push_str("\"C:\\r\",Directory,2,2,2,1,\r\n");
+        csv.push_str("\"C:\\r\\a\",File,1,1,0,0,\r\n");
+        csv.push_str("\"C:\\r\\A\",Directory,1,1,1,0,\r\n");
+        assert!(
+            read_csv(csv.as_bytes()).is_err(),
+            "a file and a folder at one path"
+        );
+        let mut csv = String::from(HEADER);
+        csv.push_str("\"C:\\r\",Directory,2,2,2,2,\r\n");
+        csv.push_str("\"C:\\r\\a\\same.txt\",File,1,1,0,0,\r\n");
+        csv.push_str("\"C:\\r\\b\\same.txt\",File,1,1,0,0,\r\n");
+        assert!(read_csv(csv.as_bytes()).is_ok(), "one name in two folders");
+    }
+
+    #[test]
+    fn the_common_root_is_compared_once_per_folder_run() {
+        let (csv, _) = deep_export(5, 1000);
+        reset_probes();
+        read_csv(csv.as_bytes()).unwrap();
+        let probes = COMMON_PROBES.with(|count| count.get());
+        assert!(probes <= 10, "common-root probes: {probes}");
+    }
+
+    fn many_rows(count: usize) -> String {
+        let mut csv = String::from(HEADER);
+        csv.push_str("\"C:\\r\",Directory,1,1,1,0,\r\n");
+        for index in 0..count {
+            csv.push_str(&format!(
+                "\"C:\\r\\d{}\\\"\"q\"\"{index}\",File,{index},1,0,0,\r\n",
+                index % 7
+            ));
+        }
+        csv
+    }
+
+    #[test]
+    fn rows_parsed_in_chunks_match_one_pass() {
+        let csv = many_rows(5000);
+        for chunks in [1, 2, 3, 4, 7] {
+            assert_eq!(
+                parallel_rows(&csv, ',', chunks).unwrap(),
+                rows(&csv, ',').unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn a_chunk_split_inside_a_quoted_line_break_falls_back_to_one_pass() {
+        // NTFS allows a line break in a name through native calls; the split
+        // then lands inside a quoted field, and that chunk fails to parse.
+        let mut csv = many_rows(400);
+        csv.push_str("\"C:\\r\\line\nbreak\",File,1,1,0,0,\r\n");
+        csv.push_str(&many_rows(400)[HEADER.len()..].replace("C:\\r\\d", "C:\\r\\e"));
+        for chunks in [2, 3, 4, 7] {
+            assert_eq!(
+                parallel_rows(&csv, ',', chunks).unwrap(),
+                rows(&csv, ',').unwrap()
+            );
+        }
     }
 
     #[test]

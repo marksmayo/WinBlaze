@@ -21,7 +21,7 @@ pub use store::{
     BufferedIndexTransaction, IndexBackend, IndexRepository, IndexSnapshot, IndexStorageError,
     IndexTransaction, SqliteIndexRepository,
 };
-pub use tree::{DirRollup, TreeEntry, TreeIndex};
+pub use tree::{DirRollup, FilePatchError, TreeEntry, TreeIndex};
 
 pub mod storage_cost;
 

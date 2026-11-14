@@ -28,6 +28,8 @@ use crate::api::{
     WbUpdateCheck,
 };
 
+mod refresh;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ScanDelivery {
     Live,
@@ -45,6 +47,26 @@ const PROGRESS_LOG_MIN_INTERVAL: Duration = Duration::from_secs(1);
 const TREE_CHILDREN_LIMIT: usize = 4096;
 const DIRECTORY_BATCH_SIZE: usize = 4096;
 const DIRECTORY_BATCH_MAX_LATENCY: Duration = Duration::from_millis(250);
+/// Deepest live folder level the UI shows below the scan root; mirrors
+/// `kMaxLiveDepth` in MainWindow.cpp, which drops anything deeper.
+const LIVE_TREE_MAX_DEPTH: usize = 3;
+
+/// Levels between `root` and `path` (0 for the root itself), or `None` when
+/// the root is unknown or `path` is not under it (a followed reparse target).
+fn live_folder_depth(root: &str, path: &str) -> Option<usize> {
+    let mut root_parts = root
+        .split(['\\', '/'])
+        .filter(|part| !part.is_empty())
+        .peekable();
+    root_parts.peek()?;
+    let mut parts = path.split(['\\', '/']).filter(|part| !part.is_empty());
+    for root_part in root_parts {
+        if !parts.next()?.eq_ignore_ascii_case(root_part) {
+            return None;
+        }
+    }
+    Some(parts.count())
+}
 
 /// Read model shared by the tree/catalog/extension-stats queries: the display
 /// tree plus derived totals, built once per snapshot instead of re-reading
@@ -754,15 +776,38 @@ fn add_extension_total(totals: &mut HashMap<String, (u64, u64)>, extension: &str
 }
 
 fn set_index_model(model: IndexModel) {
-    set_index_model_arc(Arc::new(model));
+    let _ = set_index_model_arc(Arc::new(model));
 }
 
-fn set_index_model_arc(model: Arc<IndexModel>) {
+/// Publishes `model` and returns its generation (see `refresh::MODEL_GENERATION`).
+fn set_index_model_arc(model: Arc<IndexModel>) -> u64 {
     let mut guard = match INDEX_MODEL.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
     };
     *guard = Some(model);
+    model_replaced()
+}
+
+/// A different model (or none) is published: changes a watch recorded
+/// against the previous one no longer apply.
+fn model_replaced() -> u64 {
+    *refresh::LAST_REFRESH_TOUCHED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    refresh::MODEL_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
+}
+
+/// File and directory counts of the published model, without loading one:
+/// an incremental rescan of the same root finds about as many records.
+fn published_record_counts() -> Option<(usize, usize)> {
+    let guard = match INDEX_MODEL.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard
+        .as_ref()
+        .map(|model| (model.tree.files().len(), model.tree.directories().len()))
 }
 
 fn invalidate_index_model() {
@@ -771,6 +816,7 @@ fn invalidate_index_model() {
         Err(poisoned) => poisoned.into_inner(),
     };
     *guard = None;
+    model_replaced();
 }
 
 /// Returns the cached model, loading it from the persisted snapshot when
@@ -801,13 +847,17 @@ fn get_or_load_index_model() -> Arc<IndexModel> {
         Some(cache_stats),
     ));
     *guard = Some(Arc::clone(&model));
+    model_replaced();
     model
 }
 
 pub struct NativeSession {
-    controller: ScanController,
     worker: Mutex<Option<thread::JoinHandle<()>>>,
-    scan_handle: Mutex<Option<winblaze_scanner::ScanHandle>>,
+    /// The walk's handle, once the worker has started it. A refresh that
+    /// patches the model from recorded changes never starts one.
+    scan_handle: Arc<Mutex<Option<winblaze_scanner::ScanHandle>>>,
+    /// Cancel requested before the walk started: the worker does not start it.
+    cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -853,6 +903,9 @@ struct UiEventForwarder {
     // directory dominated scan wall-clock.
     pending_directories: Vec<PendingLiveDirectory>,
     last_directory_batch_at: Option<Instant>,
+    // Scan root; folders deeper than LIVE_TREE_MAX_DEPTH under it are not
+    // forwarded. Empty forwards every folder.
+    live_root: String,
 }
 
 impl UiEventForwarder {
@@ -871,7 +924,13 @@ impl UiEventForwarder {
             ),
             pending_directories: Vec::with_capacity(DIRECTORY_BATCH_SIZE),
             last_directory_batch_at: None,
+            live_root: String::new(),
         }
+    }
+
+    fn with_live_root(mut self, root: &str) -> Self {
+        self.live_root = root.to_owned();
+        self
     }
 
     fn forward(&mut self, event: &ScanEvent) {
@@ -890,6 +949,13 @@ impl UiEventForwarder {
             if self.live_catalog_events < UI_LIVE_CATALOG_EVENT_LIMIT {
                 self.directory_paths
                     .insert(directory.id.0, directory.full_path.clone());
+            }
+            // The UI drops these anyway; a full drive has hundreds of
+            // thousands, each a name copy here and a conversion on its thread.
+            if live_folder_depth(&self.live_root, &directory.full_path)
+                .is_some_and(|depth| depth > LIVE_TREE_MAX_DEPTH)
+            {
+                return;
             }
 
             self.pending_directories.push(PendingLiveDirectory {
@@ -1077,19 +1143,16 @@ impl NativeSession {
         rules: winblaze_scanner::ScanRules,
         delivery: ScanDelivery,
     ) -> Self {
-        // Keep producer backlog bounded while indexing/logging consumes it.
-        // Sixteen default batches hold at most 8192 queued events; worker
-        // buffers and individual unusually large records are additional.
-        let (controller, rx) = ScanController::recycling_bounded_channel(16);
-        let root_path_for_config = root_path.clone();
-        // The scope key queries the volume's used space, which can block on a
-        // slow or disconnected network drive: compute it on the worker thread,
-        // not on the caller's (the UI) thread.
-        let (scope_root, scope_rules) = (root_path.clone(), rules.clone());
+        // An incremental refresh of the watched root first tries to patch
+        // the published model from the recorded changes; it walks only if
+        // that declines. Everything else walks at once, as before.
+        let refresh_first = persistence_mode == ScanPersistenceMode::IncrementalRescan
+            && rules.is_empty()
+            && delivery == ScanDelivery::Live;
         let session = Self {
-            controller,
             worker: Mutex::new(None),
-            scan_handle: Mutex::new(None),
+            scan_handle: Arc::new(Mutex::new(None)),
+            cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
 
         let max_parallelism = thread::available_parallelism()
@@ -1098,21 +1161,79 @@ impl NativeSession {
         let request = ScanRequest {
             root_path: root_path.clone().into(),
             config: ScanRuntimeConfig {
-                rules,
-                root_path: root_path_for_config.into(),
+                rules: rules.clone(),
+                root_path: root_path.clone().into(),
                 max_parallelism,
+                // The GUI's scan must never delay its own UI thread.
+                background_priority: true,
                 ..ScanRuntimeConfig::default()
             },
         };
-        let scan_handle = session.controller.start_scan(request);
-        *session
-            .scan_handle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(scan_handle);
+        // Starts the walk: records changes from before it reads anything,
+        // then hands its events to the worker. Rules-limited and terminal
+        // scans keep no watch (their models are never patched).
+        let watched = rules.is_empty() && delivery == ScanDelivery::Live;
+        let scan_handle = Arc::clone(&session.scan_handle);
+        let cancelled = Arc::clone(&session.cancelled);
+        let walk_root = root_path.clone();
+        let start_walk = move || {
+            // The walk will replace or mutate the snapshot; drop the cached
+            // read model so queries rebuild against the fresh state.
+            invalidate_index_model();
+            let token = if watched {
+                refresh::begin_change_watch(&walk_root)
+            } else {
+                refresh::end_change_watch();
+                None
+            };
+            // Keep producer backlog bounded while indexing/logging consumes
+            // it. Sixteen default batches hold at most 8192 queued events.
+            let (controller, rx) = ScanController::recycling_bounded_channel(16);
+            let mut slot = scan_handle
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                return None;
+            }
+            *slot = Some(controller.start_scan(request));
+            // The producer owns its sender; the receiver disconnects when
+            // the walk ends.
+            drop(controller);
+            Some((rx, token))
+        };
 
         let user_data = user_data as usize;
         let index_root = index_storage_root();
+        let (scope_root, scope_rules) = (root_path.clone(), rules);
+        let live_root = root_path.clone();
+        // A walk starts here, on the caller's thread, so a scan is under way
+        // when this returns; a refresh decides on the worker.
+        let mut start_walk = Some(start_walk);
+        let mut started = if refresh_first {
+            None
+        } else {
+            start_walk.take().and_then(|start| start())
+        };
+        let cancelled = Arc::clone(&session.cancelled);
         let worker = thread::spawn(move || {
+            if refresh_first {
+                if refresh::try_fast_refresh(&live_root, callback, user_data, &index_root) {
+                    return;
+                }
+                started = start_walk.take().and_then(|start| start());
+            }
+            let Some((rx, watch_token)) = started else {
+                if cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    if let Some(cb) = callback {
+                        let native = convert_event(ScanEvent::Cancelled);
+                        cb(&native.event, user_data as *mut core::ffi::c_void);
+                    }
+                }
+                return;
+            };
+            // The scope key queries the volume's used space, which can block
+            // on a slow or disconnected network drive: computed here, on the
+            // worker thread, not on the caller's (the UI) thread.
             let capacity_scope = crate::capacity_hint::scope_key(&scope_root, &scope_rules);
             let _ = forward_events(
                 rx,
@@ -1120,9 +1241,11 @@ impl NativeSession {
                 user_data,
                 IndexScanScope {
                     index_root,
+                    live_root,
                     capacity_scope,
                     background_persist: false,
                     persist: true,
+                    watch_token,
                 },
                 persistence_mode,
                 delivery,
@@ -1138,6 +1261,8 @@ impl NativeSession {
     }
 
     fn cancel(&self) {
+        self.cancelled
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         if let Some(handle) = self
             .scan_handle
             .lock()
@@ -1151,10 +1276,17 @@ impl NativeSession {
     fn join(self) {
         self.cancel();
         let Self {
-            controller,
             worker,
             scan_handle,
+            cancelled: _,
         } = self;
+        // The worker ends once the walk's producer drops its sender, so the
+        // walk is joined first; a refresh has no walk. A walk the worker
+        // starts after this was cancelled above and never starts.
+        let worker_handle = worker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
         if let Some(handle) = scan_handle
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1162,14 +1294,6 @@ impl NativeSession {
         {
             handle.join();
         }
-        // The event-forwarding worker's `for event in rx` loop only ends once
-        // every Sender is gone; the controller holds the original one, so it
-        // must drop before joining the worker or this blocks forever.
-        drop(controller);
-        let worker_handle = worker
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
         if let Some(worker_handle) = worker_handle {
             let _ = worker_handle.join();
         }
@@ -1178,6 +1302,8 @@ impl NativeSession {
 
 struct IndexScanScope {
     index_root: PathBuf,
+    /// Scan root for the live folder depth limit (see UiEventForwarder).
+    live_root: String,
     capacity_scope: String,
     /// Finish a completed full scan's snapshot write on a registered worker
     /// (see `wait_for_pending_persist`) instead of before returning.
@@ -1185,6 +1311,9 @@ struct IndexScanScope {
     /// Write the catalog snapshot to disk at all. Off keeps the scan in
     /// memory only (the read model is still published for exports).
     persist: bool,
+    /// The change watch started with this walk: a completed walk binds it
+    /// to the model it publishes, so a later refresh can patch that model.
+    watch_token: Option<u64>,
 }
 
 fn forward_events(
@@ -1198,10 +1327,15 @@ fn forward_events(
 ) -> bool {
     let IndexScanScope {
         index_root,
+        live_root,
         capacity_scope,
         background_persist,
         persist,
+        watch_token,
     } = scope;
+    // Directory-walk backends report an unknown file system; only their
+    // models are patched from recorded changes (MFT records differ).
+    let mut walked = false;
     wait_for_persisted_snapshot();
     // An incremental rescan loads the previous snapshot only when it merges,
     // after Completed reached the UI (see `deferred_merge`).
@@ -1227,7 +1361,9 @@ fn forward_events(
     // then merges it into the previous snapshot (path-matched ids, change
     // summary, disk write) after Completed: that merge was ~85% of the
     // rescan's perceived time.
-    let mut deferred_merge: Option<BufferedIndexTransaction> = None;
+    // The published model and its sessions; the merge input is rebuilt from
+    // them after Completed instead of cloning the transaction before it.
+    let mut deferred_merge: Option<(Arc<IndexModel>, Vec<ScanSession>, bool)> = None;
     // Acquired BEFORE Completed is forwarded and held until the deferred
     // write finishes, so a session started the instant the UI sees
     // Completed blocks on the gate instead of reading the stale snapshot.
@@ -1236,14 +1372,23 @@ fn forward_events(
     // cost is that a *second* concurrent ReplaceSnapshot scan would wait on
     // this one's finalization — which the single-session UI never starts.
     let mut persist_guard: Option<std::sync::MutexGuard<'static, ()>> = None;
-    let mut ui_forwarder =
-        (delivery == ScanDelivery::Live).then(|| UiEventForwarder::new(callback, user_data));
+    let mut ui_forwarder = (delivery == ScanDelivery::Live)
+        .then(|| UiEventForwarder::new(callback, user_data).with_live_root(&live_root));
     // Reserve the transaction maps once, from the first Progress event's total
     // record count, so the millions of inserts that follow don't rehash the
     // maps ~20 times as they grow. total_items is the volume's total MFT record
     // count; the split below reflects the typical ~50% files / ~12% dirs share
     // and only over-reserves a bounded amount when a volume skews.
     let mut reserved = false;
+    // A walk's progress carries no total, and the capacity hint is read for
+    // full scans only: size an incremental rescan from the model it
+    // refreshes, or its record maps rehash ~18 times on the way up.
+    if matches!(persistence_mode, ScanPersistenceMode::IncrementalRescan) {
+        if let Some((files, directories)) = published_record_counts() {
+            transaction.reserve(files, directories);
+            reserved = true;
+        }
+    }
     // Read once at walk start; the end-of-scan update reuses it (see HintFile).
     let mut hint_file: Option<crate::capacity_hint::HintFile> = None;
 
@@ -1265,6 +1410,9 @@ fn forward_events(
             }
         }
         scan_completed |= matches!(event, ScanEvent::Completed);
+        if let ScanEvent::SessionStarted(volume) = &event {
+            walked = matches!(volume.file_system, winblaze_core::FileSystemKind::Unknown);
+        }
 
         if !reserved {
             if let ScanEvent::Progress(progress) = &event {
@@ -1302,7 +1450,12 @@ fn forward_events(
                     });
                     let (sessions, lineages, changes) = transaction.auxiliary_parts();
                     let model = Arc::new(build_index_model(std::mem::take(&mut transaction), None));
-                    set_index_model_arc(Arc::clone(&model));
+                    let generation = set_index_model_arc(Arc::clone(&model));
+                    if let (Some(token), true, true) =
+                        (watch_token, walked, matches!(event, ScanEvent::Completed))
+                    {
+                        refresh::bind_change_watch(token, generation);
+                    }
                     if persist {
                         persist_guard = Some(persist_gate_lock());
                         deferred_persist = Some((model, sessions, lineages, changes));
@@ -1333,10 +1486,16 @@ fn forward_events(
                             state: ScanState::Completed,
                             progress: Default::default(),
                         });
-                        let merge = transaction.clone();
-                        set_index_model(build_index_model(std::mem::take(&mut transaction), None));
+                        let (sessions, _, _) = transaction.auxiliary_parts();
+                        let committed = transaction.is_committed();
+                        let model =
+                            Arc::new(build_index_model(std::mem::take(&mut transaction), None));
+                        let generation = set_index_model_arc(Arc::clone(&model));
+                        if let (Some(token), true) = (watch_token, walked) {
+                            refresh::bind_change_watch(token, generation);
+                        }
                         persist_guard = Some(persist_gate_lock());
-                        deferred_merge = Some(merge);
+                        deferred_merge = Some((model, sessions, committed));
                         records_dirty = false;
                         model_published = true;
                     }
@@ -1393,6 +1552,9 @@ fn forward_events(
                 .unwrap_or_else(|| crate::capacity_hint::HintFile::read(&hint_path))
         });
         let finish = move || {
+            // Off the UI's path: a refresh patch and its row update then find
+            // the child orders built.
+            deferred.0.tree.warm_child_orders();
             write_deferred_snapshot(
                 &mut repository,
                 &mut log,
@@ -1432,7 +1594,16 @@ fn forward_events(
         let _gate = persist_guard.is_none().then(persist_gate_lock);
         repository = SqliteIndexRepository::open(&index_root, IndexBackend::BinaryCache);
     }
-    if let Some(merge) = deferred_merge {
+    if let Some((model, sessions, committed)) = deferred_merge {
+        model.tree.warm_child_orders();
+        let merge = BufferedIndexTransaction::from_records(
+            model.tree.volumes(),
+            &sessions,
+            model.tree.directories(),
+            model.tree.files(),
+            committed,
+        );
+        drop(model);
         // The gate is still held, so a session started once the UI saw
         // Completed reads the merged snapshot, not the previous one.
         let result = repository.apply_path_matched_incremental_transaction(&merge);
@@ -1574,9 +1745,11 @@ pub fn run_terminal_scan_with(
         (&mut observer as *mut TerminalObserver) as usize,
         IndexScanScope {
             index_root: index_storage_root(),
+            live_root: root.to_owned(),
             capacity_scope,
             background_persist: true,
             persist: keep_catalog,
+            watch_token: None,
         },
         ScanPersistenceMode::ReplaceSnapshot,
         ScanDelivery::Terminal,
@@ -2567,10 +2740,8 @@ fn start_scan_session_with_delivery(
     })
     .to_string();
 
-    // The scan will replace or mutate the snapshot; drop the cached read
-    // model so queries rebuild against the fresh state when the scan ends.
-    invalidate_index_model();
-
+    // A walk drops the cached read model when it starts (see
+    // NativeSession::new); a refresh that patches it keeps it.
     let session = Box::new(NativeSession::new(
         callback,
         user_data,
@@ -2920,6 +3091,29 @@ pub extern "C" fn wb_tree_largest_files_page(
     }
 }
 
+/// Directories whose totals the last refresh patched in place, so the UI
+/// can update just those rows. Returns -1 when the published model was
+/// replaced since (a walk, a reload or an import: show everything anew);
+/// otherwise the number of directories, writing up to `capacity` ids.
+///
+/// # Safety
+/// `ids` is null or points to `capacity` writable `u64`s.
+#[no_mangle]
+pub unsafe extern "C" fn wb_last_refresh_touched(ids: *mut u64, capacity: usize) -> i64 {
+    let touched = refresh::LAST_REFRESH_TOUCHED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(touched) = touched.as_ref() else {
+        return -1;
+    };
+    if !ids.is_null() {
+        let count = touched.len().min(capacity);
+        // SAFETY: the caller provides `capacity` writable ids.
+        unsafe { std::ptr::copy_nonoverlapping(touched.as_ptr(), ids, count) };
+    }
+    touched.len() as i64
+}
+
 #[no_mangle]
 pub extern "C" fn wb_scan_session_cancel(handle: WbScanSessionHandle) {
     if handle._private.is_null() {
@@ -3165,6 +3359,90 @@ pub extern "C" fn wb_scan_roots(paths: WbCStringView) -> crate::api::WbMultiScan
 #[cfg(test)]
 mod tests {
     use super::*;
+    use winblaze_core::DirectoryId;
+
+    extern "C" fn collect_live_directory_ids(
+        event: *const WbEvent,
+        user_data: *mut core::ffi::c_void,
+    ) {
+        // SAFETY: the forwarder passes a live event; user_data is the test's Vec.
+        let (event, ids) = unsafe { (&*event, &mut *user_data.cast::<Vec<u64>>()) };
+        if event.kind == WbEventKind::DirectoryBatch {
+            let batch = event.directory_batch;
+            // SAFETY: the batch's items stay valid for the callback's duration.
+            let items = unsafe { std::slice::from_raw_parts(batch.items, batch.count) };
+            ids.extend(items.iter().map(|item| item.id));
+        }
+    }
+
+    fn live_directory(id: u64, parent: Option<u64>, path: &str) -> ScanEvent {
+        ScanEvent::DirectoryFound(DirectoryRecord {
+            id: DirectoryId(id),
+            parent_directory_id: parent.map(DirectoryId),
+            name: path.rsplit('\\').next().unwrap_or_default().to_string(),
+            full_path: path.to_string(),
+            ..DirectoryRecord::default()
+        })
+    }
+
+    #[test]
+    fn an_incremental_rescan_is_sized_from_the_published_model() {
+        invalidate_index_model();
+        assert_eq!(published_record_counts(), None);
+        let mut transaction = BufferedIndexTransaction::default();
+        transaction.insert_directory(DirectoryRecord {
+            id: DirectoryId(1),
+            full_path: r"C:\".into(),
+            ..DirectoryRecord::default()
+        });
+        for id in 1..=3 {
+            transaction.insert_file(FileRecord {
+                id: winblaze_core::FileId(id),
+                parent_directory_id: DirectoryId(1),
+                ..FileRecord::default()
+            });
+        }
+        set_index_model(build_index_model(transaction, None));
+        assert_eq!(published_record_counts(), Some((3, 1)));
+        invalidate_index_model();
+    }
+
+    #[test]
+    fn live_folders_below_the_shown_depth_never_cross_to_the_ui() {
+        // The UI shows the root and three levels under it (kMaxLiveDepth);
+        // a full drive has hundreds of thousands of deeper folders.
+        let mut ids: Vec<u64> = Vec::new();
+        let mut forwarder = UiEventForwarder::new(
+            Some(collect_live_directory_ids),
+            (&mut ids as *mut Vec<u64>) as usize,
+        )
+        .with_live_root(r"C:\Data");
+        for event in [
+            live_directory(1, None, r"C:\Data"),
+            live_directory(2, Some(1), r"C:\Data\a"),
+            live_directory(3, Some(2), r"C:\data\a\b"),
+            live_directory(4, Some(3), r"C:\Data\a\b\c"),
+            live_directory(5, Some(4), r"C:\Data\a\b\c\d"),
+            live_directory(6, Some(5), r"C:\Data\a\b\c\d\e"),
+            // Outside the root (e.g. a followed reparse target): depth is
+            // unknown, so it is forwarded as before.
+            live_directory(7, Some(2), r"D:\Target\x\y\z\w"),
+        ] {
+            forwarder.forward(&event);
+        }
+        forwarder.forward(&ScanEvent::Completed);
+        assert_eq!(ids, vec![1, 2, 3, 4, 7]);
+    }
+
+    #[test]
+    fn a_drive_root_counts_its_first_level_folders_as_depth_one() {
+        assert_eq!(live_folder_depth(r"C:\", r"C:\"), Some(0));
+        assert_eq!(live_folder_depth(r"C:\", r"C:\Users"), Some(1));
+        assert_eq!(live_folder_depth(r"C:\", r"c:\Users\me\x"), Some(3));
+        assert_eq!(live_folder_depth(r"C:\Data\", r"C:\Data\a"), Some(1));
+        assert_eq!(live_folder_depth(r"C:\Data", r"C:\Database\a"), None);
+        assert_eq!(live_folder_depth("", r"C:\Data"), None);
+    }
 
     fn view(text: &str) -> WbCStringView {
         WbCStringView {

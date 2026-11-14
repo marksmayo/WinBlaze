@@ -125,6 +125,78 @@ fn deferred_sorted_persist_matches_transaction_persist() {
 }
 
 #[test]
+fn a_transaction_rebuilt_from_the_published_tree_matches_the_scan() {
+    // An incremental rescan publishes its tree first and rebuilds the merge
+    // input from it afterwards, instead of cloning the whole transaction
+    // while the UI waits for Completed.
+    let mut tx = BufferedIndexTransaction::default();
+    tx.upsert_volume(&VolumeRecord {
+        id: VolumeId(0),
+        mount_point: String::from("C:\\"),
+        root_directory_id: DirectoryId(5),
+        ..VolumeRecord::default()
+    });
+    tx.upsert_session(&ScanSession {
+        session_id: 1,
+        volume_id: VolumeId(0),
+        root_path: String::new(),
+        state: ScanState::Completed,
+        progress: ScanProgress::default(),
+    });
+    tx.upsert_directory(&DirectoryRecord {
+        id: DirectoryId(5),
+        parent_directory_id: None,
+        name: String::from("C:\\"),
+        full_path: String::from("C:\\"),
+        ..DirectoryRecord::default()
+    });
+    for id in [30_u64, 12, 25] {
+        tx.upsert_directory(&DirectoryRecord {
+            id: DirectoryId(id),
+            parent_directory_id: Some(DirectoryId(5)),
+            name: format!("dir-{id}"),
+            full_path: format!("C:\\dir-{id}"),
+            ..DirectoryRecord::default()
+        });
+        tx.upsert_file(&FileRecord {
+            id: FileId(id + 100),
+            parent_directory_id: DirectoryId(id),
+            name: format!("file-{id}.bin").into(),
+            size_bytes: id * 10,
+            allocation_bytes: id * 16,
+            ..FileRecord::default()
+        });
+    }
+    tx.commit();
+    let expected = (
+        tx.snapshot_volumes(),
+        tx.snapshot_sessions(),
+        tx.snapshot_directories(),
+        tx.snapshot_files_with_paths(),
+    );
+    let (sessions, _, _) = tx.auxiliary_parts();
+    let committed = tx.is_committed();
+    let tree = TreeIndex::build(tx);
+    let rebuilt = BufferedIndexTransaction::from_records(
+        tree.volumes(),
+        &sessions,
+        tree.directories(),
+        tree.files(),
+        committed,
+    );
+    assert!(rebuilt.is_committed());
+    assert_eq!(
+        (
+            rebuilt.snapshot_volumes(),
+            rebuilt.snapshot_sessions(),
+            rebuilt.snapshot_directories(),
+            rebuilt.snapshot_files_with_paths(),
+        ),
+        expected
+    );
+}
+
+#[test]
 fn buffered_transaction_captures_records() {
     let mut tx = BufferedIndexTransaction::default();
     tx.upsert_volume(&VolumeRecord {
