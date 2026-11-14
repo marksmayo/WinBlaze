@@ -86,9 +86,9 @@ jobs:
         if: matrix.configuration == 'Release'
         run: cargo build --package winblaze-native --release
 
-      - name: Build updater (release)
-        # package-portable.ps1 bundles the release updater for both configs.
-        run: cargo build --package winblaze-updater --release
+      - name: Build updater and CLI (release)
+        # package-portable.ps1 bundles the release updater and CLI for both configs.
+        run: cargo build --package winblaze-updater --release && cargo build --package winblaze-native --bin winblaze-cli --release
 
       - name: Restore WinUI packages
         run: msbuild src\WinBlaze.UI\WinBlaze.UI.vcxproj /restore /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /nologo /v:minimal
