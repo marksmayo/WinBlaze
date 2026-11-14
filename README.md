@@ -22,7 +22,7 @@ WinBlaze combines a Rust scanning engine (raw NTFS MFT access with a parallel di
 - **Responsive by measurement**: the UI ships its own frame/flush latency counters, and scan-time work is budgeted per frame
 - **Self-updating**: checks GitHub for a newer release on launch (and on demand), then downloads, **SHA-256-verifies**, and installs the update in-app before relaunching — no manual reinstall
 
-## Benchmark results (October 2026)
+## Benchmark results (November 2026)
 
 WinBlaze was measured against six other Windows disk analyzers across **80 medal events**: scan speed on 23 datasets (from the full `C:\` drive to adversarial fixtures), CPU, memory, I/O, GUI responsiveness, startup and reliability. Each event takes the median of 10 runs, and medals go to the three best values.
 
@@ -30,20 +30,20 @@ WinBlaze was measured against six other Windows disk analyzers across **80 medal
 
 | Product | 🥇 Gold | 🥈 Silver | 🥉 Bronze |
 |---|---:|---:|---:|
-| **WinBlaze** | **71** | 4 | 3 |
+| **WinBlaze** | **73** | 3 | 2 |
 | WinDirStat | 3 | 39 | 20 |
-| Everything | 3 | 16 | 7 |
 | SpaceSniffer | 3 | 6 | 4 |
-| Directory Report | 2 | 9 | 20 |
+| Everything | 2 | 17 | 7 |
 | TreeSize Free | 2 | 0 | 3 |
-| WizTree | 1 | 4 | 22 |
+| Directory Report | 1 | 9 | 20 |
+| WizTree | 1 | 4 | 23 |
 
 ```mermaid
 xychart-beta
     title "Gold medals out of 80 events"
-    x-axis ["WinBlaze", "WinDirStat", "Everything", "SpaceSniffer", "Directory Report", "TreeSize Free", "WizTree"]
+    x-axis ["WinBlaze", "WinDirStat", "SpaceSniffer", "Everything", "TreeSize Free", "Directory Report", "WizTree"]
     y-axis "Gold medals" 0 --> 80
-    bar [71, 3, 3, 3, 2, 2, 1]
+    bar [73, 3, 3, 2, 2, 1, 1]
 ```
 
 ### Headline events
@@ -87,7 +87,7 @@ xychart-beta
     title "GUI: launch on a 250k-file folder until the first result (ms)"
     x-axis ["WinBlaze", "WinDirStat", "Everything", "Directory Report", "WizTree"]
     y-axis "Milliseconds" 0 --> 2400
-    bar [351, 380, 728, 1060, 2323]
+    bar [262, 380, 728, 1060, 2323]
 ```
 
 ```mermaid
@@ -108,7 +108,10 @@ xychart-beta
 | Standard-user full-drive CPU | **80.1 CPU-s** | Everything 83.2 CPU-s |
 | Full C: kernel CPU | **128 CPU-s** | SpaceSniffer 131 CPU-s |
 | Full C: disk bytes read | **2.9 KB** | WinDirStat 4.2 KB |
-| GUI time to first result | **351 ms** | WinDirStat 380 ms |
+| GUI time to first result | **262 ms** | WinDirStat 380 ms |
+| GUI session, reload saved results | **165 ms** | Everything 178 ms |
+| GUI refresh after a small change | **21 ms** | Everything 30 ms |
+| GUI repeat scan | **133 ms** | Directory Report 633 ms |
 | Startup to first idle | **60 ms** | WinDirStat 64 ms |
 | Failed scans on hostile datasets | **0 %** | (tied with four others; Everything 20 %) |
 
@@ -117,33 +120,30 @@ xychart-beta
 | Event | WinBlaze | Leader | Why |
 |---|---:|---:|---|
 | GUI · usable-window startup | 160 ms 🥈 | Everything 135 ms | Most of it is the system XAML framework starting up |
-| GUI session · reload saved results | 626 ms 🥈 | Everything 178 ms | Everything reopens its own database |
-| GUI · refresh after a small change | 246 ms 🥈 | Everything 30 ms | Everything is notified of changes and never rescans |
 | Full C: disk bytes written | 517 MiB 🥈 | SpaceSniffer 323 MiB | Almost all of it is the CSV export itself (full paths) |
 | Full C: context switches | 327k 🥉 | SpaceSniffer 225k | Kernel file-system work; reducing thread wake-ups did not change it |
 | GUI full drive · memory with results | 721 MiB 🥉 | TreeSize Free 520 MiB | Holds the complete 3.35M-file index in memory |
-| GUI session · redraw after resize | 66 ms 🥉 | Directory Report 54 ms | XAML relayout. The benchmark samples the screen about every 30 ms, so this is two samples against just under two |
+| GUI session · redraw after resize | 41 ms 🥈 | Everything 36 ms | XAML relayout; the treemap itself draws in about 3 ms |
 | GUI full drive · responsiveness p95 | 0.64 ms | TreeSize Free 0.15 ms | All products answer within a millisecond |
-| GUI · memory growth over 10 rescans | +23 MiB | WinDirStat −0.8 MiB | Not a leak: memory is back to its first-scan level about 1 s after each scan. The benchmark samples 300 ms after the last scan |
+| GUI · memory growth over 10 rescans | +7.0 MiB | WinDirStat −0.8 MiB | Not a leak: freed memory the heap keeps for reuse, plus non-heap memory. Compacting the heap does not return it |
 
 ### What we found this round
 
-**Improvements (each red/green tested and checked with interleaved before/after runs):**
-- **Time to first result: 391 → 351 ms (silver → gold).** A finished scan no longer builds live tree rows that the snapshot reload immediately discards. The post-scan "top 50 of 250k" search selects in a single streaming pass instead of sorting every match (26 → 10.5 ms).
-- **Disk bytes read on a full scan: halved, 5,976 → 2,988 bytes (silver → gold).** The allocation-hint file was the only file a report scan read, and it was read twice.
-- **Exports:** JSON and full-metadata CSV build each record in one reused buffer: 500k files, 85 → 56 ms and 77 → 52 ms, with byte-identical output.
-- **Catalog load:** short names are read without a heap copy, and a 1 MiB read buffer makes a 1M-file catalog load about 17 % faster.
-- **MFT parsing:** names decode straight into inline storage, and DOS 8.3 aliases are validated but never decoded.
+**Improvements:**
+- **Refresh after a small change: 246 → 21 ms (silver → gold).** WinBlaze now records file changes under the scanned folder while it runs. A refresh re-reads only the folders that changed, patches the results in place and updates only the affected tree rows. Anything it cannot prove matches a full scan (removed files, new folders, hard links, junctions, lost change notifications) falls back to a full rescan.
+- **Reload saved results: 626 → 165 ms (silver → gold).** Rename editors and text boxes are created on first use, and tree rows past the first screen are added after the first frame.
+- **Time to first result: 351 → 262 ms**, and **repeat scan: 133 ms** (gold for both).
+- **Redraw after resize: 66 → 41 ms (bronze → silver)**, partly from the new timing below.
+- **Memory growth over 10 rescans: +23 → +7.0 MiB.**
 
-**Benchmark fairness fixes (applied to every product):**
-- The resize benchmark now captures only the window's visible frame and parks the mouse pointer away from the window. Before, a hover highlight under the pointer, or a blinking cursor in a window behind, counted as a late redraw for whichever product was being measured.
-- Extended-benchmark timeouts apply equally to every product, and only real timeouts are recorded as failures.
-- Install footprint is no longer a medal event: on-disk size isn't performance.
+**Benchmark fairness fix (applied to every product):**
+- Resize redraws are now timed when each screen copy is taken, not after it is hashed. Hashing took 25–33 ms per capture and put a floor of about 53–69 ms under every product. All products except Directory Report (trial expired) were re-measured under the new timing.
 
-**Bugs found by benchmarking:**
-- A code-review fix had silently broken the Release build step that generates the shipping OS XAML host. The benchmark then measured the slower WinUI build: startup memory went 14 → 37 MiB. The fix restores the patched code, and the local gate now validates the host patches (about 1 s), so this cannot ship again.
+**Bugs found by benchmarking and review:**
+- The explorer pane's height was never assigned, so the panes were measured at unbounded height: rescans went 221 → 850 ms and resizes 65 → 180 ms until it was fixed.
+- A code review of this round's work found, and we fixed, a possible crash on exit after opening a saved scan, unsafe cleanup when the change watch fails to start, a flag that could stop the treemap redrawing, and cancels that a fast refresh ignored.
 
-**Tried and reverted (no measurable gain):** waking one walker thread per new task instead of all of them (no fewer context switches, slower walk); showing the window maximized in one step; rendering the treemap immediately on resize.
+**Tried and reverted (no measurable gain):** laying out immediately on window resize, finishing the corrected layout in the same pass, and freeing the old catalog after the new results show (it raised memory growth by about 1.5 MiB). A separate treemap render thread was not built: the treemap draws in about 3 ms.
 
 ### Method
 
