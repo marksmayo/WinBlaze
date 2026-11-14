@@ -12,6 +12,15 @@ fn view(s: &str) -> WbCStringView {
 fn scans_multiple_folders_atomically_and_preserves_original_export_paths() {
     let root = std::env::temp_dir().join(format!("wb-multi-{}", std::process::id()));
     std::fs::create_dir_all(root.join("one")).unwrap();
+    // The scan reports long names. CI's temp directory is an 8.3 short path
+    // (C:\Users\RUNNER~1\...), so expect the long form of it.
+    let root = std::path::PathBuf::from(
+        std::fs::canonicalize(&root)
+            .unwrap()
+            .to_string_lossy()
+            .trim_start_matches(r"\\?\")
+            .to_owned(),
+    );
     std::fs::create_dir_all(root.join("two")).unwrap();
     std::fs::write(root.join("one/a.bin"), b"one").unwrap();
     std::fs::write(root.join("two/b.bin"), b"second").unwrap();
