@@ -1,5 +1,7 @@
 # WinBlaze
 
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/marksmayo/WinBlaze?utm_source=badge)
+
 <p align="center">
   <img src="docs/winblaze.png" alt="WinBlaze" width="256" />
 </p>
@@ -266,6 +268,14 @@ powershell -ExecutionPolicy Bypass -File benchmarks\run-ui-benchmark.ps1 -Size t
 
 # Record competitor inventory / manual timings
 powershell -ExecutionPolicy Bypass -File benchmarks\record-competitor-baselines.ps1
+```
+
+Micro-benchmarks for the index and core rollup paths (tree build, search, CSV/JSON export and
+import, directory aggregation, record diffs) live in `src/WinBlaze.Index/benches/index.rs` and
+run on every pull request with [CodSpeed](https://codspeed.io):
+
+```powershell
+cargo bench -p winblaze-index
 ```
 
 ## Privacy

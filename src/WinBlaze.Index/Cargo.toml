@@ -15,3 +15,10 @@ winblaze-core = { path = "../WinBlaze.Core" }
 name = "winblaze_index"
 path = "src/lib.rs"
 
+[dev-dependencies]
+divan = { version = "6.0.0", package = "codspeed-divan-compat" }
+
+
+[[bench]]
+name = "index"
+harness = false
