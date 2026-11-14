@@ -440,7 +440,7 @@
     {
       "name": "GUI session \u00b7 redraw after resize",
       "unit": "ms",
-      "scope": "Standard-user GUI. With the reloaded results shown, resize the window from 1200x800 to 1600x1000 until its screen pixels last change before 400 ms without change (treemap and lists redrawn).",
+      "scope": "Standard-user GUI. With the reloaded results shown, resize the window from 1200x800 to 1600x1000 until its screen pixels last change before 400 ms without change (treemap and lists redrawn); each change is timed when its screen capture was taken.",
       "comparable": true,
       "observational": false
     },

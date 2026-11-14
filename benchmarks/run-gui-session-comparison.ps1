@@ -178,7 +178,7 @@ function Measure-GuiProductSession([string]$tool, $identity, [int]$run) {
         $rows.Add([pscustomobject][ordered]@{
             tool = $tool; target = $TargetName; run = $run; binary = $identity; started_utc = [DateTime]::UtcNow.ToString('o')
             scope = "GUI session on the $TargetName dataset: first result while scanning, reload of the product's own saved state where it has one, and a resize"
-            first_result_ms = $first; reload_ms = $reload; resize_ms = [math]::Round($resize, 2)
+            first_result_ms = $first; reload_ms = $reload; resize_ms = [math]::Round($resize, 2); resize_protocol = 'capture-start'
         })
         Write-BenchmarkJson -Path $OutputPath -Value $rows.ToArray()
         Write-Output ("{0} session run {1}: first result {2}; reload {3}; resize {4:N0} ms" -f $tool, $run, $(if ($null -ne $first) { '{0:N0} ms' -f $first } else { 'n/a' }), $(if ($null -ne $reload) { '{0:N0} ms' -f $reload } else { 'n/a' }), $resize)
@@ -235,7 +235,7 @@ foreach ($tool in $Tools) {
                 tool = $tool; target = $TargetName; run = $run; binary = $identity; started_utc = [DateTime]::UtcNow.ToString('o')
                 scope = "GUI session on the $TargetName dataset: first result while scanning, then reload of the product's own saved scan and a resize"
                 saved_scan = [IO.Path]::GetFileName($saved); saved_scan_bytes = (Get-Item -LiteralPath $saved).Length
-                first_result_ms = $first; reload_ms = $reload; resize_ms = [math]::Round($resize, 2)
+                first_result_ms = $first; reload_ms = $reload; resize_ms = [math]::Round($resize, 2); resize_protocol = 'capture-start'
             })
             Write-BenchmarkJson -Path $OutputPath -Value $rows.ToArray()
             Write-Output ("{0} session run {1}: first result {2:N0} ms; reload {3:N0} ms; resize {4:N0} ms" -f $tool, $run, $first, $reload, $resize)

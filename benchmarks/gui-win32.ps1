@@ -131,6 +131,21 @@ public static class Win32Window {
 '@
 }
 
+# Window properties another process can read without any work on the
+# window's own thread (GetProp reads the window's property list directly).
+if (-not ('WinBlazeBench.WindowProperty' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace WinBlazeBench {
+public static class WindowProperty {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetPropW(IntPtr hwnd, string name);
+    public static long Get(IntPtr hwnd, string name) { return GetPropW(hwnd, name).ToInt64(); }
+}
+}
+'@
+}
+
 # The process's application window and its title (see AppWindow); falls back
 # to MainWindowHandle before the first titled window exists.
 function Get-AppWindow($process) {
@@ -144,4 +159,12 @@ function Get-AppTitle($process) {
     $hwnd = Get-AppWindow $process
     if ($hwnd -eq [IntPtr]::Zero) { return '' }
     return [WinBlazeBench.Win32Window]::Title($hwnd)
+}
+# How many times WinBlaze has shown results (its "WinBlaze.ResultsShown"
+# window property; 0 for builds without it). A refresh can finish before a
+# title poll ever sees "Scanning", so completion is a change in this count.
+function Get-AppResultsShown($process) {
+    $hwnd = Get-AppWindow $process
+    if ($hwnd -eq [IntPtr]::Zero) { return 0 }
+    return [WinBlazeBench.WindowProperty]::Get($hwnd, 'WinBlaze.ResultsShown')
 }

@@ -169,7 +169,9 @@ export const GUI_SESSION_EVENTS = [
     ['GUI session · time to first result','ms',r=>r.first_result_ms,'Launch with the 250k-file lognormal dataset until the first result row is on screen (WinDirStat directory list, WinBlaze results list; WizTree draws rows only once its scan completes).'],
     ['GUI session · reload saved results','ms',r=>r.reload_ms,"Launch with the product's own saved scan of the 250k-file lognormal dataset until its loaded-results signal (WinDirStat /LoadFrom, WizTree CSV, WinBlaze CSV)."],
     // 0 ms means no redraw was observable (screen not capturable), not an instant redraw.
-    ['GUI session · redraw after resize','ms',r=>r.resize_ms>0?r.resize_ms:null,'With the reloaded results shown, resize the window from 1200x800 to 1600x1000 until its screen pixels last change before 400 ms without change (treemap and lists redrawn).']
+    // Only rows timed at each capture's screen copy (resize_protocol): older rows
+    // were timed after hashing, a ~25-33 ms floor per capture.
+    ['GUI session · redraw after resize','ms',r=>r.resize_protocol==='capture-start'&&r.resize_ms>0?r.resize_ms:null,'With the reloaded results shown, resize the window from 1200x800 to 1600x1000 until its screen pixels last change before 400 ms without change (treemap and lists redrawn); each change is timed when its screen capture was taken.']
 ];
 export function guiSessionEvents(rows) {
     return GUI_SESSION_EVENTS.map(([name,unit,value,scope])=>[name,unit,

@@ -78,6 +78,10 @@ function Test-Ready([string]$tool, $process) {
 }
 # Runs $action, then waits until a scan was seen and has finished. Returns ms.
 function Measure-Scan([string]$tool, $process, [scriptblock]$action, [int]$TimeoutSeconds = 600) {
+    # WinBlaze also counts each time it shows results (Get-AppResultsShown):
+    # a refresh patched from recorded changes can end before any poll sees
+    # its "Scanning" title, and a change in the count shows it finished.
+    $shown = if ($tool -eq 'WinBlaze') { Get-AppResultsShown $process } else { 0 }
     $watch = [Diagnostics.Stopwatch]::StartNew()
     & $action
     # Timing starts once the rescan is requested (after any confirmation dialog).
@@ -85,7 +89,9 @@ function Measure-Scan([string]$tool, $process, [scriptblock]$action, [int]$Timeo
     $seen = $false
     while ($watch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
         if (Test-Scanning $tool $process) { $seen = $true }
-        elseif ($seen -and (Test-Ready $tool $process)) { return [math]::Round($watch.Elapsed.TotalMilliseconds, 2) }
+        elseif (($seen -or ($tool -eq 'WinBlaze' -and (Get-AppResultsShown $process) -gt $shown)) -and (Test-Ready $tool $process)) {
+            return [math]::Round($watch.Elapsed.TotalMilliseconds, 2)
+        }
         Start-Sleep -Milliseconds 2
     }
     throw "$tool scan did not finish within $TimeoutSeconds s (scan seen: $seen)"

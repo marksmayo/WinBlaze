@@ -1,4 +1,4 @@
-# Dot-source: visual settle timing for GUI events that have no product-specific
+﻿# Dot-source: visual settle timing for GUI events that have no product-specific
 # "done drawing" signal (EXTENDED_MEDALS_PLAN.md #53). Captures the window's screen
 # pixels (per-monitor DPI aware, so physical pixels) and reports when they last
 # changed before a stable period.
@@ -55,6 +55,9 @@ public static class GuiSettle {
     }
     // Milliseconds from $action until the region (x, y, w, h) last changed before
     // stableMs without change; -1 on timeout. The action runs after the first frame.
+    // A change is timed when its capture copied the screen, not after hashing:
+    // copying and hashing a 1600x1000 region takes ~25-33 ms, which otherwise
+    // set a floor of two whole captures under every product's result.
     public static double MeasureSettle(Action action, int x, int y, int w, int h, int stableMs, int timeoutMs) {
         Aware();
         IntPtr screen = GetDC(IntPtr.Zero), memory = CreateCompatibleDC(screen), bits;
@@ -68,10 +71,10 @@ public static class GuiSettle {
             action();
             double changed = 0;
             while (watch.ElapsedMilliseconds < timeoutMs) {
+                double copied = watch.Elapsed.TotalMilliseconds;
                 ulong now = Frame(screen, memory, bits, x, y, w, h, buffer);
-                double t = watch.Elapsed.TotalMilliseconds;
-                if (now != last) { last = now; changed = t; }
-                else if (t - changed >= stableMs) return changed;
+                if (now != last) { last = now; changed = copied; }
+                else if (watch.Elapsed.TotalMilliseconds - changed >= stableMs) return changed;
                 Thread.Sleep(1);
             }
             return -1;

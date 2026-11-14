@@ -310,6 +310,19 @@ Timing-variability medals (IQR / median) were removed: dividing a fixed launch j
 
 `run-gui-session-comparison.ps1` used to detect WinBlaze's first result with a UI Automation search over every descendant of its window. XAML answers that search on WinBlaze's UI thread: about 83 ms for the first probe and 13–27 ms for later ones. That slowed the startup it was timing, while WinDirStat's row check is a single `LVM_GETITEMCOUNT` message. WinBlaze now shows "WinBlaze - Scanning <root> - N rows shown" in its title once rows are in the results list. The harness reads that title, or the loaded-results title "WinBlaze - <target>", with `GetWindowText`, which does no UI-thread work in the measured process. WinBlaze first-result values recorded before this change used the old probe.
 
+### GUI session resize timing (changed 2026-11-14)
+
+`gui-settle.ps1` times the resize medal from screen captures of the 1600x1000 window region. Copying and hashing one capture takes about 25–33 ms. A change used to be timed after its capture was hashed, so the earliest possible result for any product was the end of the second capture, about 53–69 ms. That floor decided the medal more than the products did: one product's run landed either just above the floor or one whole capture later, by chance.
+
+A change is now timed when its capture copied the screen. The medal definition's scope says so, which separates its results and competitor bests from the earlier protocol. New rows carry `resize_protocol: "capture-start"`, and only those rows count.
+
+All products were rerun with the new timing on 2026-11-14 except Directory Report, whose trial has expired; it has no resize result until it is rerun.
+
+- **WizTree** was reinstalled: the same 4.33 binary, with an identical SHA-256.
+- **WizTree and TreeSize Free** had saved "always run as administrator" settings, so they relaunched elevated and the harness saw them exit. Both settings were switched off to restore the standard-user runs:
+  - WizTree: `actRunAsAdmin_Checked` in `%APPDATA%\WizTree3\WizTree3.ini`.
+  - TreeSize Free: `AlwaysStartAsAdministrator` and `AskForRestartAsAdministrator` in its `GlobalOptions.xml`.
+
 ### Standard-user full-drive private memory focus
 
 The focused report (`FULL_DRIVE_PRIVATE_MEMORY.html`, generated locally) describes the completed n=10 comparison: WinBlaze 479.13 MiB (gold), WinDirStat 542.12 MiB, WizTree 913.07 MiB. All runs, including the cold first run, remain included. Four allocation changes passed red/green tests; the observed WinBlaze baseline reduction is 23.14%, with uncontrolled live-volume/cache differences.
