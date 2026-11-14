@@ -184,7 +184,11 @@ impl ChangeWatch {
             }),
             buffer: vec![0u32; BUFFER_BYTES / 4],
             shared: Arc::clone(&shared),
+            armed: false,
         };
+        // From here the reader owns the directory handle and the completion
+        // event: dropping it (a failed arm or spawn) cancels and waits out its
+        // read before freeing the buffer, then closes them.
         if !reader.arm() {
             return None;
         }
@@ -245,6 +249,24 @@ struct Reader {
     overlapped: Box<Overlapped>,
     buffer: Vec<u32>,
     shared: Arc<Shared>,
+    /// A read is pending on the buffer and OVERLAPPED.
+    armed: bool,
+}
+
+impl Drop for Reader {
+    fn drop(&mut self) {
+        // SAFETY: cancel and wait out the pending read before its buffer and
+        // OVERLAPPED are freed, then close the handles this reader owns.
+        unsafe {
+            if self.armed {
+                CancelIoEx(self.handle, &mut *self.overlapped);
+                let mut bytes = 0u32;
+                GetOverlappedResult(self.handle, &mut *self.overlapped, &mut bytes, 1);
+            }
+            CloseHandle(self.handle);
+            CloseHandle(self.completed);
+        }
+    }
 }
 
 // SAFETY: the reader and its pending read move to the watch thread once,
@@ -273,6 +295,7 @@ impl Reader {
                 std::ptr::null_mut(),
             ) != 0
         };
+        self.armed = armed;
         if !armed {
             self.mark_incomplete();
         }
@@ -309,6 +332,8 @@ impl Reader {
                 return true;
             }
             if error != 995 {
+                // The read ended with an error: nothing is pending now.
+                self.armed = false;
                 self.mark_incomplete();
                 return false;
             }
@@ -398,17 +423,8 @@ impl Reader {
                 unsafe { ResetEvent(self.completed) };
             }
         }
-        // SAFETY: cancel and wait out the pending read before its buffer and
-        // OVERLAPPED are freed, then close the handles this reader owns.
-        unsafe {
-            if alive {
-                CancelIoEx(self.handle, &mut *self.overlapped);
-                let mut bytes = 0u32;
-                GetOverlappedResult(self.handle, &mut *self.overlapped, &mut bytes, 1);
-            }
-            CloseHandle(self.handle);
-            CloseHandle(self.completed);
-        }
+        // Drop cancels any pending read and closes the handles.
+        debug_assert_eq!(alive, self.armed);
     }
 }
 

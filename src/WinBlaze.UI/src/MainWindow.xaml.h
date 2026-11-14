@@ -300,7 +300,8 @@ namespace winrt::WinBlaze::UI::implementation
         void ApplyDeferredCatalogEntries(std::vector<TreeCatalogEntry> entries);
         // True from a catalog (re)load request until its results are applied.
         bool ResultsApplyPending();
-        bool m_results_apply_pending{ false };
+        // The snapshot load whose results are not applied yet, or 0.
+        uint64_t m_results_apply_generation{ 0 };
         void EnsureTreeChildrenLoaded(size_t node_index);
         void RebuildTreeVisibleRows();
         void RefreshTreeListView();

@@ -56,6 +56,9 @@ namespace WinBlaze::UI::NativeBridge
     void CancelScan(SessionHandle handle);
     void DestroyScan(SessionHandle handle);
     WbIndexSnapshotStats LoadCatalogSnapshotWithStats(CatalogHandler handler);
+    // The published model's entries only, never loaded from disk: false when
+    // no model is published (a scan started and dropped it).
+    bool LoadPublishedCatalog(CatalogHandler handler);
     // The catalog's counts only: loads the index model, emits no entries.
     WbIndexSnapshotStats LoadCatalogSnapshotStats();
     void LoadExtensionStatsSnapshot(ExtensionStatHandler handler);

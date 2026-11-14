@@ -810,6 +810,15 @@ fn published_record_counts() -> Option<(usize, usize)> {
         .map(|model| (model.tree.files().len(), model.tree.directories().len()))
 }
 
+/// The published model, never loaded from disk.
+fn published_index_model() -> Option<Arc<IndexModel>> {
+    let guard = match INDEX_MODEL.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.as_ref().map(Arc::clone)
+}
+
 fn invalidate_index_model() {
     let mut guard = match INDEX_MODEL.lock() {
         Ok(guard) => guard,
@@ -1177,6 +1186,11 @@ impl NativeSession {
         let cancelled = Arc::clone(&session.cancelled);
         let walk_root = root_path.clone();
         let start_walk = move || {
+            // Cancelled before it started (a refresh that declined): keep the
+            // published model and start no watch.
+            if cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                return None;
+            }
             // The walk will replace or mutate the snapshot; drop the cached
             // read model so queries rebuild against the fresh state.
             invalidate_index_model();
@@ -1193,6 +1207,10 @@ impl NativeSession {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                // Cancelled in between: the watch would never be bound.
+                if token.is_some() {
+                    refresh::end_change_watch();
+                }
                 return None;
             }
             *slot = Some(controller.start_scan(request));
@@ -1217,7 +1235,13 @@ impl NativeSession {
         let cancelled = Arc::clone(&session.cancelled);
         let worker = thread::spawn(move || {
             if refresh_first {
-                if refresh::try_fast_refresh(&live_root, callback, user_data, &index_root) {
+                if refresh::try_fast_refresh(
+                    &live_root,
+                    callback,
+                    user_data,
+                    &index_root,
+                    &cancelled,
+                ) {
                     return;
                 }
                 started = start_walk.take().and_then(|start| start());
@@ -2425,9 +2449,14 @@ fn load_catalog_entries_with_stats(
     // cloned record vectors, and at most SNAPSHOT_ENTRY_LIMIT entries emitted
     // (the UI never displays more).
     let model = get_or_load_index_model();
-    let tree = &model.tree;
+    let stats = snapshot_stats(&model);
+    emit_catalog_entries(&model, callback, user_data);
+    stats
+}
 
-    let stats = WbIndexSnapshotStats {
+fn snapshot_stats(model: &IndexModel) -> WbIndexSnapshotStats {
+    let tree = &model.tree;
+    WbIndexSnapshotStats {
         volumes: tree.volumes().len() as u64,
         directories: tree.directories().len() as u64,
         files: tree.files().len() as u64,
@@ -2436,13 +2465,22 @@ fn load_catalog_entries_with_stats(
         cache_read_millis: model.cache_read_millis,
         cache_decode_millis: model.cache_decode_millis,
         cache_loaded_from_backup: u8::from(model.cache_loaded_from_backup),
-    };
+    }
+}
 
+/// Emits at most SNAPSHOT_ENTRY_LIMIT entries of the model (the UI never
+/// displays more).
+fn emit_catalog_entries(
+    model: &IndexModel,
+    callback: WbCatalogCallback,
+    user_data: *mut core::ffi::c_void,
+) {
+    let tree = &model.tree;
     if let Some(cb) = callback {
         let mut emitted = 0usize;
         for volume in tree.volumes() {
             if emitted >= SNAPSHOT_ENTRY_LIMIT {
-                return stats;
+                return;
             }
             let entry = catalog_entry_from_volume(volume);
             cb(&entry.entry as *const WbCatalogEntry, user_data);
@@ -2450,7 +2488,7 @@ fn load_catalog_entries_with_stats(
         }
         for directory in tree.directories() {
             if emitted >= SNAPSHOT_ENTRY_LIMIT {
-                return stats;
+                return;
             }
             let entry = catalog_entry_from_directory(directory);
             cb(&entry.entry as *const WbCatalogEntry, user_data);
@@ -2458,15 +2496,13 @@ fn load_catalog_entries_with_stats(
         }
         for file in tree.files() {
             if emitted >= SNAPSHOT_ENTRY_LIMIT {
-                return stats;
+                return;
             }
             let entry = catalog_entry_from_file(file, &tree.file_display_path(file));
             cb(&entry.entry as *const WbCatalogEntry, user_data);
             emitted += 1;
         }
     }
-
-    stats
 }
 
 fn load_catalog_entries(callback: WbCatalogCallback, user_data: *mut core::ffi::c_void) {
@@ -2769,6 +2805,24 @@ pub extern "C" fn wb_index_snapshot_load_with_stats(
     user_data: *mut core::ffi::c_void,
 ) -> WbIndexSnapshotStats {
     load_catalog_entries_with_stats(callback, user_data)
+}
+
+/// Emits the catalog entries of the published model and returns 1, or returns
+/// 0 without loading anything when no model is published. For a follow-up
+/// read after the stats: a scan that started in between has dropped the model,
+/// and reloading the previous snapshot from disk then would only be thrown away.
+#[no_mangle]
+pub extern "C" fn wb_index_published_catalog(
+    callback: WbCatalogCallback,
+    user_data: *mut core::ffi::c_void,
+) -> u8 {
+    match published_index_model() {
+        Some(model) => {
+            emit_catalog_entries(&model, callback, user_data);
+            1
+        }
+        None => 0,
+    }
 }
 
 #[no_mangle]

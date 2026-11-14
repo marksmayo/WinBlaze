@@ -6355,7 +6355,9 @@ namespace winrt::WinBlaze::UI::implementation
         // (and therefore `this`) outlives the app's dispatcher queue, which
         // stops running callbacks at shutdown.
         const uint64_t generation = ++m_snapshot_load_generation;
-        m_results_apply_pending = true;
+        // Pending while this load is the newest: a newer load or a saved-scan
+        // open that supersedes it (and drops its apply) ends it too.
+        m_results_apply_generation = generation;
         UpdateStatus(L"Loading catalog snapshot...");
         auto dispatcher = DispatcherQueue();
         std::thread([this, generation, dispatcher]() {
@@ -6373,14 +6375,24 @@ namespace winrt::WinBlaze::UI::implementation
             if (stats.volumes + stats.directories + stats.files == 0) {
                 return;
             }
+            if (generation != m_snapshot_load_generation.load()) {
+                return;
+            }
             auto entries = std::make_shared<std::vector<TreeCatalogEntry>>();
             entries->reserve(kCatalogSnapshotLoadLimit);
-            ::WinBlaze::UI::NativeBridge::LoadCatalogSnapshotWithStats(
+            // From the model the stats came from only: a scan started since
+            // has dropped it, and reloading the old snapshot from disk (under
+            // the model lock, mid-walk) would only be thrown away.
+            const bool loaded = ::WinBlaze::UI::NativeBridge::LoadPublishedCatalog(
                 [&entries, this](WbCatalogEntry const& entry) {
                     if (entries->size() < kCatalogSnapshotLoadLimit) {
                         entries->push_back(CatalogEntryFromNative(entry));
                     }
                 });
+            if (!loaded) {
+                TraceStartup(L"LoadPersistedCatalogSnapshot catalog skipped: model dropped");
+                return;
+            }
             dispatcher.TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low,
                 [this, generation, entries]() {
                     if (generation != m_snapshot_load_generation.load()) {
@@ -6393,7 +6405,7 @@ namespace winrt::WinBlaze::UI::implementation
 
     bool MainWindow::ResultsApplyPending()
     {
-        if (m_results_apply_pending) {
+        if (m_results_apply_generation != 0 && m_results_apply_generation == m_snapshot_load_generation.load()) {
             return true;
         }
         std::lock_guard guard(m_pending_ui_mutex);
@@ -6425,7 +6437,7 @@ namespace winrt::WinBlaze::UI::implementation
     void MainWindow::ApplyPersistedCatalogSnapshot(WbIndexSnapshotStats stats)
     {
         TraceStartup(L"ApplyPersistedCatalogSnapshot begin");
-        m_results_apply_pending = false;
+        m_results_apply_generation = 0;
         const bool tree_kept = std::exchange(m_tree_kept_for_refresh, false);
         const size_t kept_window_offset = m_tree_window_offset;
         // Freed here, before the new catalog is built: freeing it after the

@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -135,6 +135,16 @@ fn plan_patch(tree: &TreeIndex, root: &str, changed_paths: &[String]) -> Option<
         };
         let listing = listing::list_directory(&path, DirectoryId(directory_id)).ok()?;
         let (model_directories, model_files) = tree.direct_children(directory_id)?;
+        // A junction, link or cloud folder could have replaced a same-named
+        // folder (or the reverse), and the walk descends those by policy: a
+        // name match proves nothing, so leave such directories to a walk.
+        if listing
+            .directories
+            .iter()
+            .any(|directory| directory.reparse_or_cloud)
+        {
+            return None;
+        }
 
         // Directory changes are structural: leave them to a walk.
         let mut listed: Vec<&str> = listing
@@ -213,6 +223,7 @@ pub(super) fn try_fast_refresh(
     callback: WbEventCallback,
     user_data: usize,
     index_root: &Path,
+    cancelled: &AtomicBool,
 ) -> bool {
     let generation = MODEL_GENERATION.load(Ordering::SeqCst);
     let changes = {
@@ -263,7 +274,11 @@ pub(super) fn try_fast_refresh(
         let mut guard = INDEX_MODEL
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if MODEL_GENERATION.load(Ordering::SeqCst) != generation {
+        // A cancel before the model changes declines: the caller then sees
+        // it, starts no walk and reports the session cancelled. Past this
+        // point the patch is applied and the refresh completes.
+        if MODEL_GENERATION.load(Ordering::SeqCst) != generation || cancelled.load(Ordering::SeqCst)
+        {
             return decline();
         }
         let Some(model) = guard.as_mut().and_then(Arc::get_mut) else {

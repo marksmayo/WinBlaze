@@ -209,12 +209,27 @@ namespace WinBlaze::UI::NativeBridge
 
     namespace
     {
-        struct PrestartedImport
+        struct PrestartState
         {
             std::wstring path;
             bool wiztree_utc{};
             uint32_t result{ 4 };
+        };
+        struct PrestartedImport
+        {
+            // Shared with the worker, so the worker never touches freed state.
+            std::shared_ptr<PrestartState> state;
             std::thread worker;
+            PrestartedImport() = default;
+            PrestartedImport(PrestartedImport const&) = delete;
+            PrestartedImport& operator=(PrestartedImport const&) = delete;
+            // Reached at process exit when no ImportCsv collected the job (the
+            // window closed first). A joinable std::thread would terminate the
+            // process; the import is abandoned instead of awaited.
+            ~PrestartedImport()
+            {
+                if (worker.joinable()) { worker.detach(); }
+            }
         };
         // Outlives the job, which ImportCsv collects and destroys.
         struct PrestartCompletion
@@ -244,11 +259,12 @@ namespace WinBlaze::UI::NativeBridge
         if (g_prestart_used) { return; }
         g_prestart_used = true;
         auto job = std::make_unique<PrestartedImport>();
-        job->path = inputPath;
-        job->wiztree_utc = wiztreeUtc;
+        job->state = std::make_shared<PrestartState>();
+        job->state->path = inputPath;
+        job->state->wiztree_utc = wiztreeUtc;
         auto completion = std::make_shared<PrestartCompletion>();
         g_prestart_completion = completion;
-        job->worker = std::thread([state = job.get(), completion] {
+        job->worker = std::thread([state = job->state, completion] {
             TraceStartup(L"Prestarted import begin");
             try { state->result = RunImport(state->path.c_str(), state->wiztree_utc); } catch (...) {}
             TraceStartup(L"Prestarted import end");
@@ -300,7 +316,7 @@ namespace WinBlaze::UI::NativeBridge
         if (job) {
             // Never leave an earlier import running behind a newer one.
             job->worker.join();
-            if (job->path == inputPath && job->wiztree_utc == wiztreeUtc) { return job->result; }
+            if (job->state->path == inputPath && job->state->wiztree_utc == wiztreeUtc) { return job->state->result; }
         }
         return RunImport(inputPath, wiztreeUtc);
     }
@@ -492,6 +508,20 @@ namespace WinBlaze::UI::NativeBridge
         auto context = std::make_shared<CatalogCallbackContext>();
         context->handler = std::move(handler);
         return Api().load_catalog_snapshot_with_stats(&OnCatalogWithContext, context.get());
+    }
+
+    bool LoadPublishedCatalog(CatalogHandler handler)
+    {
+        EnsureLoaded();
+        using Fn = uint8_t(__stdcall*)(WbCatalogCallback, void*);
+        static const auto fn = reinterpret_cast<Fn>(GetProcAddress(Api().module, "wb_index_published_catalog"));
+        auto context = std::make_shared<CatalogCallbackContext>();
+        context->handler = std::move(handler);
+        if (!fn) {
+            Api().load_catalog_snapshot_with_stats(&OnCatalogWithContext, context.get());
+            return true;
+        }
+        return fn(&OnCatalogWithContext, context.get()) != 0;
     }
 
     WbIndexSnapshotStats LoadCatalogSnapshotStats()

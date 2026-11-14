@@ -154,6 +154,23 @@ fn a_refresh_patches_new_and_changed_files_and_walks_for_anything_else() {
         // the walk met first, so its folder always walks).
         std::fs::write(data.join("fresh/later.txt"), b"later").unwrap();
         assert!(refresh_matches_walk(data_path, &export, "after a walk"));
+
+        // A folder holding a junction: a name match cannot prove the folder
+        // is the one the model has, so it walks.
+        let junction = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(data.join("fresh").join("junction"))
+            .arg(data.join("nested"))
+            .output()
+            .unwrap();
+        assert!(junction.status.success(), "{junction:?}");
+        assert!(!refresh_matches_walk(data_path, &export, "new junction"));
+        std::fs::write(data.join("fresh/beside-junction.txt"), b"beside").unwrap();
+        assert!(!refresh_matches_walk(
+            data_path,
+            &export,
+            "beside a junction"
+        ));
         return;
     }
     let root = std::env::temp_dir().join(format!("winblaze-fast-refresh-{}", std::process::id()));
