@@ -24,12 +24,6 @@ use crate::winfind;
 
 const FALLBACK_PROGRESS_ITEM_DELTA: u64 = 4_096;
 
-/// How many times an idle worker yields while checking for new work before it
-/// parks on the condition variable. A directory takes tens of microseconds to
-/// list, so a short spin usually finds a sibling's children without a kernel
-/// wait and the two context switches it costs.
-const IDLE_SPINS: u32 = 64;
-
 /// Parent directory handles referenced by queued walk tasks (see
 /// [`ParentHandle`]); zero whenever no walk is running.
 static HELD_PARENT_HANDLES: AtomicUsize = AtomicUsize::new(0);
@@ -1065,17 +1059,8 @@ impl FallbackSharedState {
             if self.outstanding.load(Ordering::SeqCst) == 0 {
                 return None;
             }
-            let mut spins = 0;
-            while spins < IDLE_SPINS && self.queued.load(Ordering::SeqCst) == 0 {
-                if self.outstanding.load(Ordering::SeqCst) == 0 {
-                    return None;
-                }
-                thread::yield_now();
-                spins += 1;
-            }
-            if self.queued.load(Ordering::SeqCst) > 0 {
-                continue;
-            }
+            // No spin before parking: on a full drive, yielding while idle
+            // cost more kernel time and wall time than the waits it saved.
             let guard = self.idle.lock().unwrap();
             self.sleepers.fetch_add(1, Ordering::SeqCst);
             if self.queued.load(Ordering::SeqCst) == 0

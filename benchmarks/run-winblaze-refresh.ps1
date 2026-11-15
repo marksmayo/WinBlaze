@@ -1,4 +1,4 @@
-param([ValidateRange(1,100)][int]$Runs=10,[switch]$SkipStandard,[switch]$SkipUi,[switch]$IncludeElevated,[switch]$SkipBuild)
+param([ValidateRange(1,100)][int]$Runs=10,[switch]$SkipStandard,[switch]$SkipUi,[switch]$IncludeElevated,[switch]$SkipBuild,[switch]$SkipFeatures)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'track-tool-versions.ps1')
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -46,12 +46,16 @@ for project in ['tests/native/file-actions.vcxproj', 'tests/native/directory-wat
   Publish
   & (Join-Path $PSScriptRoot 'run-current-engine-comparison.ps1') -Runs $Runs -Profiles tiny,small,medium,fanout,fanout-large,scale,full
   Publish
-  & (Join-Path $PSScriptRoot 'run-feature-comparison.ps1') -Tools WinBlaze -Runs $Runs
-  $featureRows=@(Read-BenchmarkJson -Path (Join-Path $PSScriptRoot 'current-feature-performance-results.json') | Where-Object { $_.tool -eq 'WinBlaze' -and $_.operation -ne 'raw-mft-dump' })
-  $featureManifest=Read-BenchmarkJson -Path (Join-Path $PSScriptRoot 'current-feature-performance-batch.json')
-  $expectedJobs=@($featureManifest.jobs | Where-Object {$_.tool -eq 'WinBlaze' -and $_.kind -ne 'mft'})
-  if($featureRows.Count -ne $expectedJobs.Count*$Runs -or @($featureRows | Where-Object status -ne measured).Count){throw 'WinBlaze feature batch is incomplete or failed output validation.'}
-  foreach($job in $expectedJobs){if(@($featureRows | Where-Object job -eq $job.id).Count -ne $Runs){throw "Incomplete feature job: $($job.id)"}}
+  # Feature jobs import competitor exports as seeds; -SkipFeatures keeps the
+  # previous feature results when a competitor is not installed.
+  if(!$SkipFeatures){
+    & (Join-Path $PSScriptRoot 'run-feature-comparison.ps1') -Tools WinBlaze -Runs $Runs
+    $featureRows=@(Read-BenchmarkJson -Path (Join-Path $PSScriptRoot 'current-feature-performance-results.json') | Where-Object { $_.tool -eq 'WinBlaze' -and $_.operation -ne 'raw-mft-dump' })
+    $featureManifest=Read-BenchmarkJson -Path (Join-Path $PSScriptRoot 'current-feature-performance-batch.json')
+    $expectedJobs=@($featureManifest.jobs | Where-Object {$_.tool -eq 'WinBlaze' -and $_.kind -ne 'mft'})
+    if($featureRows.Count -ne $expectedJobs.Count*$Runs -or @($featureRows | Where-Object status -ne measured).Count){throw 'WinBlaze feature batch is incomplete or failed output validation.'}
+    foreach($job in $expectedJobs){if(@($featureRows | Where-Object job -eq $job.id).Count -ne $Runs){throw "Incomplete feature job: $($job.id)"}}
+  }
   Publish
  }
  if(!$SkipUi){
