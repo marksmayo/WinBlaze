@@ -26,7 +26,6 @@ fn snapshot(swapped: bool, changed: bool) -> BufferedIndexTransaction {
             parent_directory_id: Some(DirectoryId(root_id)),
             name: name.into(),
             full_path: format!(r"C:\root\{name}"),
-            ..Default::default()
         });
         tx.insert_file(FileRecord {
             id: FileId(100 + i as u64),
@@ -117,7 +116,6 @@ fn newly_named_directory_gets_fresh_identity_and_linked_file_parent() {
         parent_directory_id: Some(DirectoryId(1)),
         name: "new".into(),
         full_path: r"C:\root\new".into(),
-        ..Default::default()
     });
     current.insert_file(FileRecord {
         id: FileId(100),

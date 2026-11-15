@@ -134,9 +134,8 @@ fn paged_search_matches_slices_of_the_full_order_for_every_sort() {
         tx.insert_directory(DirectoryRecord {
             id: DirectoryId(d),
             parent_directory_id: Some(DirectoryId(1 + d % 3)),
-            name: ["Docs", "docs", "Ünï", "b", "B"][(d % 5) as usize].to_string(),
+            name: (["Docs", "docs", "Ünï", "b", "B"][(d % 5) as usize].to_string()).into(),
             full_path: format!("Z:/root/d{d}"),
-            ..Default::default()
         });
     }
     // Repeated names, sizes and times force the tie-break on every sort.

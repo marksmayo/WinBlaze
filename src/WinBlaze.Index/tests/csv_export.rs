@@ -9,10 +9,6 @@ fn csv_exports_directory_rollups_with_a_stable_header() {
         parent_directory_id: None,
         name: "root".into(),
         full_path: "C:\\root".into(),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
     let tree = TreeIndex::build(transaction);
     let mut csv = Vec::new();
@@ -29,10 +25,6 @@ fn csv_preserves_unicode_quotes_and_exports_more_than_the_ui_limit() {
         parent_directory_id: None,
         name: "root".into(),
         full_path: "C:\\root".into(),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
     for id in 0..8200 {
         transaction.upsert_file(&FileRecord {
@@ -89,10 +81,6 @@ fn csv_root_totals_come_first_even_when_ids_sort_differently() {
             parent_directory_id: parent,
             name: path.into(),
             full_path: path.into(),
-            direct_bytes: 0,
-            total_bytes: 0,
-            direct_entries: 0,
-            total_entries: 0,
         });
     }
     let mut csv = Vec::new();

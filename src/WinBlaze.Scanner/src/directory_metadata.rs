@@ -4,14 +4,27 @@ use std::{
     ffi::{c_void, OsStr, OsString},
     fs::{File, OpenOptions},
     io,
-    os::windows::{ffi::OsStringExt, fs::OpenOptionsExt, io::AsRawHandle},
+    os::windows::{
+        ffi::{OsStrExt, OsStringExt},
+        fs::OpenOptionsExt,
+        io::{AsRawHandle, FromRawHandle},
+    },
     path::Path,
+    sync::Arc,
 };
 
 thread_local! {
     // One idle buffer per scanner worker; active/nested iterators own theirs.
     static DIRECTORY_BUFFER: RefCell<Option<Vec<u64>>> = const { RefCell::new(None) };
 }
+
+/// First kernel batch for every directory: 32 KiB holds roughly 300 typical
+/// records, so most directories need one request plus (on volumes that do not
+/// fill batches) the end-of-directory request.
+const INITIAL_BUFFER_WORDS: usize = 4096;
+/// Largest buffer a worker keeps idle between directories: the 64 KiB a dense
+/// directory grows to, so the next dense directory does not reallocate it.
+const CACHED_BUFFER_WORDS: usize = 8192;
 
 /// Exact filesystem name; short ASCII names require no owned heap buffer.
 pub enum EntryName {
@@ -117,7 +130,9 @@ pub struct VolumeContext {
 const MAX_RECORD_BYTES: usize = 88 + 255 * 2 + 6;
 
 pub struct DirectoryMetadataIterator {
-    file: File,
+    /// Shared so a walker can hand the handle to its child tasks, which open
+    /// their directory relative to it (see [`open_child_directory`]).
+    file: Arc<File>,
     buffer: Vec<u64>,
     offset: usize,
     volume: VolumeContext,
@@ -134,6 +149,130 @@ struct IdInfo {
     volume: u64,
     id: [u8; 16],
 }
+#[repr(C)]
+struct UnicodeString {
+    length: u16,
+    maximum_length: u16,
+    buffer: *const u16,
+}
+
+#[repr(C)]
+struct ObjectAttributes {
+    length: u32,
+    root_directory: *mut c_void,
+    object_name: *const UnicodeString,
+    attributes: u32,
+    security_descriptor: *mut c_void,
+    security_quality_of_service: *mut c_void,
+}
+
+#[repr(C)]
+#[derive(Default)]
+struct IoStatusBlock {
+    status: isize,
+    information: usize,
+}
+
+const STATUS_NO_MORE_FILES: i32 = 0x8000_0006_u32 as i32;
+const STATUS_BUFFER_OVERFLOW: i32 = 0x8000_0005_u32 as i32;
+/// FileIdExtdDirectoryInformation: the class GetFileInformationByHandleEx
+/// requests for FILE_ID_EXTD_DIR_INFO, queried here without the wrapper.
+const FILE_ID_EXTD_DIRECTORY_INFORMATION: u32 = 60;
+const OBJ_CASE_INSENSITIVE: u32 = 0x40;
+const FILE_LIST_DIRECTORY: u32 = 0x1;
+const SYNCHRONIZE: u32 = 0x0010_0000;
+const FILE_SHARE_ALL: u32 = 7;
+const FILE_OPEN: u32 = 1;
+const FILE_DIRECTORY_FILE: u32 = 0x1;
+const FILE_SYNCHRONOUS_IO_NONALERT: u32 = 0x20;
+const FILE_OPEN_FOR_BACKUP_INTENT: u32 = 0x4000;
+
+#[link(name = "ntdll")]
+extern "system" {
+    fn NtCreateFile(
+        handle: *mut *mut c_void,
+        desired_access: u32,
+        attributes: *const ObjectAttributes,
+        status: *mut IoStatusBlock,
+        allocation_size: *const i64,
+        file_attributes: u32,
+        share_access: u32,
+        disposition: u32,
+        options: u32,
+        ea_buffer: *const c_void,
+        ea_length: u32,
+    ) -> i32;
+    fn NtQueryDirectoryFile(
+        handle: *mut c_void,
+        event: *mut c_void,
+        apc_routine: *mut c_void,
+        apc_context: *mut c_void,
+        status: *mut IoStatusBlock,
+        buffer: *mut c_void,
+        length: u32,
+        class: u32,
+        return_single_entry: u8,
+        file_name: *const UnicodeString,
+        restart_scan: u8,
+    ) -> i32;
+    fn RtlNtStatusToDosError(status: i32) -> u32;
+}
+
+fn nt_error(status: i32) -> io::Error {
+    // SAFETY: pure status translation.
+    io::Error::from_raw_os_error(unsafe { RtlNtStatusToDosError(status) } as i32)
+}
+
+/// Opens the child directory `name` of the open directory `parent` for
+/// listing, as `read_directory` opens a path. The kernel resolves one
+/// component, so the cost no longer grows with the depth of the tree; a deep
+/// chain is opened in linear instead of quadratic time. Reparse points are
+/// followed as a path open follows them, so callers decide traversal first.
+pub fn open_child_directory(parent: &File, name: &OsStr) -> io::Result<File> {
+    let units: Vec<u16> = name.encode_wide().collect();
+    let bytes = units.len().saturating_mul(2);
+    if bytes > usize::from(u16::MAX) || units.is_empty() {
+        return Err(io::Error::from_raw_os_error(123)); // ERROR_INVALID_NAME
+    }
+    let object_name = UnicodeString {
+        length: bytes as u16,
+        maximum_length: bytes as u16,
+        buffer: units.as_ptr(),
+    };
+    let attributes = ObjectAttributes {
+        length: std::mem::size_of::<ObjectAttributes>() as u32,
+        root_directory: parent.as_raw_handle(),
+        object_name: &object_name,
+        attributes: OBJ_CASE_INSENSITIVE,
+        security_descriptor: std::ptr::null_mut(),
+        security_quality_of_service: std::ptr::null_mut(),
+    };
+    let mut handle = std::ptr::null_mut();
+    let mut status_block = IoStatusBlock::default();
+    // SAFETY: every pointer refers to a live local or the caller's open
+    // handle for the duration of the call; the name buffer outlives it.
+    let status = unsafe {
+        NtCreateFile(
+            &mut handle,
+            FILE_LIST_DIRECTORY | SYNCHRONIZE,
+            &attributes,
+            &mut status_block,
+            std::ptr::null(),
+            0,
+            FILE_SHARE_ALL,
+            FILE_OPEN,
+            FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_FOR_BACKUP_INTENT,
+            std::ptr::null(),
+            0,
+        )
+    };
+    if status < 0 {
+        return Err(nt_error(status));
+    }
+    // SAFETY: a successful NtCreateFile returns a handle this process owns.
+    Ok(unsafe { File::from_raw_handle(handle) })
+}
+
 #[link(name = "kernel32")]
 extern "system" {
     fn GetFileInformationByHandleEx(
@@ -187,6 +326,17 @@ pub(crate) fn traversal_attributes(attributes: u32, reparse_tag: u32) -> u32 {
     }
 }
 
+/// Frees the calling thread's idle listing buffer. A walk calls it when it
+/// finishes, so a thread that outlives the walk (the scan thread, before it
+/// exits) holds no 32 to 64 KiB scratch at completion.
+pub fn release_idle_buffer() {
+    let _ = DIRECTORY_BUFFER.try_with(|cached| {
+        if let Ok(mut cached) = cached.try_borrow_mut() {
+            cached.take();
+        }
+    });
+}
+
 pub fn read_directory(path: &Path) -> io::Result<DirectoryMetadataIterator> {
     read_directory_on(path, None)
 }
@@ -206,11 +356,20 @@ pub fn read_directory_on(
         Some(volume) => volume,
         None => query_volume(&file)?,
     };
+    read_directory_handle(file, volume)
+}
+
+/// Lists an already opened directory handle (from [`open_child_directory`] or
+/// any listing-capable open) on the given volume.
+pub fn read_directory_handle(
+    file: File,
+    volume: VolumeContext,
+) -> io::Result<DirectoryMetadataIterator> {
     let mut entries = DirectoryMetadataIterator {
-        file,
+        file: Arc::new(file),
         buffer: DIRECTORY_BUFFER
             .with(|cached| cached.borrow_mut().take())
-            .unwrap_or_else(|| vec![0; 2048]),
+            .unwrap_or_else(|| vec![0; INITIAL_BUFFER_WORDS]),
         offset: 0,
         volume,
         exhausted: false,
@@ -219,10 +378,13 @@ pub fn read_directory_on(
         metadata_reads: 0,
         compact_names: true,
     };
-    // Most directories fit one small batch. Retain cached capacity, but avoid
+    // Most directories fit one batch. Retain cached capacity, but avoid
     // requesting a large kernel enumeration buffer for every small directory.
-    entries.buffer.truncate(2048);
-    entries.fill(20)?;
+    entries.buffer.truncate(INITIAL_BUFFER_WORDS);
+    if entries.buffer.len() < INITIAL_BUFFER_WORDS {
+        entries.buffer.resize(INITIAL_BUFFER_WORDS, 0);
+    }
+    entries.fill(true)?;
     Ok(entries)
 }
 
@@ -298,9 +460,9 @@ fn is_remote(file: &File) -> bool {
 impl Drop for DirectoryMetadataIterator {
     fn drop(&mut self) {
         let buffer = std::mem::take(&mut self.buffer);
-        // Large dense-directory batches are active scratch, not idle storage.
-        // Keep the established 32 KiB cache bound at terminal delivery.
-        if buffer.capacity() > 4096 {
+        // A worker keeps one idle buffer up to the dense-directory size, so
+        // the next dense directory reuses it instead of reallocating.
+        if buffer.capacity() > CACHED_BUFFER_WORDS {
             return;
         }
         // During thread-local teardown the cache can already be unavailable.
@@ -326,6 +488,12 @@ impl DirectoryMetadataIterator {
         self.volume
     }
 
+    /// The open directory, shared so child tasks can open relative to it
+    /// after this listing is dropped.
+    pub fn directory_handle(&self) -> &Arc<File> {
+        &self.file
+    }
+
     /// End of the last record in a filled batch, or `None` if malformed.
     fn batch_end(&self) -> Option<usize> {
         let bytes_len = self.buffer.len() * 8;
@@ -347,32 +515,55 @@ impl DirectoryMetadataIterator {
         }
     }
 
-    fn fill(&mut self, class: u32) -> io::Result<()> {
+    /// One directory query straight to the kernel: the same request the
+    /// GetFileInformationByHandleEx wrapper issues for FILE_ID_EXTD_DIR_INFO,
+    /// without the wrapper's argument validation and error translation per
+    /// batch. `restart` starts the listing; a continuation follows it.
+    fn fill(&mut self, restart: bool) -> io::Result<()> {
         self.metadata_reads += 1;
         let requested = self.buffer.len() * 8;
+        let mut status_block = IoStatusBlock::default();
         // SAFETY: the buffer is writable and aligned to eight bytes as
-        // required for FILE_ID_EXTD_DIR_INFO. The owned handle stays live.
-        if unsafe {
-            GetFileInformationByHandleEx(
+        // required for FILE_ID_EXTD_DIR_INFORMATION. The owned handle stays
+        // live and was opened for synchronous I/O, so the call returns only
+        // once the batch is complete.
+        let status = unsafe {
+            NtQueryDirectoryFile(
                 self.file.as_raw_handle(),
-                class,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut status_block,
                 self.buffer.as_mut_ptr().cast(),
-                (self.buffer.len() * 8) as u32,
+                requested as u32,
+                FILE_ID_EXTD_DIRECTORY_INFORMATION,
+                0,
+                std::ptr::null(),
+                u8::from(restart),
             )
-        } == 0
-        {
-            let error = io::Error::last_os_error();
-            if error.raw_os_error() == Some(18) {
-                self.exhausted = true;
-                return Ok(());
-            }
-            return Err(error);
+        };
+        if status == STATUS_NO_MORE_FILES {
+            self.exhausted = true;
+            return Ok(());
+        }
+        if status < 0 || status == STATUS_BUFFER_OVERFLOW {
+            // The wrapper reports an overflowing single record as more data;
+            // neither can decode a record that did not fit.
+            return Err(if status == STATUS_BUFFER_OVERFLOW {
+                io::Error::from_raw_os_error(234) // ERROR_MORE_DATA
+            } else {
+                nt_error(status)
+            });
         }
         // A successful continuation establishes that this directory needs
         // multiple batches. Preserve the returned records and use a larger
         // buffer on subsequent calls; an EOF continuation never grows it.
-        let continuation_words = if self.compact_names { 8192 } else { 4096 };
-        if class == 19 && self.buffer.len() < continuation_words {
+        let continuation_words = if self.compact_names {
+            CACHED_BUFFER_WORDS
+        } else {
+            INITIAL_BUFFER_WORDS
+        };
+        if !restart && self.buffer.len() < continuation_words {
             self.buffer.resize(continuation_words, 0);
         }
         self.offset = 0;
@@ -453,7 +644,7 @@ impl Iterator for DirectoryMetadataIterator {
                     self.exhausted = true;
                     return None;
                 }
-                if let Err(error) = self.fill(19) {
+                if let Err(error) = self.fill(false) {
                     self.exhausted = true;
                     return Some(Err(error));
                 }

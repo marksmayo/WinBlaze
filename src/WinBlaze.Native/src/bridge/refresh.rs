@@ -255,10 +255,9 @@ pub(super) fn try_fast_refresh(
     else {
         return decline();
     };
-    let root_matches = model
-        .tree
-        .root()
-        .is_some_and(|(record, _)| normalized_root(&record.full_path) == normalized_root(root));
+    let root_matches = model.tree.root().is_some_and(|(record, _)| {
+        normalized_root(&model.tree.directory_path(record)) == normalized_root(root)
+    });
     if !root_matches {
         return decline();
     }
@@ -353,7 +352,7 @@ pub(super) fn try_fast_refresh(
             state: ScanState::Completed,
             progress: Default::default(),
         }],
-        model.tree.directories(),
+        model.tree.directories_with_paths(),
         model.tree.files(),
         true,
     );

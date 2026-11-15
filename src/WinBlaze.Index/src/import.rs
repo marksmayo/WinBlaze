@@ -753,12 +753,24 @@ fn build_import_metadata(
     allow_legacy_ticks: bool,
     metadata: HashMap<String, ImportedMetadata>,
 ) -> io::Result<TreeIndex> {
+    // A tree-layout export (see `export::CsvLayout::tree`) lists a file by
+    // its bare name under the directory row before it; give such rows their
+    // full path so the rest of the import sees one shape.
+    let mut last_directory: Option<String> = None;
     for row in rows.iter_mut().skip(1) {
         if row.get(1).is_some_and(|kind| kind == "Directory") {
             let len = row[0].trim_end_matches('\\').len();
             match &mut row[0] {
                 Cow::Borrowed(path) => *path = &path[..len],
                 Cow::Owned(path) => path.truncate(len),
+            }
+            last_directory = Some(row[0].to_string());
+        } else if row.get(1).is_some_and(|kind| kind == "File")
+            && !row[0].is_empty()
+            && !row[0].contains(['\\', '/'])
+        {
+            if let Some(parent) = &last_directory {
+                row[0] = Cow::Owned(winblaze_core::join_path(parent, &row[0]));
             }
         }
     }
@@ -941,7 +953,7 @@ fn build_import_metadata(
             id,
             parent_directory_id: parent,
             name: if top_roots.contains(path) {
-                path.to_owned()
+                path.to_owned().into()
             } else {
                 path.rsplit('\\').next().unwrap_or(path).into()
             },
@@ -950,10 +962,6 @@ fn build_import_metadata(
             } else {
                 path.to_owned()
             },
-            direct_bytes: 0,
-            total_bytes: 0,
-            direct_entries: 0,
-            total_entries: 0,
         });
     }
     for file in file_parts.into_iter().flatten() {
@@ -1642,7 +1650,9 @@ mod tests {
         assert_eq!(tree.files().len(), 1000);
         assert_eq!(tree.directories().len(), 51);
         assert!(
-            tree.directories().iter().any(|d| d.full_path == directory),
+            tree.directories()
+                .iter()
+                .any(|d| tree.directory_path(d) == directory),
             "deepest directory must be created from the file paths"
         );
         // One walk up the 50 levels, then at most one probe per further row.
@@ -1670,7 +1680,7 @@ mod tests {
             let directory = tree
                 .directories()
                 .iter()
-                .find(|d| d.full_path == path)
+                .find(|d| tree.directory_path(d) == path)
                 .unwrap();
             tree.rollup_for(directory.id.0).unwrap().logical_bytes
         };
@@ -1689,13 +1699,16 @@ mod tests {
         csv.push_str("\"C:\\r\\a\\deep\",Directory,3,3,2,1,\r\n");
         csv.push_str("\"C:\\r\\a\\deep\\x\\2\",File,2,2,0,0,\r\n");
         let tree = read_csv(csv.as_bytes()).unwrap();
-        let names: Vec<_> = tree
+        let names: Vec<String> = tree
             .directories()
             .iter()
-            .map(|d| d.full_path.as_str())
+            .map(|d| tree.directory_path(d).into_owned())
             .collect();
         for path in ["C:\\r", "C:\\r\\a", "C:\\r\\a\\deep", "C:\\r\\a\\deep\\x"] {
-            assert!(names.contains(&path), "missing {path}: {names:?}");
+            assert!(
+                names.iter().any(|name| name == path),
+                "missing {path}: {names:?}"
+            );
         }
         assert_eq!(names.len(), 4);
     }

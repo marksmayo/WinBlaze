@@ -74,6 +74,7 @@
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\ShellTheme.h" />
     <ClInclude Include="src\ByteFormat.h" />
+    <ClInclude Include="src\CommandLine.h" />
     <ClInclude Include="src\XamlMetaDataProvider.h" />
     <ClInclude Include="include\winblaze_native.h" />
     <ClInclude Include="resource.h" />

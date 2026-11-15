@@ -187,7 +187,6 @@ fn snapshot_seed(dir: &Path) -> Vec<u8> {
         parent_directory_id: None,
         name: "Z:\\".into(),
         full_path: "Z:\\".into(),
-        ..DirectoryRecord::default()
     });
     for i in 0..4 {
         tx.insert_file(FileRecord {

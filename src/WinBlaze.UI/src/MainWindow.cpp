@@ -2,6 +2,7 @@
 #include "PermissionView.h"
 #include "SearchInput.h"
 #include "ByteFormat.h"
+#include "CommandLine.h"
 #include "NativeBridge.h"
 #include "TreemapGeometry.h"
 #include "ShellContext.h"
@@ -681,19 +682,19 @@ namespace winrt::WinBlaze::UI::implementation
     MainWindow::MainWindow()
     {
         TraceStartup(L"MainWindow::MainWindow begin");
-        int argumentCount = 0;
-        auto arguments = CommandLineToArgvW(GetCommandLineW(), &argumentCount);
-        if (arguments) {
-            if (argumentCount == 3 && std::wstring(arguments[1]) == L"--treemap-png") { m_benchmark_png_path = arguments[2]; }
-            if(argumentCount==3 && (std::wstring(arguments[1])==L"--flame-png" || std::wstring(arguments[1])==L"--sunburst-png")) {
-                m_visualization_layout=std::wstring(arguments[1])==L"--flame-png"?2:3;
-                m_benchmark_png_path=arguments[2];
+        {
+            // Parsed locally: CommandLineToArgvW would load SHELL32 before
+            // the first frame (the host delay-loads it).
+            const auto arguments = ::WinBlaze::UI::SplitCommandLine(GetCommandLineW());
+            const size_t argumentCount = arguments.size();
+            if (argumentCount == 3 && arguments[1] == L"--treemap-png") { m_benchmark_png_path = arguments[2]; }
+            if (argumentCount == 3 && (arguments[1] == L"--flame-png" || arguments[1] == L"--sunburst-png")) {
+                m_visualization_layout = arguments[1] == L"--flame-png" ? 2 : 3;
+                m_benchmark_png_path = arguments[2];
             }
             if (argumentCount == 2 && std::wstring_view(arguments[1]).rfind(L"--", 0) != 0) {
                 m_startup_scan_path = arguments[1];
             }
-
-            LocalFree(arguments);
         }
         const DWORD startup_attributes = m_startup_scan_path.empty()
             ? INVALID_FILE_ATTRIBUTES : GetFileAttributesW(m_startup_scan_path.c_str());
@@ -1150,7 +1151,13 @@ namespace winrt::WinBlaze::UI::implementation
         progress_track.CornerRadius(UniformRadius(theme.progress_radius));
 
         m_scan_progress_fill = Border{};
-        m_scan_progress_fill.Width(0.0);
+        // Full track width, scaled by progress (see UpdateProgress).
+        m_scan_progress_fill.Width(150.0);
+        {
+            Microsoft::UI::Xaml::Media::ScaleTransform progress_scale;
+            progress_scale.ScaleX(0.0);
+            m_scan_progress_fill.RenderTransform(progress_scale);
+        }
         m_scan_progress_fill.Height(6.0);
         m_scan_progress_fill.HorizontalAlignment(HorizontalAlignment::Left);
         m_scan_progress_fill.Background(make_brush(theme.progress_fill));
@@ -4237,7 +4244,8 @@ namespace winrt::WinBlaze::UI::implementation
         // creates the render device), scans, and resizes that arrive faster
         // than a frame, such as a window edge being dragged.
         const bool draw_now = !m_session_active && m_total_treemap_render_flush_count > 0 && !ResultsApplyPending() &&
-            std::chrono::steady_clock::now() - m_last_treemap_render_completed_at >= kTreemapRenderInterval;
+            TreemapResizeDrawsNow(std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - m_last_treemap_render_completed_at));
         if (draw_now) {
             if (m_treemap_render_timer) {
                 m_treemap_render_timer.Stop();
@@ -5243,8 +5251,11 @@ namespace winrt::WinBlaze::UI::implementation
         if (m_session_active) {
             title += L" - Scanning " + m_current_root_path;
             // Read by benchmarks with GetWindowText, which needs no UI-thread work.
-            if (m_tree_rows_shown > 0) {
-                title += L" - " + std::to_wstring(m_tree_rows_shown) + L" rows shown";
+            if (RowsShownTitleDue(true, m_titled_rows_shown, m_tree_rows_shown)) {
+                m_titled_rows_shown = m_tree_rows_shown;
+            }
+            if (m_titled_rows_shown > 0) {
+                title += L" - " + std::to_wstring(m_titled_rows_shown) + L" rows shown";
             }
         } else if (m_title_results_ready && !m_current_root_path.empty()) {
             // A catalog restored at launch belongs to its own root, not to the
@@ -5290,6 +5301,14 @@ namespace winrt::WinBlaze::UI::implementation
 
     void MainWindow::ApplyShellState()
     {
+        // Runs on the UI thread after every session start and end.
+        const int wanted_priority = m_session_active ? ScanUiThreadPriority() : THREAD_PRIORITY_NORMAL;
+        if (wanted_priority != m_ui_thread_priority && SetThreadPriority(GetCurrentThread(), wanted_priority)) {
+            m_ui_thread_priority = wanted_priority;
+        }
+        if (!m_session_active) {
+            m_titled_rows_shown = 0;
+        }
         UpdateWindowTitle();
         TraceStartup(L"ApplyShellState begin");
         const bool loading = !m_shell_ready;
@@ -5608,8 +5627,12 @@ namespace winrt::WinBlaze::UI::implementation
         }
 
         m_last_ui_flush_time = flush_started;
-        m_last_working_set_bytes = CurrentWorkingSetBytes();
-        m_peak_working_set_bytes = (std::max)(m_peak_working_set_bytes, m_last_working_set_bytes);
+        // Read only for the diagnostics panel; a scan's flushes skip the call
+        // while it does not exist.
+        if (DiagnosticsCard() || !m_session_active) {
+            m_last_working_set_bytes = CurrentWorkingSetBytes();
+            m_peak_working_set_bytes = (std::max)(m_peak_working_set_bytes, m_last_working_set_bytes);
+        }
         {
             std::lock_guard guard(m_pending_ui_mutex);
             ++m_total_ui_flush_count;
@@ -6203,6 +6226,11 @@ namespace winrt::WinBlaze::UI::implementation
         if (!StatusText()) {
             return;
         }
+        // Setting identical text still invalidates layout; a scan repeats it.
+        if (text == m_shown_status_text) {
+            return;
+        }
+        m_shown_status_text = text;
         StatusText().Text(winrt::hstring(text));
         if (m_sidebar_status_text) {
             m_sidebar_status_text.Text(winrt::hstring(text));
@@ -6215,6 +6243,10 @@ namespace winrt::WinBlaze::UI::implementation
         if (!EventText()) {
             return;
         }
+        if (text == m_shown_event_text) {
+            return;
+        }
+        m_shown_event_text = text;
         EventText().Text(winrt::hstring(text));
         UpdateSummaryText();
     }
@@ -6512,11 +6544,24 @@ namespace winrt::WinBlaze::UI::implementation
             return;
         }
         if (ScanProgressFill()) {
+            // A scale transform moves the bar without a layout pass.
             const double clamped_percent = std::clamp(percent, 0.0, 100.0);
-            ScanProgressFill().Width(3.6 * clamped_percent);
+            if (auto scale = ScanProgressFill().RenderTransform().try_as<Microsoft::UI::Xaml::Media::ScaleTransform>()) {
+                scale.ScaleX(clamped_percent / 100.0);
+            }
         }
+        // During a scan the text changes on every progress event; rewrite it
+        // twice a second, and leave the summary to the shell-state refresh.
+        const auto now = std::chrono::steady_clock::now();
+        if (m_session_active && !ScanProgressTextDue(
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_scan_progress_text))) {
+            return;
+        }
+        m_last_scan_progress_text = now;
         ProgressText().Text(winrt::hstring(text));
-        UpdateSummaryText();
+        if (!m_session_active) {
+            UpdateSummaryText();
+        }
     }
 
     std::wstring MainWindow::ScanElapsedText()
@@ -7400,7 +7445,7 @@ namespace winrt::WinBlaze::UI::implementation
         // Accumulate into the backlog and apply a bounded chunk per flush: a
         // fast scan can hand one flush tens of thousands of directories, and
         // splicing them all at once stalls the UI thread.
-        constexpr size_t kMaxLiveDirectoriesPerFlush = 4096;
+        constexpr size_t kMaxLiveDirectoriesPerFlush = LiveDirectoriesPerFlush();
         // Live rows deeper than this are dropped: the live view exists to
         // show scan progress at the top of the hierarchy, and materializing
         // every deep directory burns UI-thread time for rows nobody can see

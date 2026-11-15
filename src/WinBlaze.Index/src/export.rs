@@ -9,6 +9,81 @@ fn quoted(output: &mut impl Write, text: &str) -> io::Result<()> {
     output.write_all(b"\"")
 }
 
+/// RFC 4180 lets a field go unquoted unless it holds a quote, the separator
+/// or a line break.
+fn needs_quotes(text: &str) -> bool {
+    text.bytes()
+        .any(|byte| matches!(byte, b'"' | b',' | b'\r' | b'\n'))
+}
+
+/// A text field: always quoted (the default layout, byte-stable since the
+/// first release) or quoted only when needed.
+fn field(output: &mut impl Write, text: &str, minimal: bool) -> io::Result<()> {
+    if minimal && !needs_quotes(text) {
+        output.write_all(text.as_bytes())
+    } else {
+        quoted(output, text)
+    }
+}
+
+/// How the complete catalog is laid out in a CSV. Every layout keeps the
+/// header, the `File`/`Directory` kinds and the root directory as the first
+/// data row, so a reader of the first two lines sees the same summary.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CsvLayout {
+    /// Each directory row is followed by its direct files, whose `Path` is
+    /// the bare file name (the directory row supplies the location). Saves
+    /// the parent path on every file row; `read_csv` reopens it.
+    pub tree: bool,
+    /// Only the root directory row and the file rows (full paths). Ignored
+    /// when `tree` is set, whose file rows need their directory rows.
+    pub files_only: bool,
+    /// Quote a field only when RFC 4180 requires it.
+    pub minimal_quoting: bool,
+}
+
+/// Writes the complete catalog in the given layout.
+pub fn write_csv_with_layout(
+    tree: &TreeIndex,
+    layout: CsvLayout,
+    output: &mut impl Write,
+) -> io::Result<()> {
+    write_csv_selected(tree, None, layout, output)
+}
+
+/// One full file path per line (CRLF), nothing else: the smallest complete
+/// listing of the scanned files. Not a catalog `read_csv` can reopen.
+pub fn write_paths(tree: &TreeIndex, output: &mut impl Write) -> io::Result<()> {
+    let mut row = Vec::with_capacity(512);
+    let mut parent_prefix: Vec<u8> = Vec::with_capacity(256);
+    let mut parent_id = None;
+    for file in tree.files() {
+        row.clear();
+        if !file.full_path.is_empty() {
+            row.extend_from_slice(file.full_path.as_bytes());
+        } else {
+            if parent_id != Some(file.parent_directory_id.0) {
+                parent_prefix.clear();
+                if let Some(parent) = tree
+                    .directory_full_path(file.parent_directory_id.0)
+                    .filter(|parent| !parent.is_empty())
+                {
+                    parent_prefix.extend_from_slice(parent.as_bytes());
+                    if !parent.ends_with('\\') {
+                        parent_prefix.push(b'\\');
+                    }
+                }
+                parent_id = Some(file.parent_directory_id.0);
+            }
+            row.extend_from_slice(&parent_prefix);
+            row.extend_from_slice(file.name.as_bytes());
+        }
+        row.extend_from_slice(b"\r\n");
+        output.write_all(&row)?;
+    }
+    output.flush()
+}
+
 fn escaped(output: &mut impl Write, text: &str) -> io::Result<()> {
     let mut parts = text.as_bytes().split(|&byte| byte == b'"');
     if let Some(first) = parts.next() {
@@ -34,7 +109,7 @@ fn file_path(
         .directory_full_path(file.parent_directory_id.0)
         .filter(|parent| !parent.is_empty())
     {
-        escaped(output, parent)?;
+        escaped(output, &parent)?;
         if !parent.ends_with('\\') {
             output.write_all(b"\\")?;
         }
@@ -47,7 +122,7 @@ fn file_path(
 /// Directory counts exclude the exported directory itself. Allocation values
 /// retain the scanner's accounting semantics; export does not recalculate them.
 pub fn write_csv(tree: &TreeIndex, output: &mut impl Write) -> io::Result<()> {
-    write_csv_selected(tree, None, output)
+    write_csv_selected(tree, None, CsvLayout::default(), output)
 }
 
 /// Writes the same complete catalog as CSV using tab separators.
@@ -101,6 +176,7 @@ pub fn write_csv_extension(
                 .rsplit_once('.')
                 .is_some_and(|(_, actual)| actual.eq_ignore_ascii_case(extension))
         }),
+        CsvLayout::default(),
         output,
     )
 }
@@ -246,19 +322,66 @@ pub fn write_csv_filtered(
             .map(|p| p.to_lowercase().chars().collect())
             .collect()
     };
-    write_csv_selected(tree, Some(&|file| filter.matches(file, &compiled)), output)
+    write_csv_selected(
+        tree,
+        Some(&|file| filter.matches(file, &compiled)),
+        CsvLayout::default(),
+        output,
+    )
+}
+
+fn write_directory_row(
+    row: &mut Vec<u8>,
+    tree: &TreeIndex,
+    directory: &winblaze_core::DirectoryRecord,
+    minimal: bool,
+    paths: &mut (crate::tree::DirectoryPathCache, String),
+) -> io::Result<()> {
+    let rollup = tree.rollup_for(directory.id.0).unwrap_or_default();
+    row.clear();
+    paths.1.clear();
+    tree.push_directory_path_cached(directory, &mut paths.0, &mut paths.1);
+    field(row, &paths.1, minimal)?;
+    row.extend_from_slice(b",Directory,");
+    for number in [
+        rollup.logical_bytes,
+        rollup.physical_bytes,
+        rollup.file_count,
+        rollup.item_count.saturating_sub(rollup.file_count),
+    ] {
+        csv_integer(row, number);
+        row.push(b',');
+    }
+    csv_timestamp(row, rollup.modified_utc_max);
+    Ok(())
+}
+
+fn write_file_row_tail(row: &mut Vec<u8>, file: &winblaze_core::FileRecord) {
+    row.extend_from_slice(b",File,");
+    csv_integer(row, file.size_bytes);
+    row.push(b',');
+    csv_integer(row, file.allocation_bytes);
+    row.extend_from_slice(b",0,0,");
+    csv_timestamp(row, file.modified_utc());
 }
 
 fn write_csv_selected(
     tree: &TreeIndex,
     filter: Option<&dyn Fn(&winblaze_core::FileRecord) -> bool>,
+    layout: CsvLayout,
     output: &mut impl Write,
 ) -> io::Result<()> {
     output.write_all(
         b"Path,Kind,LogicalBytes,AllocatedBytes,Files,Directories,ModifiedUnixSeconds\r\n",
     )?;
+    let minimal = layout.minimal_quoting;
     let mut row = Vec::with_capacity(512);
+    let mut paths = Default::default();
+    if layout.tree && filter.is_none() {
+        return write_csv_tree(tree, minimal, &mut row, &mut paths, output);
+    }
     let mut parent_prefix = Vec::with_capacity(256);
+    let mut parent_needs_quotes = false;
     let mut parent_id = None;
     let root = tree.root().map(|(directory, _)| directory);
     let root_id = root.map(|directory| directory.id);
@@ -267,24 +390,12 @@ fn write_csv_selected(
         .chain(
             tree.directories()
                 .iter()
-                .filter(|directory| Some(directory.id) != root_id),
+                .filter(|directory| Some(directory.id) != root_id)
+                .filter(|_| !layout.files_only),
         )
         .filter(|_| filter.is_none())
     {
-        let rollup = tree.rollup_for(directory.id.0).copied().unwrap_or_default();
-        row.clear();
-        quoted(&mut row, &directory.full_path)?;
-        row.extend_from_slice(b",Directory,");
-        for number in [
-            rollup.logical_bytes,
-            rollup.physical_bytes,
-            rollup.file_count,
-            rollup.item_count.saturating_sub(rollup.file_count),
-        ] {
-            csv_integer(&mut row, number);
-            row.push(b',');
-        }
-        csv_timestamp(&mut row, rollup.modified_utc_max);
+        write_directory_row(&mut row, tree, directory, minimal, &mut paths)?;
         output.write_all(&row)?;
     }
     for file in tree
@@ -294,33 +405,86 @@ fn write_csv_selected(
     {
         row.clear();
         if !file.full_path.is_empty() {
-            quoted(&mut row, &file.full_path)?;
+            field(&mut row, &file.full_path, minimal)?;
         } else {
             if parent_id != Some(file.parent_directory_id.0) {
                 parent_prefix.clear();
-                parent_prefix.push(b'"');
+                parent_needs_quotes = false;
                 if let Some(parent) = tree
                     .directory_full_path(file.parent_directory_id.0)
                     .filter(|parent| !parent.is_empty())
                 {
-                    escaped(&mut parent_prefix, parent)?;
+                    parent_needs_quotes = needs_quotes(&parent);
+                    escaped(&mut parent_prefix, &parent)?;
                     if !parent.ends_with('\\') {
                         parent_prefix.push(b'\\');
                     }
                 }
                 parent_id = Some(file.parent_directory_id.0);
             }
+            // The prefix is already escaped; either part may force quoting.
+            let quote = !minimal || parent_needs_quotes || needs_quotes(&file.name);
+            if quote {
+                row.push(b'"');
+            }
             row.extend_from_slice(&parent_prefix);
             escaped(&mut row, &file.name)?;
-            row.push(b'"');
+            if quote {
+                row.push(b'"');
+            }
         }
-        row.extend_from_slice(b",File,");
-        csv_integer(&mut row, file.size_bytes);
-        row.push(b',');
-        csv_integer(&mut row, file.allocation_bytes);
-        row.extend_from_slice(b",0,0,");
-        csv_timestamp(&mut row, file.modified_utc());
+        write_file_row_tail(&mut row, file);
         output.write_all(&row)?;
+    }
+    output.flush()
+}
+
+/// The tree layout: every directory row (root first, then by id) followed by
+/// its direct files by name, in id order. Files whose parent is unknown are
+/// listed under the root, as the display tree attaches them.
+fn write_csv_tree(
+    tree: &TreeIndex,
+    minimal: bool,
+    row: &mut Vec<u8>,
+    paths: &mut (crate::tree::DirectoryPathCache, String),
+    output: &mut impl Write,
+) -> io::Result<()> {
+    let directories = tree.directories();
+    let files = tree.files();
+    let Some(root) = tree.root_index() else {
+        return output.flush();
+    };
+    // Group files by directory position with one counting pass; the tree's
+    // own memoized orders are left untouched.
+    let parent_of = |file: &winblaze_core::FileRecord| {
+        tree.directory_index(file.parent_directory_id.0)
+            .unwrap_or(root)
+    };
+    let mut starts = vec![0u32; directories.len() + 1];
+    for file in files {
+        starts[parent_of(file) + 1] += 1;
+    }
+    for index in 0..directories.len() {
+        starts[index + 1] += starts[index];
+    }
+    let mut cursors = starts.clone();
+    let mut grouped = vec![0u32; files.len()];
+    for (position, file) in files.iter().enumerate() {
+        let slot = &mut cursors[parent_of(file)];
+        grouped[*slot as usize] = position as u32;
+        *slot += 1;
+    }
+    let order = std::iter::once(root).chain((0..directories.len()).filter(|index| *index != root));
+    for index in order {
+        write_directory_row(row, tree, &directories[index], minimal, paths)?;
+        output.write_all(row)?;
+        for &position in &grouped[starts[index] as usize..starts[index + 1] as usize] {
+            let file = &files[position as usize];
+            row.clear();
+            field(row, &file.name, minimal)?;
+            write_file_row_tail(row, file);
+            output.write_all(row)?;
+        }
     }
     output.flush()
 }
@@ -399,9 +563,9 @@ pub fn write_json_with_metadata(
             row.clear();
             row.push(b',');
         }
-        let totals = tree.rollup_for(directory.id.0).copied().unwrap_or_default();
+        let totals = tree.rollup_for(directory.id.0).unwrap_or_default();
         row.extend_from_slice(b"{\"Path\":");
-        json_string(&mut row, &directory.full_path)?;
+        json_string(&mut row, &tree.directory_path(directory))?;
         row.extend_from_slice(b",\"Kind\":\"Directory\",\"LogicalBytes\":");
         csv_integer(&mut row, totals.logical_bytes);
         row.extend_from_slice(b",\"AllocatedBytes\":");
@@ -517,9 +681,9 @@ pub fn write_csv_with_metadata(
         .into_iter()
         .chain(tree.directories().iter().filter(|d| Some(d.id) != root_id))
     {
-        let totals = tree.rollup_for(directory.id.0).copied().unwrap_or_default();
+        let totals = tree.rollup_for(directory.id.0).unwrap_or_default();
         row.clear();
-        quoted(&mut row, &directory.full_path)?;
+        quoted(&mut row, &tree.directory_path(directory))?;
         row.extend_from_slice(b",Directory,");
         for number in [
             totals.logical_bytes,

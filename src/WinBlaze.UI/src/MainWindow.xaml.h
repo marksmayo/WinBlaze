@@ -145,6 +145,34 @@ namespace winrt::WinBlaze::UI::implementation
         {
             return since_last_render >= std::chrono::milliseconds(2000);
         }
+        // Whether an idle window's resize draws the treemap in the same pass.
+        // One 60 Hz frame since the last draw is enough: a resize pair (such
+        // as maximize then layout) otherwise waited a timer period and showed
+        // one more stale frame. Faster resizes (an edge being dragged) still
+        // coalesce on the render timer.
+        static bool TreemapResizeDrawsNow(std::chrono::milliseconds since_last_render)
+        {
+            return since_last_render >= std::chrono::milliseconds(16);
+        }
+        // Live folders spliced into the tree per UI flush. Responsiveness is
+        // set by the longest UI-thread chunk, not by throughput, so the live
+        // view drains in small steps.
+        static constexpr size_t LiveDirectoriesPerFlush() { return 1024; }
+        // Whether a running scan's progress text is due again.
+        static bool ScanProgressTextDue(std::chrono::milliseconds since_last)
+        {
+            return since_last >= std::chrono::milliseconds(500);
+        }
+        // Whether the shown-row count in the window title is worth rewriting:
+        // during a scan only in steps of 64 rows (and for the first row).
+        static bool RowsShownTitleDue(bool scanning, size_t titled, size_t current)
+        {
+            if (!scanning || titled == 0) return current != titled;
+            return current >= titled + 64 || current + 64 <= titled;
+        }
+        // The UI thread's priority while a scan runs: one step above the
+        // indexer and walkers (both below normal), so a queued message wins.
+        static int ScanUiThreadPriority() { return THREAD_PRIORITY_ABOVE_NORMAL; }
         void ApplyShellState();
         void ScheduleUiFlush();
         void FlushPendingUiState();
@@ -540,6 +568,12 @@ namespace winrt::WinBlaze::UI::implementation
         uint64_t m_results_shown_count{ 0 };
         // Rows in the results list, shown in the title while scanning.
         uint32_t m_tree_rows_shown{ 0 };
+        // Rows shown when the title was last written (see RowsShownTitleDue).
+        size_t m_titled_rows_shown{ 0 };
+        int m_ui_thread_priority{ THREAD_PRIORITY_NORMAL };
+        std::chrono::steady_clock::time_point m_last_scan_progress_text{};
+        std::wstring m_shown_status_text;
+        std::wstring m_shown_event_text;
         // Root path text whose validation error is showing.
         winrt::hstring m_invalid_root_text;
         // A command-line scan or import was queued at construction; it loads its

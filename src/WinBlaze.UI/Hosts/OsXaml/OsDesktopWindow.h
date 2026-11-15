@@ -86,8 +86,13 @@ struct OsDesktopWindow : winrt::implements<Derived,
         cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
         if (!RegisterClassW(&cls) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
             winrt::throw_last_error();
+        // Created at the work area's size: the host shows maximized, and an
+        // island first laid out at 1024x768 laid out again at the final size.
+        RECT work{ 0, 0, 1024, 768 };
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
         m_owner = CreateWindowExW(0, cls.lpszClassName, L"WinBlaze", WS_OVERLAPPEDWINDOW,
-            CW_USEDEFAULT, CW_USEDEFAULT, 1024, 768, nullptr, nullptr, cls.hInstance, this);
+            work.left, work.top, work.right - work.left, work.bottom - work.top,
+            nullptr, nullptr, cls.hInstance, this);
         if (!m_owner) winrt::throw_last_error();
         try {
             SetIcons();

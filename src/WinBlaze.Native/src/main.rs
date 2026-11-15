@@ -7,7 +7,7 @@ use winblaze_native::api::WbCStringView;
 use winblaze_native::api::{WbEvent, WbEventKind};
 use winblaze_native::bridge::{
     run_terminal_scan_with, wait_for_pending_persist, wb_dump_mft, wb_export_analysis,
-    wb_export_csv,
+    wb_export_csv, wb_export_csv_layout,
 };
 
 #[cfg(test)]
@@ -39,10 +39,17 @@ fn view(text: &str) -> WbCStringView {
 /// The final two arguments are always positional, so a root or output file
 /// literally named `--keep-catalog` is not taken as the flag.
 fn take_keep_catalog(args: &mut Vec<String>) -> bool {
+    take_option(args, "--keep-catalog")
+}
+
+/// Removes the option `name` from the option region (between the program
+/// name and the final two positional arguments) and reports whether it was
+/// present.
+fn take_option(args: &mut Vec<String>, name: &str) -> bool {
     let options_end = args.len().saturating_sub(2).max(1);
     match args[1.min(args.len())..options_end.min(args.len())]
         .iter()
-        .position(|arg| arg == "--keep-catalog")
+        .position(|arg| arg == name)
     {
         Some(index) => {
             args.remove(index + 1);
@@ -51,9 +58,28 @@ fn take_keep_catalog(args: &mut Vec<String>) -> bool {
         None => false,
     }
 }
+
+/// CSV layout bits for `wb_export_csv_layout` from the `--tree`,
+/// `--files-only`, `--compact` and `--paths` options; 0 keeps the default
+/// layout.
+fn take_csv_layout(args: &mut Vec<String>) -> u32 {
+    let mut layout = 0;
+    for (name, bit) in [
+        ("--tree", 1),
+        ("--files-only", 2),
+        ("--compact", 4),
+        ("--paths", 8),
+    ] {
+        if take_option(args, name) {
+            layout |= bit;
+        }
+    }
+    layout
+}
 fn main() {
     let mut args: Vec<String> = std::env::args().collect();
     let keep_catalog = take_keep_catalog(&mut args);
+    let csv_layout = take_csv_layout(&mut args);
     let (mode, root, output) = match args.as_slice() {
         [_, root, output] => ("--scan", root, output),
         [_, mode, root, output]
@@ -66,8 +92,8 @@ fn main() {
         }
         _ => {
             eprintln!(
-                "usage: winblaze-cli [--keep-catalog] \
-                 [--scan|--duplicates|--permissions|--dump-mft] <root> <output.csv>"
+                "usage: winblaze-cli [--keep-catalog] [--tree] [--files-only] [--compact] \
+                 [--paths] [--scan|--duplicates|--permissions|--dump-mft] <root> <output.csv>"
             );
             std::process::exit(2);
         }
@@ -104,6 +130,7 @@ fn main() {
     let result = match mode {
         "--duplicates" => wb_export_analysis(view(output), 1),
         "--permissions" => wb_export_analysis(view(output), 2),
+        _ if csv_layout != 0 => wb_export_csv_layout(view(output), csv_layout),
         _ => wb_export_csv(view(output)),
     };
     let exported_us = phase_path.as_ref().map(|_| started.elapsed().as_micros());
@@ -164,6 +191,27 @@ mod tests {
             (false, "cli C:\\x out.csv".into())
         );
         assert_eq!(parse("cli"), (false, "cli".into()));
+    }
+    #[test]
+    fn csv_layout_options_combine_and_stay_out_of_the_positionals() {
+        let parse = |line: &str| {
+            let mut args: Vec<String> = line.split(' ').map(String::from).collect();
+            let layout = take_csv_layout(&mut args);
+            (layout, args.join(" "))
+        };
+        assert_eq!(
+            parse("cli --tree C:\\x out.csv"),
+            (1, "cli C:\\x out.csv".into())
+        );
+        assert_eq!(
+            parse("cli --compact --scan --files-only C:\\x out.csv"),
+            (6, "cli --scan C:\\x out.csv".into())
+        );
+        assert_eq!(
+            parse("cli --paths C:\\x out.txt"),
+            (8, "cli C:\\x out.txt".into())
+        );
+        assert_eq!(parse("cli C:\\x --tree"), (0, "cli C:\\x --tree".into()));
     }
     #[test]
     fn cli_terminal_callback_notifies_waiter_without_polling() {

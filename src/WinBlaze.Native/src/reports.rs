@@ -67,7 +67,7 @@ pub fn write_analysis(tree: &TreeIndex, kind: u32, output: &mut impl Write) -> i
             for path in tree
                 .directories()
                 .iter()
-                .map(|directory| PathBuf::from(&directory.full_path))
+                .map(|directory| PathBuf::from(&*tree.directory_path(directory)))
                 .chain(paths)
             {
                 field(output, &path.to_string_lossy())?;

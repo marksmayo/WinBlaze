@@ -53,7 +53,7 @@ fn small_catalog_persistence_round_trips_without_megabyte_scratch_allocations() 
         .collect();
     LARGE_BYTES.with(|bytes| bytes.set(0));
     WATCH.with(|watch| watch.set(true));
-    let result = repository.persist_sorted_records(&[], &[], &[], &files, &[], &[]);
+    let result = repository.persist_sorted_records(&[], &[], &[], &mut |_, _| {}, &files, &[], &[]);
     WATCH.with(|watch| watch.set(false));
     result.unwrap();
     let scratch = LARGE_BYTES.with(Cell::get);
@@ -140,7 +140,7 @@ fn directory_lookup_preserves_boundary_ids_paths_and_file_parentage() {
         );
         for (position, &id) in ids.iter().enumerate() {
             assert_eq!(
-                tree.directory_full_path(id),
+                tree.directory_full_path(id).as_deref(),
                 Some(format!("C:\\fixture\\{position}").as_str())
             );
             let mut files = Vec::new();

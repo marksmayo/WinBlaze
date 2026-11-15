@@ -9,10 +9,6 @@ fn json_exports_a_versioned_complete_catalog_with_numeric_totals() {
         parent_directory_id: None,
         name: "root".into(),
         full_path: "C:\\root".into(),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
     let mut output = Vec::new();
     winblaze_index::export::write_json(&TreeIndex::build(tx), &mut output).unwrap();
@@ -27,10 +23,6 @@ fn json_escapes_all_controls_and_preserves_unicode() {
         parent_directory_id: None,
         name: "root".into(),
         full_path: "日本\"\\\n\r\t\u{0}\u{8}\u{c}\u{1f}".into(),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
     let mut output = Vec::new();
     winblaze_index::export::write_json(&TreeIndex::build(tx), &mut output).unwrap();
@@ -48,10 +40,6 @@ fn json_exports_every_file_with_derived_paths_and_large_integer_bytes() {
         parent_directory_id: None,
         name: "root".into(),
         full_path: "C:\\root\\".into(),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
     for id in 0..8200 {
         tx.upsert_file(&FileRecord {
@@ -131,10 +119,6 @@ fn json_roundtrip_retains_attributes_creation_and_access_dates() {
         parent_directory_id: None,
         name: "offline".into(),
         full_path: "Z:\\offline".into(),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
     tx.upsert_file(&FileRecord {
         id: FileId(2),

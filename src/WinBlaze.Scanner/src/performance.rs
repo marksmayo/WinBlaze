@@ -16,6 +16,18 @@ impl Default for ScanPipelineConfig {
 }
 
 impl ScanPipelineConfig {
+    /// Batching for an unattended scan whose consumer is the indexer alone:
+    /// four times the live batch, so a full volume crosses the channel (and
+    /// wakes the consumer) a quarter as often. Live scans keep the default
+    /// so the UI's progress stays current.
+    pub fn terminal() -> Self {
+        Self {
+            batch_size: 2048,
+            max_in_flight_events: 4096,
+            max_in_flight_bytes: 16 * 1024 * 1024,
+        }
+    }
+
     pub fn should_apply_backpressure(&self, in_flight_events: usize, in_flight_bytes: u64) -> bool {
         in_flight_events >= self.max_in_flight_events || in_flight_bytes >= self.max_in_flight_bytes
     }

@@ -12,8 +12,8 @@ use std::{
 use winblaze_core::{IdHashMap, IdHashSet};
 
 use winblaze_core::{
-    aggregate_directory_records, DirectoryId, DirectoryRecord, FileAttributes, FileId, FileName,
-    FileRecord, FileSystemKind, ScanEvent, ScanProgress, ScanSummary, VolumeId, VolumeRecord,
+    DirectoryId, DirectoryRecord, FileAttributes, FileId, FileName, FileRecord, FileSystemKind,
+    ScanEvent, ScanProgress, ScanSummary, VolumeId, VolumeRecord,
 };
 
 const FILE_RECORD_SIGNATURE: &[u8; 4] = b"FILE";
@@ -320,12 +320,8 @@ impl NtfsStreamState {
         on_event(ScanEvent::DirectoryFound(DirectoryRecord {
             id: DirectoryId(NTFS_ROOT_RECORD),
             parent_directory_id: None,
-            name: self.root_text.clone(),
+            name: self.root_text.clone().into(),
             full_path: self.root_text.clone(),
-            direct_bytes: 0,
-            total_bytes: 0,
-            direct_entries: 0,
-            total_entries: 0,
         }));
     }
 
@@ -462,12 +458,8 @@ impl NtfsStreamState {
             on_event(ScanEvent::DirectoryFound(DirectoryRecord {
                 id: DirectoryId(file_id),
                 parent_directory_id: entry.parent_directory_id.map(DirectoryId),
-                name,
+                name: name.into(),
                 full_path: full_path.clone(),
-                direct_bytes: 0,
-                total_bytes: 0,
-                direct_entries: 0,
-                total_entries: 0,
             }));
             self.resolved_paths.insert(file_id, full_path);
             if let Some(children) = self.orphan_dirs.remove(&file_id) {
@@ -2075,12 +2067,8 @@ fn parse_entries(
                 } else {
                     entry.parent_directory_id.map(DirectoryId)
                 },
-                name: String::from(&*entry.name),
+                name: entry.name.clone(),
                 full_path,
-                direct_bytes: 0,
-                total_bytes: 0,
-                direct_entries: 0,
-                total_entries: 0,
             };
             if let Some(callback) = on_event.as_mut() {
                 (*callback)(ScanEvent::DirectoryFound(directory.clone()));
@@ -2113,7 +2101,6 @@ fn parse_entries(
         .windows(2)
         .all(|pair| pair[0].id.0 < pair[1].id.0));
     debug_assert!(files.windows(2).all(|pair| pair[0].id.0 < pair[1].id.0));
-    let directories = aggregate_directory_records(&directories, &files);
 
     let total_size_bytes = sum_u64_saturating(files.iter().map(|file| file.size_bytes));
     let total_allocation_bytes = sum_u64_saturating(files.iter().map(|file| file.allocation_bytes));

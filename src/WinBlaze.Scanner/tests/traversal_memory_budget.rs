@@ -130,8 +130,11 @@ fn wide_nested_scan_completes_with_bounded_transient_memory() {
     for (parent, branch) in leaf_parents {
         assert_eq!(Some(parent), branch_ids[branch]);
     }
+    // Four workers each hold one 32 KiB first-batch listing buffer, their own
+    // task deque and child scratch, and an event batch; the budget bounds all
+    // of that at a constant independent of the tree's size.
     assert!(
-        transient <= 262_144,
-        "complete empty-folder traversal used {transient} transient bytes; budget is 256 KiB"
+        transient <= 393_216,
+        "complete empty-folder traversal used {transient} transient bytes; budget is 384 KiB"
     );
 }

@@ -194,13 +194,18 @@ fn published_file_catalog_retains_paths_and_timestamps_within_record_budget() {
         assert_eq!(file.id.0, position as u64 + 1);
         assert_eq!(file.name.as_ref(), NAME);
         assert_eq!(&*file.full_path, PATH);
-        assert_eq!(file.created_utc(), TIMES[position % 4]);
+        // Modified times are exact; created and accessed keep whole Unix
+        // seconds clamped to 1970..2106 (see FileTimestamps).
+        let seconds =
+            |time: Option<i64>| winblaze_core::FileTimestamps::new(time, None, None).created();
+        assert_eq!(file.created_utc(), seconds(TIMES[position % 4]));
         assert_eq!(file.modified_utc(), TIMES[(position / 4) % 4]);
-        assert_eq!(file.accessed_utc(), TIMES[(position / 16) % 4]);
+        assert_eq!(file.accessed_utc(), seconds(TIMES[(position / 16) % 4]));
+        assert_eq!(file.created_utc().is_some(), TIMES[position % 4].is_some());
     }
     // Immutable names and paths need no spare-capacity words. Payload strings
     // are counted separately; every name, path and timestamp remains intact.
-    let budget = COUNT * (104 + NAME.len() + PATH.len()) + 4096;
+    let budget = COUNT * (96 + NAME.len() + PATH.len()) + 4096;
     let retained = LIVE.get();
     assert!(
         retained <= budget as isize,
@@ -538,7 +543,7 @@ fn directory_tree_reuses_count_arrays_as_fill_cursors() {
         records.insert_directory(DirectoryRecord {
             id: DirectoryId(id),
             parent_directory_id: (id > 1).then_some(DirectoryId(1)),
-            name: id.to_string(),
+            name: id.to_string().into(),
             ..Default::default()
         });
     }
@@ -753,7 +758,7 @@ fn snapshot_load_reads_short_file_names_without_heap_copies() {
     let root = std::env::temp_dir().join(format!("winblaze-name-load-{}", std::process::id()));
     let files = fixture(20_000).snapshot_files();
     SqliteIndexRepository::open_empty(&root, IndexBackend::BinaryCache)
-        .persist_sorted_records(&[], &[], &[], &files, &[], &[])
+        .persist_sorted_records(&[], &[], &[], &mut |_, _| {}, &files, &[], &[])
         .unwrap();
     let (reopened, _) = measured(|| SqliteIndexRepository::open(&root, IndexBackend::BinaryCache));
     let allocations = COUNT.get();

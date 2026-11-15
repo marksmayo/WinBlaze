@@ -69,6 +69,25 @@ static void IdleShellContracts(winrt::com_ptr<AppWindow> const& window)
         "During a scan the treemap must not redraw on every 100 ms flush");
     Require(AppWindow::ScanTreemapRenderDue(milliseconds(2000)),
         "The treemap must still follow a long scan's catalog");
+    // A second resize within the old 33 ms gate waited for the timer: one
+    // more 60 Hz frame before the new size showed.
+    Require(AppWindow::TreemapResizeDrawsNow(milliseconds(17)),
+        "An idle resize one frame after the last draw must draw at once");
+    Require(!AppWindow::TreemapResizeDrawsNow(milliseconds(8)),
+        "Resizes faster than a frame (a dragged edge) still coalesce");
+    Require(AppWindow::LiveDirectoriesPerFlush() <= 1024,
+        "One flush must not splice thousands of live folders on the UI thread");
+    Require(!AppWindow::ScanProgressTextDue(milliseconds(499)) &&
+        AppWindow::ScanProgressTextDue(milliseconds(500)),
+        "A scan's progress text is rewritten at most twice a second");
+    Require(!AppWindow::RowsShownTitleDue(true, 100, 163) && AppWindow::RowsShownTitleDue(true, 100, 164),
+        "A scan's title follows shown rows in steps, not on every row");
+    Require(AppWindow::RowsShownTitleDue(true, 0, 1),
+        "The first shown row still reaches the title");
+    Require(AppWindow::RowsShownTitleDue(false, 100, 101),
+        "Outside a scan every change reaches the title");
+    Require(AppWindow::ScanUiThreadPriority() == THREAD_PRIORITY_ABOVE_NORMAL,
+        "During a scan the UI thread runs above the indexer and walkers");
     auto probe = [&] { return window->PerformanceProbeForTests(); };
     window->OnWindowLoaded(nullptr, nullptr);
     Require(!probe().frame_stats_subscribed,

@@ -12,6 +12,8 @@
 //! multi-million-record volume adds bookkeeping proportional to the record
 //! count without cloning any names or paths.
 
+use std::borrow::Cow;
+
 use winblaze_core::IdHashMap;
 
 use winblaze_core::{DirectoryRecord, FileRecord, VolumeRecord};
@@ -28,13 +30,57 @@ pub struct DirRollup {
     pub modified_utc_max: Option<i64>,
 }
 
+/// `DirRollup` as the tree stores it, 32 bytes instead of 48: counts fit
+/// 32 bits (the tree indexes children with u32), and the newest modified
+/// time uses `i64::MIN` as "none" (a file record keeps its exact value).
+#[derive(Clone, Copy, Debug, Default)]
+struct StoredRollup {
+    logical: u64,
+    physical: u64,
+    files: u32,
+    items: u32,
+    modified: i64,
+}
+
+const NO_MODIFIED: i64 = i64::MIN;
+
+impl StoredRollup {
+    const fn new() -> Self {
+        Self {
+            logical: 0,
+            physical: 0,
+            files: 0,
+            items: 0,
+            modified: NO_MODIFIED,
+        }
+    }
+
+    fn to_rollup(self) -> DirRollup {
+        DirRollup {
+            logical_bytes: self.logical,
+            physical_bytes: self.physical,
+            file_count: u64::from(self.files),
+            item_count: u64::from(self.items),
+            modified_utc_max: (self.modified != NO_MODIFIED).then_some(self.modified),
+        }
+    }
+
+    fn observe_modified(&mut self, modified: Option<i64>) {
+        if let Some(modified) = modified {
+            if modified > self.modified {
+                self.modified = modified;
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct DirNode {
     /// Range into `TreeIndex::dir_children`.
     dir_children: (u32, u32),
     /// Range into `TreeIndex::file_children`.
     file_children: (u32, u32),
-    rollup: DirRollup,
+    rollup: StoredRollup,
 }
 
 /// A borrowed view of one child entry, ordered largest-physical-first.
@@ -42,7 +88,7 @@ struct DirNode {
 pub enum TreeEntry<'a> {
     Directory {
         record: &'a DirectoryRecord,
-        rollup: &'a DirRollup,
+        rollup: DirRollup,
     },
     File(&'a FileRecord),
 }
@@ -129,9 +175,20 @@ impl DirectoryLookup {
     }
 }
 
+/// The last parent path built by [`TreeIndex::push_directory_path_cached`].
+#[derive(Debug, Default)]
+pub struct DirectoryPathCache {
+    parent: Option<u32>,
+    path: String,
+}
+
 pub struct TreeIndex {
     export_metadata: winblaze_core::IdHashMap<u64, FileExportMetadata>,
     volumes: Vec<VolumeRecord>,
+    /// Sorted by id. A directory whose path is its parent's path plus its
+    /// name stores an empty `full_path` and derives it on demand (see
+    /// [`TreeIndex::directory_path`]); roots, orphans and imports whose paths
+    /// do not follow from the chain keep theirs.
     directories: Vec<DirectoryRecord>,
     files: Vec<FileRecord>,
     nodes: Vec<DirNode>,
@@ -161,10 +218,11 @@ impl TreeIndex {
         // ~100-byte structs and pdqsort swaps them O(n log n) times, whereas
         // applying a sorted index permutation moves the records O(n) times
         // without duplicating their array. ~2.3M files on a full drive.
-        let directories = sort_records_by_id(directories, |directory| directory.id.0);
+        let mut directories = sort_records_by_id(directories, |directory| directory.id.0);
         let files = sort_records_by_id(files, |file| file.id.0);
 
         let dir_index_by_id = DirectoryLookup::new(&directories);
+        release_derivable_paths(&mut directories, &dir_index_by_id);
 
         // Resolve each directory's structural parent. Self-parents and
         // missing parents make a directory a root candidate; among the
@@ -221,7 +279,7 @@ impl TreeIndex {
             nodes.push(DirNode {
                 dir_children: (dir_offset, dir_end),
                 file_children: (file_offset, file_end),
-                rollup: DirRollup::default(),
+                rollup: StoredRollup::new(),
             });
             dir_offset = dir_end;
             file_offset = file_end;
@@ -275,11 +333,11 @@ impl TreeIndex {
                 .or(self.root)
             {
                 let rollup = &mut self.nodes[index as usize].rollup;
-                rollup.logical_bytes = rollup.logical_bytes.saturating_add(file.size_bytes);
-                rollup.physical_bytes = rollup.physical_bytes.saturating_add(file.allocation_bytes);
-                rollup.file_count += 1;
-                rollup.item_count += 1;
-                rollup.modified_utc_max = max_option(rollup.modified_utc_max, file.modified_utc());
+                rollup.logical = rollup.logical.saturating_add(file.size_bytes);
+                rollup.physical = rollup.physical.saturating_add(file.allocation_bytes);
+                rollup.files = rollup.files.saturating_add(1);
+                rollup.items = rollup.items.saturating_add(1);
+                rollup.observe_modified(file.modified_utc());
             }
         }
 
@@ -311,22 +369,15 @@ impl TreeIndex {
             }
             let child_rollup = self.nodes[index as usize].rollup;
             let parent_rollup = &mut self.nodes[parent as usize].rollup;
-            parent_rollup.logical_bytes = parent_rollup
-                .logical_bytes
-                .saturating_add(child_rollup.logical_bytes);
-            parent_rollup.physical_bytes = parent_rollup
-                .physical_bytes
-                .saturating_add(child_rollup.physical_bytes);
-            parent_rollup.file_count = parent_rollup
-                .file_count
-                .saturating_add(child_rollup.file_count);
-            parent_rollup.item_count = parent_rollup
-                .item_count
-                .saturating_add(child_rollup.item_count.saturating_add(1));
-            parent_rollup.modified_utc_max = max_option(
-                parent_rollup.modified_utc_max,
-                child_rollup.modified_utc_max,
-            );
+            parent_rollup.logical = parent_rollup.logical.saturating_add(child_rollup.logical);
+            parent_rollup.physical = parent_rollup.physical.saturating_add(child_rollup.physical);
+            parent_rollup.files = parent_rollup.files.saturating_add(child_rollup.files);
+            parent_rollup.items = parent_rollup
+                .items
+                .saturating_add(child_rollup.items.saturating_add(1));
+            if child_rollup.modified > parent_rollup.modified {
+                parent_rollup.modified = child_rollup.modified;
+            }
         }
     }
 
@@ -343,8 +394,8 @@ impl TreeIndex {
                     .sort_unstable_by(|a, b| {
                         self.nodes[*b as usize]
                             .rollup
-                            .physical_bytes
-                            .cmp(&self.nodes[*a as usize].rollup.physical_bytes)
+                            .physical
+                            .cmp(&self.nodes[*a as usize].rollup.physical)
                     });
             }
             children
@@ -378,6 +429,16 @@ impl TreeIndex {
             }
             children
         })
+    }
+
+    /// Position of the directory with `id` in [`TreeIndex::directories`].
+    pub fn directory_index(&self, id: u64) -> Option<usize> {
+        self.dir_index_by_id.get(&id).map(|index| index as usize)
+    }
+
+    /// Position of the root in [`TreeIndex::directories`].
+    pub fn root_index(&self) -> Option<usize> {
+        self.root.map(|index| index as usize)
     }
 
     /// Largest file id; files are kept sorted by id.
@@ -533,15 +594,15 @@ impl TreeIndex {
                 (new.size_bytes, new.allocation_bytes, new.modified_utc());
             for index in self.ancestry(parent) {
                 let rollup = &mut self.nodes[index as usize].rollup;
-                rollup.logical_bytes = rollup
-                    .logical_bytes
+                rollup.logical = rollup
+                    .logical
                     .saturating_sub(old_logical)
                     .saturating_add(new_logical);
-                rollup.physical_bytes = rollup
-                    .physical_bytes
+                rollup.physical = rollup
+                    .physical
                     .saturating_sub(old_physical)
                     .saturating_add(new_physical);
-                rollup.modified_utc_max = max_option(rollup.modified_utc_max, new_modified);
+                rollup.observe_modified(new_modified);
                 touched.push(index);
             }
             resort_files.push(parent);
@@ -587,11 +648,11 @@ impl TreeIndex {
                 self.files.push(file);
                 for index in self.ancestry(parent) {
                     let rollup = &mut self.nodes[index as usize].rollup;
-                    rollup.logical_bytes = rollup.logical_bytes.saturating_add(logical);
-                    rollup.physical_bytes = rollup.physical_bytes.saturating_add(physical);
-                    rollup.file_count += 1;
-                    rollup.item_count += 1;
-                    rollup.modified_utc_max = max_option(rollup.modified_utc_max, modified);
+                    rollup.logical = rollup.logical.saturating_add(logical);
+                    rollup.physical = rollup.physical.saturating_add(physical);
+                    rollup.files = rollup.files.saturating_add(1);
+                    rollup.items = rollup.items.saturating_add(1);
+                    rollup.observe_modified(modified);
                     touched.push(index);
                 }
                 resort_files.push(parent);
@@ -627,8 +688,8 @@ impl TreeIndex {
                 order[start as usize..end as usize].sort_unstable_by(|a, b| {
                     nodes[*b as usize]
                         .rollup
-                        .physical_bytes
-                        .cmp(&nodes[*a as usize].rollup.physical_bytes)
+                        .physical
+                        .cmp(&nodes[*a as usize].rollup.physical)
                 });
             }
         }
@@ -652,14 +713,115 @@ impl TreeIndex {
         &self.files
     }
 
-    pub fn root(&self) -> Option<(&DirectoryRecord, &DirRollup)> {
+    pub fn root(&self) -> Option<(&DirectoryRecord, DirRollup)> {
         let root = self.root? as usize;
-        Some((&self.directories[root], &self.nodes[root].rollup))
+        Some((&self.directories[root], self.nodes[root].rollup.to_rollup()))
     }
 
-    pub fn rollup_for(&self, directory_id: u64) -> Option<&DirRollup> {
+    pub fn rollup_for(&self, directory_id: u64) -> Option<DirRollup> {
         let index = self.dir_index_by_id.get(&directory_id)? as usize;
-        Some(&self.nodes[index].rollup)
+        Some(self.nodes[index].rollup.to_rollup())
+    }
+
+    /// The display path of a directory of this tree: its stored path, or the
+    /// parent chain's path plus its name when the record stores none.
+    pub fn directory_path<'a>(&'a self, directory: &'a DirectoryRecord) -> Cow<'a, str> {
+        if !directory.full_path.is_empty() {
+            return Cow::Borrowed(&directory.full_path);
+        }
+        let mut path = String::new();
+        self.push_directory_path(directory, &mut path);
+        Cow::Owned(path)
+    }
+
+    /// Appends [`TreeIndex::directory_path`] to `out`, for callers that reuse
+    /// one buffer.
+    pub fn push_directory_path(&self, directory: &DirectoryRecord, out: &mut String) {
+        if !directory.full_path.is_empty() {
+            out.push_str(&directory.full_path);
+            return;
+        }
+        // Collect the chain of derived ancestors (bounded, like `ancestry`).
+        let mut chain: Vec<&DirectoryRecord> = vec![directory];
+        let mut current = directory;
+        while current.full_path.is_empty() {
+            let Some(parent) = current
+                .parent_directory_id
+                .filter(|parent| parent.0 != current.id.0)
+                .and_then(|parent| self.dir_index_by_id.get(&parent.0))
+            else {
+                break;
+            };
+            let parent = &self.directories[parent as usize];
+            if chain.len() > self.nodes.len() {
+                break;
+            }
+            chain.push(parent);
+            current = parent;
+        }
+        let mut ancestors = chain.into_iter().rev();
+        if let Some(top) = ancestors.next() {
+            if top.full_path.is_empty() {
+                out.push_str(&top.name);
+            } else {
+                out.push_str(&top.full_path);
+            }
+        }
+        for directory in ancestors {
+            if !out.is_empty() && !out.ends_with('\\') {
+                out.push('\\');
+            }
+            out.push_str(&directory.name);
+        }
+    }
+
+    /// [`TreeIndex::push_directory_path`] for callers that visit many
+    /// directories in a row: consecutive siblings (the common order of a
+    /// walk's ids) reuse their parent's path from `cache` instead of walking
+    /// the chain again.
+    pub fn push_directory_path_cached(
+        &self,
+        directory: &DirectoryRecord,
+        cache: &mut DirectoryPathCache,
+        out: &mut String,
+    ) {
+        if !directory.full_path.is_empty() {
+            out.push_str(&directory.full_path);
+            return;
+        }
+        let Some(parent) = directory
+            .parent_directory_id
+            .filter(|parent| parent.0 != directory.id.0)
+            .and_then(|parent| self.dir_index_by_id.get(&parent.0))
+        else {
+            out.push_str(&directory.name);
+            return;
+        };
+        if cache.parent != Some(parent) {
+            cache.path.clear();
+            self.push_directory_path(&self.directories[parent as usize], &mut cache.path);
+            cache.parent = Some(parent);
+        }
+        out.push_str(&cache.path);
+        if !out.is_empty() && !out.ends_with('\\') {
+            out.push('\\');
+        }
+        out.push_str(&directory.name);
+    }
+
+    /// Every directory with its full path filled in, for writers that need
+    /// complete records (snapshots, merges).
+    pub fn directories_with_paths(&self) -> impl ExactSizeIterator<Item = DirectoryRecord> + '_ {
+        self.directories.iter().map(|directory| {
+            if directory.full_path.is_empty() {
+                DirectoryRecord {
+                    full_path: self.directory_path(directory).into_owned(),
+                    ..directory.clone()
+                }
+            } else {
+                directory.clone()
+            }
+        })
     }
 
     /// Visits the `limit` largest files on the volume by allocation size,
@@ -732,9 +894,9 @@ impl TreeIndex {
         });
     }
 
-    pub fn directory_full_path(&self, directory_id: u64) -> Option<&str> {
+    pub fn directory_full_path(&self, directory_id: u64) -> Option<Cow<'_, str>> {
         let index = self.dir_index_by_id.get(&directory_id)? as usize;
-        Some(self.directories[index].full_path.as_str())
+        Some(self.directory_path(&self.directories[index]))
     }
 
     /// Display path for a file record: the stored path when present (records
@@ -744,7 +906,7 @@ impl TreeIndex {
             return file.full_path.to_string();
         }
         match self.directory_full_path(file.parent_directory_id.0) {
-            Some(parent) => winblaze_core::join_path(parent, &file.name),
+            Some(parent) => winblaze_core::join_path(&parent, &file.name),
             None => file.name.to_string(),
         }
     }
@@ -762,7 +924,7 @@ impl TreeIndex {
             } else {
                 let raw_parent = self
                     .directory_full_path(file.parent_directory_id.0)
-                    .unwrap_or("");
+                    .unwrap_or(Cow::Borrowed(""));
                 let parent = raw_parent.trim_start_matches(r"\\?\");
                 if parent.is_ascii()
                     && file.name.is_ascii()
@@ -834,7 +996,7 @@ impl TreeIndex {
         while emitted < limit as u64 && (dir_cursor < dir_end || file_cursor < file_end) {
             let next_dir_physical = (dir_cursor < dir_end).then(|| {
                 let child = dir_children[dir_cursor] as usize;
-                self.nodes[child].rollup.physical_bytes
+                self.nodes[child].rollup.physical
             });
             let next_file_physical = (file_cursor < file_end)
                 .then(|| self.files[file_children[file_cursor] as usize].allocation_bytes);
@@ -854,7 +1016,7 @@ impl TreeIndex {
                 }
                 visit(TreeEntry::Directory {
                     record: &self.directories[child],
-                    rollup: &self.nodes[child].rollup,
+                    rollup: self.nodes[child].rollup.to_rollup(),
                 });
             } else {
                 let child = file_children[file_cursor] as usize;
@@ -967,11 +1129,40 @@ fn choose_root(directories: &[DirectoryRecord], dir_index_by_id: &DirectoryLooku
         .map(|index| index as u32)
 }
 
-fn max_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
-    match (a, b) {
-        (Some(a), Some(b)) => Some(a.max(b)),
-        (Some(a), None) => Some(a),
-        (None, b) => b,
+/// Empties the stored path of every directory whose path is exactly its
+/// parent's path joined with its name: those paths are derived on demand,
+/// which saves one heap string per directory of a volume. Decided against
+/// the original paths before any is cleared, so a chain of derived
+/// directories still ends at a stored one.
+fn release_derivable_paths(directories: &mut [DirectoryRecord], lookup: &DirectoryLookup) {
+    let derivable: Vec<bool> = directories
+        .iter()
+        .map(|directory| {
+            let Some(parent) = directory
+                .parent_directory_id
+                .filter(|parent| parent.0 != directory.id.0)
+                .and_then(|parent| lookup.get(&parent.0))
+            else {
+                return false;
+            };
+            let parent = &directories[parent as usize];
+            if parent.full_path.is_empty() || directory.full_path.is_empty() {
+                return false;
+            }
+            let expected_len = parent.full_path.len()
+                + usize::from(!parent.full_path.ends_with('\\'))
+                + directory.name.len();
+            expected_len == directory.full_path.len()
+                && directory.full_path.starts_with(parent.full_path.as_str())
+                && directory.full_path.ends_with(directory.name.as_str())
+                && (parent.full_path.ends_with('\\')
+                    || directory.full_path.as_bytes()[parent.full_path.len()] == b'\\')
+        })
+        .collect();
+    for (directory, derivable) in directories.iter_mut().zip(derivable) {
+        if derivable {
+            directory.full_path = String::new();
+        }
     }
 }
 
@@ -985,12 +1176,8 @@ mod tests {
         DirectoryRecord {
             id: DirectoryId(id),
             parent_directory_id: parent.map(DirectoryId),
-            name: name.to_string(),
+            name: name.to_string().into(),
             full_path: format!(r"C:\{name}"),
-            direct_bytes: 0,
-            total_bytes: 0,
-            direct_entries: 0,
-            total_entries: 0,
         }
     }
 
@@ -1016,6 +1203,125 @@ mod tests {
             transaction.upsert_file(file);
         }
         TreeIndex::build(transaction)
+    }
+
+    #[test]
+    fn stored_rollups_are_thirty_two_bytes_and_nodes_forty_eight() {
+        assert_eq!(std::mem::size_of::<StoredRollup>(), 32);
+        assert_eq!(std::mem::size_of::<DirNode>(), 48);
+    }
+
+    #[test]
+    fn derivable_directory_paths_are_released_and_rebuilt_exactly() {
+        let walk = |id: u64, parent: Option<u64>, name: &str, path: &str| DirectoryRecord {
+            id: DirectoryId(id),
+            parent_directory_id: parent.map(DirectoryId),
+            name: name.into(),
+            full_path: path.to_string(),
+        };
+        let tree = build(
+            vec![
+                walk(5, None, "C:\\", "C:\\"),
+                walk(6, Some(5), "Users", "C:\\Users"),
+                walk(7, Some(6), "markm", "C:\\Users\\markm"),
+                walk(
+                    8,
+                    Some(7),
+                    "a-long-directory-name-\u{e9}",
+                    "C:\\Users\\markm\\a-long-directory-name-\u{e9}",
+                ),
+                // An orphan keeps its own path: the root chain cannot derive it.
+                walk(9, Some(99), "elsewhere", "D:\\elsewhere"),
+                // A reparse target under a different prefix keeps its path.
+                walk(10, Some(6), "Link", "E:\\Target"),
+            ],
+            vec![FileRecord {
+                full_path: String::new().into(),
+                ..file(1, 8, "leaf.bin", 1, 1)
+            }],
+        );
+        let by_id = |id: u64| tree.directory_by_id(id).unwrap();
+        assert!(!by_id(5).full_path.is_empty());
+        assert!(by_id(6).full_path.is_empty());
+        assert!(by_id(7).full_path.is_empty());
+        assert!(by_id(8).full_path.is_empty());
+        assert_eq!(by_id(9).full_path, "D:\\elsewhere");
+        assert_eq!(by_id(10).full_path, "E:\\Target");
+        assert_eq!(tree.directory_path(by_id(5)), "C:\\");
+        assert_eq!(tree.directory_path(by_id(6)), "C:\\Users");
+        assert_eq!(tree.directory_path(by_id(7)), "C:\\Users\\markm");
+        assert_eq!(
+            tree.directory_full_path(8).unwrap(),
+            "C:\\Users\\markm\\a-long-directory-name-\u{e9}"
+        );
+        assert_eq!(tree.directory_full_path(9).unwrap(), "D:\\elsewhere");
+        assert_eq!(
+            tree.file_display_path(&tree.files()[0]),
+            "C:\\Users\\markm\\a-long-directory-name-\u{e9}\\leaf.bin"
+        );
+        let mut scratch = String::from("x");
+        scratch.clear();
+        tree.push_directory_path(by_id(7), &mut scratch);
+        assert_eq!(scratch, "C:\\Users\\markm");
+        let with_paths: Vec<String> = tree
+            .directories_with_paths()
+            .map(|directory| directory.full_path)
+            .collect();
+        assert_eq!(
+            with_paths,
+            vec![
+                "C:\\",
+                "C:\\Users",
+                "C:\\Users\\markm",
+                "C:\\Users\\markm\\a-long-directory-name-\u{e9}",
+                "D:\\elsewhere",
+                "E:\\Target",
+            ]
+        );
+    }
+
+    #[test]
+    fn cached_directory_paths_match_uncached_ones_in_any_order() {
+        let mut dirs = vec![DirectoryRecord {
+            id: DirectoryId(5),
+            parent_directory_id: None,
+            name: "C:\\".into(),
+            full_path: "C:\\".into(),
+        }];
+        let mut next = 6;
+        let mut frontier = vec![(5u64, "C:".to_string())];
+        for depth in 0..4 {
+            let mut deeper = Vec::new();
+            for (parent, path) in &frontier {
+                for child in 0..3 {
+                    let name = format!("d{depth}-{child}");
+                    let full = format!("{path}\\{name}");
+                    dirs.push(DirectoryRecord {
+                        id: DirectoryId(next),
+                        parent_directory_id: Some(DirectoryId(*parent)),
+                        name: name.as_str().into(),
+                        full_path: full.clone(),
+                    });
+                    deeper.push((next, full));
+                    next += 1;
+                }
+            }
+            frontier = deeper;
+        }
+        let tree = build(dirs, Vec::new());
+        let mut cache = DirectoryPathCache::default();
+        let mut cached = String::new();
+        // Forward, backward and interleaved orders all hit and miss the cache.
+        let order: Vec<usize> = (0..tree.directories().len())
+            .chain((0..tree.directories().len()).rev())
+            .chain((0..tree.directories().len()).step_by(7))
+            .collect();
+        for index in order {
+            let directory = &tree.directories()[index];
+            cached.clear();
+            tree.push_directory_path_cached(directory, &mut cache, &mut cached);
+            assert_eq!(cached, tree.directory_path(directory), "{:?}", directory.id);
+        }
     }
 
     #[test]
@@ -1080,7 +1386,7 @@ mod tests {
             .for_each_child(5, 0, 3, |entry| {
                 seen.push(match entry {
                     TreeEntry::Directory { record, rollup } => {
-                        (record.name.clone(), rollup.physical_bytes)
+                        (record.name.to_string(), rollup.physical_bytes)
                     }
                     TreeEntry::File(file) => (file.name.to_string(), file.allocation_bytes),
                 });
@@ -1104,7 +1410,7 @@ mod tests {
         let emitted = tree
             .for_each_child(5, 3, 3, |entry| {
                 if let TreeEntry::Directory { record, .. } = entry {
-                    paged.push(record.name.clone());
+                    paged.push(record.name.to_string());
                 }
             })
             .expect("paged children");

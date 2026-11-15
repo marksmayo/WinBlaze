@@ -164,6 +164,7 @@ impl SqliteIndexRepository {
         volumes: &[VolumeRecord],
         sessions: &[ScanSession],
         directories: &[DirectoryRecord],
+        directory_path: &mut dyn FnMut(&DirectoryRecord, &mut String),
         files: &[FileRecord],
         lineages: &[FileLineageRecord],
         file_changes: &[FileChangeSet],
@@ -188,6 +189,7 @@ impl SqliteIndexRepository {
                 volumes,
                 sessions,
                 directories,
+                directory_path,
                 files,
                 lineages,
                 file_changes,
@@ -487,7 +489,7 @@ impl BufferedIndexTransaction {
     pub fn from_records(
         volumes: &[VolumeRecord],
         sessions: &[ScanSession],
-        directories: &[DirectoryRecord],
+        directories: impl ExactSizeIterator<Item = DirectoryRecord>,
         files: &[FileRecord],
         committed: bool,
     ) -> Self {
@@ -500,7 +502,7 @@ impl BufferedIndexTransaction {
             transaction.upsert_session(session);
         }
         for directory in directories {
-            transaction.insert_directory(directory.clone());
+            transaction.insert_directory(directory);
         }
         for file in files {
             transaction.insert_file(file.clone());
@@ -804,7 +806,9 @@ fn write_state<W: Write>(
 
     let mut directories: Vec<&DirectoryRecord> = state.directories.values().collect();
     directories.sort_unstable_by_key(|directory| directory.id.0);
-    write_directory_records(writer, &directories)?;
+    write_directory_records(writer, &directories, &mut |directory, out| {
+        out.push_str(&directory.full_path)
+    })?;
 
     let mut files: Vec<&FileRecord> = state.files.values().collect();
     files.sort_unstable_by_key(|file| file.id.0);
@@ -816,11 +820,15 @@ fn write_state<W: Write>(
 }
 
 /// `write_state` twin over slices that are already sorted by record id.
+/// `directory_path` appends each directory's full path to the given buffer
+/// (a tree derives most of them instead of storing them).
+#[allow(clippy::too_many_arguments)]
 fn write_sorted_records<W: Write>(
     writer: &mut W,
     volumes: &[VolumeRecord],
     sessions: &[ScanSession],
     directories: &[DirectoryRecord],
+    directory_path: &mut dyn FnMut(&DirectoryRecord, &mut String),
     files: &[FileRecord],
     lineages: &[FileLineageRecord],
     file_changes: &[FileChangeSet],
@@ -829,7 +837,7 @@ fn write_sorted_records<W: Write>(
     write_u32(writer, INDEX_FORMAT_VERSION)?;
     write_volume_records(writer, volumes)?;
     write_session_records(writer, sessions)?;
-    write_directory_records(writer, directories)?;
+    write_directory_records(writer, directories, directory_path)?;
     write_file_records(writer, files)?;
     write_lineage_records(writer, lineages)?;
     write_change_sets(writer, file_changes)?;
@@ -958,15 +966,19 @@ fn write_session_records<W: Write, R: std::borrow::Borrow<ScanSession>>(
 fn write_directory_records<W: Write, R: std::borrow::Borrow<DirectoryRecord>>(
     writer: &mut W,
     directories: &[R],
+    directory_path: &mut dyn FnMut(&DirectoryRecord, &mut String),
 ) -> Result<(), IndexStorageError> {
     write_len(writer, directories.len())?;
     // Encode each record into a reused scratch buffer and emit it with a
     // single `write_all`, rather than ~8 tiny writes per record. On a full
     // drive that turns tens of millions of writer calls into a few million.
     let mut buffer = Vec::with_capacity(128);
+    let mut path = String::with_capacity(256);
     for directory in directories {
         let directory = directory.borrow();
         buffer.clear();
+        path.clear();
+        directory_path(directory, &mut path);
         push_u64(&mut buffer, directory.id.0);
         match directory.parent_directory_id {
             Some(parent) => {
@@ -976,11 +988,11 @@ fn write_directory_records<W: Write, R: std::borrow::Borrow<DirectoryRecord>>(
             None => buffer.push(0),
         }
         push_string(&mut buffer, &directory.name);
-        push_string(&mut buffer, &directory.full_path);
-        push_u64(&mut buffer, directory.direct_bytes);
-        push_u64(&mut buffer, directory.total_bytes);
-        push_u64(&mut buffer, directory.direct_entries);
-        push_u64(&mut buffer, directory.total_entries);
+        push_string(&mut buffer, &path);
+        // Format version 2 carried four rollup words per directory; they
+        // were always zero from scanners and are no longer part of the
+        // record, so the writer keeps the layout and the reader skips them.
+        buffer.extend_from_slice(&[0u8; 32]);
         writer.write_all(&buffer)?;
     }
     Ok(())
@@ -1143,13 +1155,12 @@ fn read_directory_records<R: Read>(
         let record = DirectoryRecord {
             id,
             parent_directory_id,
-            name: read_string(cursor)?,
+            name: read_file_name(cursor)?,
             full_path: read_string(cursor)?,
-            direct_bytes: read_u64(cursor)?,
-            total_bytes: read_u64(cursor)?,
-            direct_entries: read_u64(cursor)?,
-            total_entries: read_u64(cursor)?,
         };
+        // Legacy rollup words (see write_directory_records).
+        let mut legacy_totals = [0u8; 32];
+        cursor.read_exact(&mut legacy_totals)?;
         directories.insert(id, record);
     }
     Ok(directories)
@@ -1509,16 +1520,14 @@ mod fuzz_tests {
         txn.insert_directory(DirectoryRecord {
             id: DirectoryId(5),
             parent_directory_id: None,
-            name: String::from(r"C:\"),
+            name: r"C:\".into(),
             full_path: String::from(r"C:\"),
-            ..Default::default()
         });
         txn.insert_directory(DirectoryRecord {
             id: DirectoryId(10),
             parent_directory_id: Some(DirectoryId(5)),
-            name: String::from("Users"),
+            name: "Users".into(),
             full_path: String::from(r"C:\Users"),
-            ..Default::default()
         });
         txn.insert_file(FileRecord {
             id: FileId(11),

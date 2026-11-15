@@ -77,54 +77,85 @@ impl BitAndAssign for FileAttributes {
     }
 }
 
-/// Three lossless optional timestamps sharing one presence byte. Values retain
-/// the full i64 range; no timestamp is reserved as a sentinel. Packed (25 bytes)
-/// so the presence byte doesn't pad every file record by 7 bytes; fields are
-/// only ever read by value, never borrowed.
+/// Three optional timestamps in 17 bytes. The modified time is lossless (full
+/// i64 range, presence tracked separately, no sentinel); the created and
+/// accessed times, which only ever reach exports in whole seconds, are kept
+/// as Unix seconds in 32 bits: whole-second resolution within 1970-01-01 to
+/// 2106-02-07, clamped to that range. Packed so the presence byte does not
+/// pad every file record; fields are only read by value, never borrowed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(C, packed)]
 pub struct FileTimestamps {
-    values: [i64; 3],
+    modified: i64,
+    created: u32,
+    accessed: u32,
     present: u8,
 }
+
+/// FILETIME ticks (100 ns since 1601) at the Unix epoch.
+const UNIX_EPOCH_TICKS: i64 = 116_444_736_000_000_000;
+const TICKS_PER_SECOND: i64 = 10_000_000;
 
 impl FileTimestamps {
     pub const fn new(created: Option<i64>, modified: Option<i64>, accessed: Option<i64>) -> Self {
         let mut result = Self {
-            values: [0; 3],
+            modified: 0,
+            created: 0,
+            accessed: 0,
             present: 0,
         };
         if let Some(value) = created {
-            result.values[0] = value;
+            result.created = Self::compact_seconds(value);
             result.present |= 1;
         }
         if let Some(value) = modified {
-            result.values[1] = value;
+            result.modified = value;
             result.present |= 2;
         }
         if let Some(value) = accessed {
-            result.values[2] = value;
+            result.accessed = Self::compact_seconds(value);
             result.present |= 4;
         }
         result
     }
 
-    const fn value(self, index: usize) -> Option<i64> {
-        if self.present & (1 << index) == 0 {
-            None
+    /// Whole Unix seconds of a FILETIME value, clamped to the u32 range.
+    const fn compact_seconds(ticks: i64) -> u32 {
+        if ticks <= UNIX_EPOCH_TICKS {
+            return 0;
+        }
+        let seconds = (ticks - UNIX_EPOCH_TICKS) / TICKS_PER_SECOND;
+        if seconds > u32::MAX as i64 {
+            u32::MAX
         } else {
-            Some(self.values[index])
+            seconds as u32
         }
     }
 
+    const fn expand_seconds(seconds: u32) -> i64 {
+        UNIX_EPOCH_TICKS + seconds as i64 * TICKS_PER_SECOND
+    }
+
     pub const fn created(self) -> Option<i64> {
-        self.value(0)
+        if self.present & 1 == 0 {
+            None
+        } else {
+            Some(Self::expand_seconds(self.created))
+        }
     }
     pub const fn modified(self) -> Option<i64> {
-        self.value(1)
+        if self.present & 2 == 0 {
+            None
+        } else {
+            Some(self.modified)
+        }
     }
     pub const fn accessed(self) -> Option<i64> {
-        self.value(2)
+        if self.present & 4 == 0 {
+            None
+        } else {
+            Some(Self::expand_seconds(self.accessed))
+        }
     }
 }
 
@@ -191,16 +222,19 @@ pub fn derive_file_path<S: std::hash::BuildHasher>(
     }
 }
 
+/// A directory as scanners emit it and the index stores it. Totals are not
+/// part of the record: the display tree computes rollups, and
+/// [`aggregate_directory_records`] computes them for the search catalog.
+/// `full_path` may be empty inside a published tree, which derives it from
+/// the parent chain (see `TreeIndex::directory_path`); scanners and the
+/// transport always fill it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DirectoryRecord {
     pub id: DirectoryId,
     pub parent_directory_id: Option<DirectoryId>,
-    pub name: String,
+    /// Short names are retained inline; long names own immutable heap storage.
+    pub name: crate::FileName,
     pub full_path: String,
-    pub direct_bytes: u64,
-    pub total_bytes: u64,
-    pub direct_entries: u64,
-    pub total_entries: u64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -272,10 +306,12 @@ pub struct DirectoryAggregation {
     pub total_entries: u64,
 }
 
+/// Rollup totals for each directory of `directories`, index-aligned with it:
+/// `result[i]` describes `directories[i]`.
 pub fn aggregate_directory_records(
     directories: &[DirectoryRecord],
     files: &[FileRecord],
-) -> Vec<DirectoryRecord> {
+) -> Vec<DirectoryAggregation> {
     let mut parent_map: IdHashMap<DirectoryId, Option<DirectoryId>> =
         IdHashMap::with_capacity_and_hasher(directories.len(), Default::default());
     parent_map.extend(
@@ -332,17 +368,10 @@ pub fn aggregate_directory_records(
         );
     }
 
-    let mut aggregated_directories = directories.to_vec();
-    for directory in &mut aggregated_directories {
-        if let Some(aggregate) = aggregates.get(&directory.id) {
-            directory.direct_bytes = aggregate.direct_bytes;
-            directory.total_bytes = aggregate.total_bytes;
-            directory.direct_entries = aggregate.direct_entries;
-            directory.total_entries = aggregate.total_entries;
-        }
-    }
-
-    aggregated_directories
+    directories
+        .iter()
+        .map(|directory| aggregates.get(&directory.id).copied().unwrap_or_default())
+        .collect()
 }
 
 /// Applies `apply` to `start` and each ancestor (the first call with
@@ -534,7 +563,8 @@ mod tests {
         let aggregated = finished
             .recv_timeout(std::time::Duration::from_secs(5))
             .expect("aggregation looped forever on a parent cycle");
-        let one = aggregated.iter().find(|d| d.id == DirectoryId(1)).unwrap();
+        // Totals are index-aligned with the input directories.
+        let one = &aggregated[0];
         assert_eq!(one.direct_bytes, 5);
         assert_eq!(one.direct_entries, 2);
         // Each cycle directory counts the file once, not once per lap.
@@ -542,7 +572,7 @@ mod tests {
         assert_eq!(one.total_entries, 2);
         // Every cycle member sees content under any member exactly once, and
         // no directory counts itself as its own descendant.
-        let two = aggregated.iter().find(|d| d.id == DirectoryId(2)).unwrap();
+        let two = &aggregated[1];
         assert_eq!((two.direct_entries, two.total_entries), (1, 2), "{two:?}");
         assert_eq!((two.direct_bytes, two.total_bytes), (0, 8), "{two:?}");
     }
@@ -555,22 +585,14 @@ mod tests {
             DirectoryRecord {
                 id: DirectoryId(1),
                 parent_directory_id: None,
-                name: String::from("root"),
+                name: "root".into(),
                 full_path: String::from("C:\\root"),
-                direct_bytes: 0,
-                total_bytes: 0,
-                direct_entries: 0,
-                total_entries: 0,
             },
             DirectoryRecord {
                 id: DirectoryId(2),
                 parent_directory_id: Some(DirectoryId(1)),
-                name: String::from("child"),
+                name: "child".into(),
                 full_path: String::from("C:\\root\\child"),
-                direct_bytes: 0,
-                total_bytes: 0,
-                direct_entries: 0,
-                total_entries: 0,
             },
         ];
         let files = vec![
@@ -597,14 +619,7 @@ mod tests {
         ];
 
         let aggregated = aggregate_directory_records(&directories, &files);
-        let root = aggregated
-            .iter()
-            .find(|directory| directory.id == DirectoryId(1))
-            .expect("root directory");
-        let child = aggregated
-            .iter()
-            .find(|directory| directory.id == DirectoryId(2))
-            .expect("child directory");
+        let (root, child) = (&aggregated[0], &aggregated[1]);
 
         assert_eq!(root.direct_bytes, 10);
         assert_eq!(root.total_bytes, 48);
@@ -624,12 +639,8 @@ mod tests {
             DirectoryRecord {
                 id: DirectoryId(9),
                 parent_directory_id: None,
-                name: String::from("Users"),
+                name: "Users".into(),
                 full_path: String::from(r"C:\Users"),
-                direct_bytes: 0,
-                total_bytes: 0,
-                direct_entries: 0,
-                total_entries: 0,
             },
         );
 
@@ -661,6 +672,65 @@ mod tests {
         // Root paths with a trailing separator don't double it.
         assert_eq!(join_path(r"C:\", "file.txt"), r"C:\file.txt");
         assert_eq!(join_path(r"C:\Users", "file.txt"), r"C:\Users\file.txt");
+    }
+
+    #[test]
+    fn file_and_directory_records_fit_their_compact_layouts() {
+        assert_eq!(std::mem::size_of::<FileTimestamps>(), 17);
+        assert!(
+            std::mem::size_of::<FileRecord>() <= 88,
+            "{}",
+            std::mem::size_of::<FileRecord>()
+        );
+        assert!(
+            std::mem::size_of::<DirectoryRecord>() <= 72,
+            "{}",
+            std::mem::size_of::<DirectoryRecord>()
+        );
+        // Directory names stay inline, so a directory record costs no heap
+        // beyond its path.
+        let record = DirectoryRecord {
+            id: DirectoryId(1),
+            parent_directory_id: None,
+            name: "Program Files".into(),
+            full_path: String::new(),
+        };
+        assert_eq!(record.name, "Program Files");
+    }
+
+    #[test]
+    fn modified_times_stay_exact_while_created_and_accessed_keep_whole_seconds() {
+        const EPOCH: i64 = 116_444_736_000_000_000;
+        for modified in [i64::MIN, -1, 0, 1, EPOCH + 123_456_789, i64::MAX] {
+            let stamps = FileTimestamps::new(None, Some(modified), None);
+            assert_eq!(stamps.modified(), Some(modified));
+            assert_eq!(stamps.created(), None);
+            assert_eq!(stamps.accessed(), None);
+        }
+        assert_eq!(FileTimestamps::new(None, None, None).modified(), None);
+        // Sub-second ticks round down to the second.
+        let stamps = FileTimestamps::new(Some(EPOCH + 123_456_789), None, Some(EPOCH + 9_999_999));
+        assert_eq!(stamps.created(), Some(EPOCH + 120_000_000));
+        assert_eq!(stamps.accessed(), Some(EPOCH));
+        // Whole seconds within the representable range round-trip exactly.
+        let exact = EPOCH + 1_700_000_000 * 10_000_000;
+        assert_eq!(
+            FileTimestamps::new(Some(exact), None, None).created(),
+            Some(exact)
+        );
+        // Out-of-range values clamp to the range edges but stay present.
+        assert_eq!(
+            FileTimestamps::new(Some(i64::MIN), None, None).created(),
+            Some(EPOCH)
+        );
+        assert_eq!(
+            FileTimestamps::new(None, None, Some(i64::MAX)).accessed(),
+            Some(EPOCH + u32::MAX as i64 * 10_000_000)
+        );
+        assert_eq!(
+            FileTimestamps::new(Some(0), None, None).created(),
+            Some(EPOCH)
+        );
     }
 
     #[test]

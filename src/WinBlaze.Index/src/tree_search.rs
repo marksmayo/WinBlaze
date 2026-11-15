@@ -79,7 +79,7 @@ fn name(entry: TreeEntry<'_>) -> &str {
 }
 fn path(tree: &TreeIndex, entry: TreeEntry<'_>) -> String {
     match entry {
-        TreeEntry::Directory { record, .. } => record.full_path.clone(),
+        TreeEntry::Directory { record, .. } => tree.directory_path(record).into_owned(),
         TreeEntry::File(file) => tree.file_display_path(file),
     }
 }
@@ -87,13 +87,18 @@ fn path(tree: &TreeIndex, entry: TreeEntry<'_>) -> String {
 /// built in `scratch`, so filtering allocates nothing per candidate.
 fn path_text<'s>(tree: &'s TreeIndex, entry: TreeEntry<'s>, scratch: &'s mut String) -> &'s str {
     match entry {
-        TreeEntry::Directory { record, .. } => &record.full_path,
+        TreeEntry::Directory { record, .. } if !record.full_path.is_empty() => &record.full_path,
+        TreeEntry::Directory { record, .. } => {
+            scratch.clear();
+            tree.push_directory_path(record, scratch);
+            scratch
+        }
         TreeEntry::File(file) if !file.full_path.is_empty() => &file.full_path,
         TreeEntry::File(file) => {
             scratch.clear();
             // Same join as TreeIndex::file_display_path, into the reused buffer.
             match tree.directory_full_path(file.parent_directory_id.0) {
-                Some(parent) => winblaze_core::push_join_path(scratch, parent, &file.name),
+                Some(parent) => winblaze_core::push_join_path(scratch, &parent, &file.name),
                 None => scratch.push_str(&file.name),
             }
             scratch

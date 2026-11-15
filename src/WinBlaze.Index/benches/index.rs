@@ -39,17 +39,15 @@ fn fixture_records(file_count: u64) -> (Vec<DirectoryRecord>, Vec<FileRecord>) {
         directories.push(DirectoryRecord {
             id: DirectoryId(top_id),
             parent_directory_id: Some(DirectoryId(1)),
-            name: format!("dir-{top}"),
+            name: (format!("dir-{top}")).into(),
             full_path: top_path.clone(),
-            ..Default::default()
         });
         for sub in 0..DIRECTORY_FANOUT {
             directories.push(DirectoryRecord {
                 id: DirectoryId(next_id),
                 parent_directory_id: Some(DirectoryId(top_id)),
-                name: format!("sub-{sub}"),
+                name: (format!("sub-{sub}")).into(),
                 full_path: format!("{top_path}\\sub-{sub}"),
-                ..Default::default()
             });
             next_id += 1;
         }

@@ -335,6 +335,14 @@ impl DirEntries {
             _ => None,
         }
     }
+
+    /// The open handle of a batched directory, for relative child opens.
+    pub fn directory_handle(&self) -> Option<&std::sync::Arc<fs::File>> {
+        match self {
+            DirEntries::Batched(entries) => Some(entries.directory_handle()),
+            _ => None,
+        }
+    }
 }
 
 impl Iterator for DirEntries {

@@ -71,7 +71,7 @@ call "$vcvars"
 if errorlevel 1 exit /b 1
 rc /nologo /fo "$output/app.res" "$output/app.rc"
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++20 /EHsc /O2 /MT /utf-8 /bigobj /DUNICODE /D_UNICODE /I"$cppwinrt" /I"$ui/include" /I"$ui" /I"$winuiInclude" /Fo"$bin/" /Fe"$bin/WinBlaze.UI.exe" "$output/full-os-main.cpp" "$bin/NativeBridge.cpp" "$bin/MainWindow.cpp" "$output/app.res" /link delayimp.lib $delayOptions windowsapp.lib user32.lib ole32.lib shell32.lib d2d1.lib d3d11.lib dwrite.lib dxgi.lib windowscodecs.lib /SUBSYSTEM:WINDOWS /MANIFEST:EMBED /MANIFESTINPUT:"$output/app.manifest"
+cl /nologo /std:c++20 /EHsc /O2 /GL /Gy /Gw /MT /utf-8 /bigobj /DUNICODE /D_UNICODE /I"$cppwinrt" /I"$ui/include" /I"$ui" /I"$winuiInclude" /Fo"$bin/" /Fe"$bin/WinBlaze.UI.exe" "$output/full-os-main.cpp" "$bin/NativeBridge.cpp" "$bin/MainWindow.cpp" "$output/app.res" /link /LTCG /OPT:REF /OPT:ICF delayimp.lib $delayOptions windowsapp.lib user32.lib ole32.lib shell32.lib d2d1.lib d3d11.lib dwrite.lib dxgi.lib windowscodecs.lib /SUBSYSTEM:WINDOWS /MANIFEST:EMBED /MANIFESTINPUT:"$output/app.manifest"
 "@
     $buildFile = Join-Path $output 'build.cmd'
     [IO.File]::WriteAllText($buildFile, $command)

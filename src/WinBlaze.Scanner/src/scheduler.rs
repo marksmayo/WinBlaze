@@ -5,9 +5,26 @@ extern "system" {
     fn GetCurrentThread() -> isize;
     fn SetThreadPriority(thread: isize, priority: i32) -> i32;
     fn GetThreadPriority(thread: isize) -> i32;
+    fn SetThreadIdealProcessor(thread: isize, processor: u32) -> u32;
 }
 
 const THREAD_PRIORITY_BELOW_NORMAL: i32 = -1;
+
+/// Hints the scheduler to keep walker `index` on one processor, so the
+/// workers spread across cores and keep their caches instead of migrating
+/// after every wait. A hint only: the thread still runs anywhere when its
+/// processor is busy.
+pub(crate) fn prefer_processor(index: usize) {
+    let processors = thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1)
+        .min(64);
+    // SAFETY: pseudo-handle for the calling thread; a rejected hint changes
+    // nothing.
+    unsafe {
+        SetThreadIdealProcessor(GetCurrentThread(), (index % processors) as u32);
+    }
+}
 
 /// Called first on every scan thread. A background scan (the GUI's) runs one
 /// step below normal, so the UI thread gets a core the moment a message
@@ -20,6 +37,17 @@ pub fn enter_scan_thread_priority(background: bool) {
         unsafe {
             SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
         }
+    }
+}
+
+/// Returns the calling thread to normal priority once its scan work is done,
+/// for work that something waits on (a snapshot write the process must
+/// finish before it exits).
+pub fn leave_scan_thread_priority() {
+    // SAFETY: pseudo-handle for the calling thread; failure leaves the
+    // current priority.
+    unsafe {
+        SetThreadPriority(GetCurrentThread(), 0);
     }
 }
 
@@ -89,6 +117,19 @@ mod tests {
         .join()
         .unwrap();
         assert_eq!(normal, 0, "foreground scans (the CLI) keep normal priority");
+    }
+
+    #[test]
+    fn a_scan_thread_returns_to_normal_priority_for_work_after_the_scan() {
+        let observed = std::thread::spawn(|| {
+            super::enter_scan_thread_priority(true);
+            let during = super::current_thread_priority();
+            super::leave_scan_thread_priority();
+            (during, super::current_thread_priority())
+        })
+        .join()
+        .unwrap();
+        assert_eq!(observed, (-1, 0));
     }
 
     #[test]

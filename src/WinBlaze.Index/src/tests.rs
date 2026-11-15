@@ -55,24 +55,16 @@ fn deferred_sorted_persist_matches_transaction_persist() {
     tx.upsert_directory(&DirectoryRecord {
         id: DirectoryId(5),
         parent_directory_id: None,
-        name: String::from("C:\\"),
+        name: "C:\\".into(),
         full_path: String::from("C:\\"),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
     // Deliberately out of id order to exercise the sort parity.
     for id in [30_u64, 12, 25] {
         tx.upsert_directory(&DirectoryRecord {
             id: DirectoryId(id),
             parent_directory_id: Some(DirectoryId(5)),
-            name: format!("dir-{id}"),
+            name: (format!("dir-{id}")).into(),
             full_path: format!("C:\\dir-{id}"),
-            direct_bytes: 0,
-            total_bytes: 0,
-            direct_entries: 0,
-            total_entries: 0,
         });
         tx.upsert_file(&FileRecord {
             id: FileId(id + 100),
@@ -99,6 +91,7 @@ fn deferred_sorted_persist_matches_transaction_persist() {
             tree.volumes(),
             &sessions,
             tree.directories(),
+            &mut |directory, out| tree.push_directory_path(directory, out),
             tree.files(),
             &lineages,
             &changes,
@@ -146,17 +139,15 @@ fn a_transaction_rebuilt_from_the_published_tree_matches_the_scan() {
     tx.upsert_directory(&DirectoryRecord {
         id: DirectoryId(5),
         parent_directory_id: None,
-        name: String::from("C:\\"),
+        name: "C:\\".into(),
         full_path: String::from("C:\\"),
-        ..DirectoryRecord::default()
     });
     for id in [30_u64, 12, 25] {
         tx.upsert_directory(&DirectoryRecord {
             id: DirectoryId(id),
             parent_directory_id: Some(DirectoryId(5)),
-            name: format!("dir-{id}"),
+            name: (format!("dir-{id}")).into(),
             full_path: format!("C:\\dir-{id}"),
-            ..DirectoryRecord::default()
         });
         tx.upsert_file(&FileRecord {
             id: FileId(id + 100),
@@ -180,7 +171,7 @@ fn a_transaction_rebuilt_from_the_published_tree_matches_the_scan() {
     let rebuilt = BufferedIndexTransaction::from_records(
         tree.volumes(),
         &sessions,
-        tree.directories(),
+        tree.directories_with_paths(),
         tree.files(),
         committed,
     );
@@ -218,12 +209,8 @@ fn buffered_transaction_captures_records() {
     tx.upsert_directory(&DirectoryRecord {
         id: DirectoryId(10),
         parent_directory_id: None,
-        name: String::from("root"),
+        name: "root".into(),
         full_path: String::from("C:\\root"),
-        direct_bytes: 100,
-        total_bytes: 200,
-        direct_entries: 2,
-        total_entries: 4,
     });
     tx.upsert_file(&FileRecord {
         id: FileId(99),
@@ -448,12 +435,8 @@ fn repository_persists_and_recovers_state_on_disk() {
     tx.upsert_directory(&DirectoryRecord {
         id: DirectoryId(10),
         parent_directory_id: None,
-        name: String::from("root"),
+        name: "root".into(),
         full_path: String::from("C:\\root"),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
     tx.upsert_file(&FileRecord {
         id: FileId(1),

@@ -12,6 +12,7 @@ use std::{
 
 use winblaze_core::{FileAttributes, ScanEvent, ScanIssueKind, ScanIssueRecord};
 
+use crate::directory_metadata::{open_child_directory, read_directory_handle, EntryName};
 use crate::errors::{classify_io_error, ScanErrorKind};
 use crate::filesystem::build_scan_access_plan;
 use crate::ntfs::{enumerate_ntfs_volume_parallel_streaming_summary, NtfsEnumerationError};
@@ -22,6 +23,80 @@ use crate::types::ScanRuntimeConfig;
 use crate::winfind;
 
 const FALLBACK_PROGRESS_ITEM_DELTA: u64 = 4_096;
+
+/// How many times an idle worker yields while checking for new work before it
+/// parks on the condition variable. A directory takes tens of microseconds to
+/// list, so a short spin usually finds a sibling's children without a kernel
+/// wait and the two context switches it costs.
+const IDLE_SPINS: u32 = 64;
+
+/// Parent directory handles referenced by queued walk tasks (see
+/// [`ParentHandle`]); zero whenever no walk is running.
+static HELD_PARENT_HANDLES: AtomicUsize = AtomicUsize::new(0);
+
+/// Parent directory handles that queued walk tasks still hold, for tests and
+/// diagnostics. A finished walk leaves none.
+pub fn held_parent_directory_handles() -> usize {
+    HELD_PARENT_HANDLES.load(Ordering::SeqCst)
+}
+
+/// A queued directory's reference to its parent's open handle. The child is
+/// opened relative to it (one path component for the kernel to resolve) and
+/// the reference is released as soon as that open completes, so a parent
+/// stays open only until its last child task has started.
+struct ParentHandle(Arc<fs::File>);
+
+impl ParentHandle {
+    fn new(file: &Arc<fs::File>) -> Self {
+        HELD_PARENT_HANDLES.fetch_add(1, Ordering::SeqCst);
+        Self(Arc::clone(file))
+    }
+}
+
+impl Drop for ParentHandle {
+    fn drop(&mut self) {
+        HELD_PARENT_HANDLES.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Opens `path` (whose exact name is the last component) relative to `parent`
+/// and lists it; `None` when the relative open fails, so the caller falls back
+/// to the path open and its error reporting.
+fn open_relative(
+    parent: ParentHandle,
+    path: &Path,
+    volume: crate::directory_metadata::VolumeContext,
+) -> Option<winfind::DirEntries> {
+    let name = path.file_name()?;
+    let file = open_child_directory(&parent.0, name).ok()?;
+    drop(parent);
+    read_directory_handle(file, volume)
+        .ok()
+        .map(winfind::DirEntries::Batched)
+}
+
+/// The display text of `parent_text` joined with `name`, equal to
+/// `path_text(&Path::new(parent).join(name))` without re-validating the whole
+/// parent path: a deep path otherwise costs its full length per directory.
+fn child_path_text(parent_text: &str, name: &EntryName) -> String {
+    let separator = !(parent_text.is_empty()
+        || parent_text.ends_with('\\')
+        || parent_text.ends_with('/')
+        || (parent_text.len() == 2 && parent_text.ends_with(':')));
+    let mut text = String::with_capacity(parent_text.len() + usize::from(separator) + 24);
+    text.push_str(parent_text);
+    if separator {
+        text.push('\\');
+    }
+    match name {
+        EntryName::Short(short) => text.push_str(short),
+        EntryName::Original(original) => match original.to_str() {
+            Some(valid) => text.push_str(valid),
+            None => text.push_str(&original.to_string_lossy()),
+        },
+    }
+    text
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScanRequest {
@@ -160,6 +235,17 @@ impl ScanController {
         let (event_tx, receiver) = crate::ScanEventReceiver::channel(batch_capacity);
         (Self { event_tx }, receiver)
     }
+
+    /// [`Self::recycling_bounded_channel`] whose recycled arenas fit batches
+    /// of `pipeline.batch_size` events (see [`ScanPipelineConfig::terminal`]).
+    pub fn recycling_bounded_channel_for(
+        batch_capacity: usize,
+        pipeline: ScanPipelineConfig,
+    ) -> (Self, crate::ScanEventReceiver) {
+        let (event_tx, receiver) =
+            crate::ScanEventReceiver::channel_for_batches(batch_capacity, pipeline.batch_size);
+        (Self { event_tx }, receiver)
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -201,12 +287,9 @@ fn run_fallback_scan(
         name: selected_root
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| selected_root.display().to_string()),
+            .unwrap_or_else(|| selected_root.display().to_string())
+            .into(),
         full_path: selected_root.display().to_string(),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
 
     // The walker only needs canonical ancestor identities for cycle checks
@@ -250,6 +333,7 @@ fn run_fallback_scan(
                 pipeline,
                 cancelled,
                 selected_root,
+                &path_text(selected_root),
                 root_id,
                 &mut walk_state,
                 issue_keys,
@@ -258,6 +342,7 @@ fn run_fallback_scan(
                 fast_enumeration,
                 selected_root,
                 rules,
+                None,
                 None,
             );
 
@@ -269,6 +354,8 @@ fn run_fallback_scan(
             )
         };
 
+    // The scan thread's listing scratch is idle from here on.
+    crate::directory_metadata::release_idle_buffer();
     if cancelled.load(Ordering::SeqCst) {
         pipeline.emit_cancelled();
     } else {
@@ -481,6 +568,7 @@ fn walk_directory_tree(
     pipeline: &mut ScanEventPipeline,
     cancelled: &AtomicBool,
     directory: &std::path::Path,
+    directory_text: &str,
     parent_directory_id: winblaze_core::DirectoryId,
     walk_state: &mut DirectoryWalkState,
     issue_keys: &mut HashSet<String>,
@@ -490,21 +578,32 @@ fn walk_directory_tree(
     scan_root: &std::path::Path,
     rules: &crate::types::ScanRules,
     volume: Option<crate::directory_metadata::VolumeContext>,
+    parent: Option<ParentHandle>,
 ) {
-    let entries = match winfind::read_dir_auto(directory, fast_enumeration, volume) {
-        Ok(entries) => entries,
-        Err(error) => {
-            emit_deduplicated_issue(
-                pipeline,
-                issue_keys,
-                convert_io_error(&error, directory.display().to_string()),
-            );
-            return;
-        }
+    // The recursion holds the parent's listing (and so its handle) open, so a
+    // child opens relative to it; a failed relative open reports through the
+    // path open like any other directory.
+    let relative = match (parent, volume, fast_enumeration) {
+        (Some(parent), Some(volume), true) => open_relative(parent, directory, volume),
+        _ => None,
+    };
+    let mut entries = match relative {
+        Some(entries) => entries,
+        None => match winfind::read_dir_auto(directory, fast_enumeration, volume) {
+            Ok(entries) => entries,
+            Err(error) => {
+                emit_deduplicated_issue(
+                    pipeline,
+                    issue_keys,
+                    convert_io_error(&error, directory_text.to_owned()),
+                );
+                return;
+            }
+        },
     };
     let child_volume = entries.volume();
 
-    for entry_result in entries {
+    while let Some(entry_result) = entries.next() {
         if cancelled.load(Ordering::SeqCst) {
             return;
         }
@@ -545,6 +644,7 @@ fn walk_directory_tree(
         // on-disk name): file records carry a parent id, not a path.
         if attributes.is_directory() {
             let entry_path = directory.join(&entry.name);
+            let entry_text = child_path_text(directory_text, &entry.name);
             let decision = evaluate_reparse_descent(
                 directory,
                 &entry_path,
@@ -561,17 +661,22 @@ fn walk_directory_tree(
                 walk_state,
                 directory_id,
                 Some(parent_directory_id),
-                &entry_path,
+                entry_text.clone(),
                 entry_name,
                 0,
             );
 
             match decision {
                 ReparseDecision::Follow(child_ancestors) => {
+                    let volume = inherited_volume(attributes, entry.cloud_folder, child_volume);
+                    let parent = volume
+                        .and(entries.directory_handle())
+                        .map(ParentHandle::new);
                     walk_directory_tree(
                         pipeline,
                         cancelled,
                         &entry_path,
+                        &entry_text,
                         directory_id,
                         walk_state,
                         issue_keys,
@@ -580,7 +685,8 @@ fn walk_directory_tree(
                         fast_enumeration,
                         scan_root,
                         rules,
-                        inherited_volume(attributes, entry.cloud_folder, child_volume),
+                        volume,
+                        parent,
                     );
                 }
                 ReparseDecision::SkippedCycle => {
@@ -599,7 +705,7 @@ fn emit_directory_record(
     walk_state: &mut DirectoryWalkState,
     directory_id: winblaze_core::DirectoryId,
     parent_directory_id: Option<winblaze_core::DirectoryId>,
-    full_path: &std::path::Path,
+    full_path: String,
     name: String,
     allocation_bytes: u64,
 ) {
@@ -611,12 +717,8 @@ fn emit_directory_record(
     pipeline.emit_directory(winblaze_core::DirectoryRecord {
         id: directory_id,
         parent_directory_id,
-        name,
-        full_path: path_text(full_path),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
+        name: name.into(),
+        full_path,
     });
     walk_state.maybe_emit_progress(pipeline, false);
 }
@@ -817,14 +919,23 @@ fn provisional_volume_record(
     }
 }
 
-/// Task queue and counters shared across the fallback walker's worker
-/// threads. `outstanding` counts tasks that are queued or in flight; the
-/// walk is finished once it drops to zero with an empty queue.
+/// One queued directory of the parallel walk. `outstanding` (in the shared
+/// state) counts tasks that are queued or in flight; the walk is finished once
+/// it drops to zero.
 struct FallbackTask {
-    path: PathBuf,
+    /// The directory's display text (`path_text` of its path). For the usual
+    /// UTF-8 path this is also the exact path, so a queued task holds one
+    /// string; a child's text is one append rather than a re-validation of
+    /// the whole path.
+    text: String,
+    /// The exact path, only when `text` is lossy (a component holds an
+    /// unpaired UTF-16 surrogate).
+    exact: Option<PathBuf>,
     directory_id: winblaze_core::DirectoryId,
     ancestors: AncestorChain,
     volume: Option<crate::directory_metadata::VolumeContext>,
+    /// The parent's open handle, for a relative open (see [`ParentHandle`]).
+    parent: Option<ParentHandle>,
 }
 
 /// A non-reparse child directory is on its parent's volume. Reparse points
@@ -849,14 +960,21 @@ fn inherited_volume(
         })
 }
 
-struct FallbackQueue {
-    tasks: VecDeque<FallbackTask>,
-    outstanding: usize,
-}
-
 struct FallbackSharedState {
     physical_ids: crate::allocation::ConcurrentAllocationTracker,
-    queue: Mutex<FallbackQueue>,
+    /// One deque per worker. A worker pushes and pops its own (newest first,
+    /// so it descends depth-first and its parent handles stay few); an idle
+    /// worker steals the oldest half of another's, which are the largest
+    /// remaining subtrees. The locks are uncontended in the common case, so
+    /// no directory costs a kernel wait on a shared queue.
+    queues: Vec<Mutex<VecDeque<FallbackTask>>>,
+    /// Tasks in any deque.
+    queued: AtomicUsize,
+    /// Tasks queued or being processed; zero ends the walk.
+    outstanding: AtomicUsize,
+    /// Workers parked on `work_available`.
+    sleepers: AtomicUsize,
+    idle: Mutex<()>,
     work_available: Condvar,
     reparse_policy: ReparseTraversalPolicy,
     fast_enumeration: bool,
@@ -870,6 +988,117 @@ struct FallbackSharedState {
     total_size_bytes: AtomicU64,
     total_allocation_bytes: AtomicU64,
     last_progress_reported_items: AtomicU64,
+}
+
+impl FallbackSharedState {
+    /// Queues `tasks` on worker `index`'s deque and wakes parked workers.
+    fn push_tasks(&self, index: usize, tasks: &mut Vec<FallbackTask>) {
+        if tasks.is_empty() {
+            return;
+        }
+        let count = tasks.len();
+        self.outstanding.fetch_add(count, Ordering::SeqCst);
+        {
+            let mut queue = self.queues[index].lock().unwrap();
+            queue.extend(tasks.drain(..));
+        }
+        self.queued.fetch_add(count, Ordering::SeqCst);
+        // Wake only as many workers as there is new work for; a woken worker
+        // that finds more wakes the next (see `next_task`).
+        if self.sleepers.load(Ordering::SeqCst) > 0 {
+            let _guard = self.idle.lock().unwrap();
+            if count == 1 {
+                self.work_available.notify_one();
+            } else {
+                self.work_available.notify_all();
+            }
+        }
+    }
+
+    fn pop_local(&self, index: usize) -> Option<FallbackTask> {
+        let task = self.queues[index].lock().unwrap().pop_back();
+        if task.is_some() {
+            self.queued.fetch_sub(1, Ordering::SeqCst);
+        }
+        task
+    }
+
+    /// Takes the oldest half of another worker's deque: one task to run now,
+    /// the rest onto this worker's own deque.
+    fn steal(&self, index: usize) -> Option<FallbackTask> {
+        let workers = self.queues.len();
+        for offset in 1..workers {
+            let victim = (index + offset) % workers;
+            let stolen: Vec<FallbackTask> = {
+                let mut queue = self.queues[victim].lock().unwrap();
+                let take = queue.len().div_ceil(2);
+                queue.drain(..take).collect()
+            };
+            if stolen.is_empty() {
+                continue;
+            }
+            let mut stolen = stolen.into_iter();
+            let first = stolen.next();
+            let rest: Vec<FallbackTask> = stolen.collect();
+            if !rest.is_empty() {
+                self.queues[index].lock().unwrap().extend(rest);
+            }
+            self.queued.fetch_sub(1, Ordering::SeqCst);
+            return first;
+        }
+        None
+    }
+
+    /// The next task for worker `index`, or `None` once the walk is complete.
+    fn next_task(&self, index: usize) -> Option<FallbackTask> {
+        loop {
+            if let Some(task) = self.pop_local(index).or_else(|| self.steal(index)) {
+                // More work than one task: pass the wake along.
+                if self.queued.load(Ordering::SeqCst) > 0
+                    && self.sleepers.load(Ordering::SeqCst) > 0
+                {
+                    let _guard = self.idle.lock().unwrap();
+                    self.work_available.notify_one();
+                }
+                return Some(task);
+            }
+            if self.outstanding.load(Ordering::SeqCst) == 0 {
+                return None;
+            }
+            let mut spins = 0;
+            while spins < IDLE_SPINS && self.queued.load(Ordering::SeqCst) == 0 {
+                if self.outstanding.load(Ordering::SeqCst) == 0 {
+                    return None;
+                }
+                thread::yield_now();
+                spins += 1;
+            }
+            if self.queued.load(Ordering::SeqCst) > 0 {
+                continue;
+            }
+            let guard = self.idle.lock().unwrap();
+            self.sleepers.fetch_add(1, Ordering::SeqCst);
+            if self.queued.load(Ordering::SeqCst) == 0
+                && self.outstanding.load(Ordering::SeqCst) > 0
+            {
+                // The timeout is a safety net only; pushes and the final
+                // completion notify this variable.
+                let _ = self
+                    .work_available
+                    .wait_timeout(guard, std::time::Duration::from_millis(20))
+                    .unwrap();
+            }
+            self.sleepers.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+
+    /// A task finished (its children, if any, are already queued).
+    fn finish_task(&self) {
+        if self.outstanding.fetch_sub(1, Ordering::SeqCst) == 1 {
+            let _guard = self.idle.lock().unwrap();
+            self.work_available.notify_all();
+        }
+    }
 }
 
 #[derive(Default)]
@@ -919,17 +1148,16 @@ fn run_fallback_scan_parallel(
     fast_enumeration: bool,
     rules: &crate::types::ScanRules,
 ) -> (u64, u64, u64, u64) {
-    let mut shared = FallbackSharedState {
+    let worker_count = worker_count.max(1);
+    let shared = FallbackSharedState {
         physical_ids: crate::allocation::ConcurrentAllocationTracker::default(),
-        queue: Mutex::new(FallbackQueue {
-            tasks: VecDeque::from(vec![FallbackTask {
-                path: selected_root.to_path_buf(),
-                directory_id: root_id,
-                ancestors: root_ancestors,
-                volume: None,
-            }]),
-            outstanding: 1,
-        }),
+        queues: (0..worker_count)
+            .map(|_| Mutex::new(VecDeque::new()))
+            .collect(),
+        queued: AtomicUsize::new(0),
+        outstanding: AtomicUsize::new(0),
+        sleepers: AtomicUsize::new(0),
+        idle: Mutex::new(()),
         work_available: Condvar::new(),
         reparse_policy,
         fast_enumeration,
@@ -948,34 +1176,53 @@ fn run_fallback_scan_parallel(
     // A leaf or single directory chain cannot keep additional workers busy.
     // Traverse it on the existing scan thread until actual branching appears.
     let mut totals = FallbackTotals::default();
-    while shared.queue.get_mut().unwrap().tasks.len() == 1 {
-        let task = shared.queue.get_mut().unwrap().tasks.pop_back().unwrap();
-        let new_tasks = if cancelled.load(Ordering::SeqCst) {
-            Vec::new()
-        } else {
-            process_fallback_directory(&shared, pipeline, &task, cancelled, &mut totals)
-        };
-        let queue = shared.queue.get_mut().unwrap();
-        queue.tasks.extend(new_tasks);
-        queue.outstanding = queue.tasks.len();
+    let mut pending = vec![FallbackTask {
+        text: path_text(selected_root),
+        exact: selected_root
+            .to_str()
+            .is_none()
+            .then(|| selected_root.to_path_buf()),
+        directory_id: root_id,
+        ancestors: root_ancestors,
+        volume: None,
+        parent: None,
+    }];
+    let mut children = Vec::new();
+    while pending.len() == 1 {
+        let task = pending.pop().unwrap();
+        if !cancelled.load(Ordering::SeqCst) {
+            process_fallback_directory(
+                &shared,
+                pipeline,
+                task,
+                cancelled,
+                &mut totals,
+                &mut children,
+            );
+        }
+        pending.append(&mut children);
     }
 
-    if !shared.queue.get_mut().unwrap().tasks.is_empty() {
+    if !pending.is_empty() {
         // Publish discovered parents before other producers emit descendants.
         pipeline.flush();
         let pipeline_config = pipeline.config();
         let event_tx = pipeline.event_sender();
-        let workers_started = AtomicUsize::new(1);
+        shared.push_tasks(0, &mut pending);
+        let shared = &shared;
         thread::scope(|scope| {
-            run_fallback_worker(
-                scope,
-                &shared,
-                cancelled,
-                event_tx,
-                pipeline_config,
-                &workers_started,
-                worker_count,
-            );
+            // Every worker starts at once: the queue already holds more than
+            // one subtree, and a worker that finds nothing to steal parks.
+            let priority = crate::scheduler::current_thread_priority();
+            for index in 1..worker_count {
+                let sender = event_tx.clone();
+                scope.spawn(move || {
+                    crate::scheduler::adopt_thread_priority(priority);
+                    crate::scheduler::prefer_processor(index);
+                    run_fallback_worker(shared, index, cancelled, sender, pipeline_config);
+                });
+            }
+            run_fallback_worker(shared, 0, cancelled, event_tx, pipeline_config);
         });
     }
 
@@ -987,90 +1234,32 @@ fn run_fallback_scan_parallel(
     )
 }
 
-fn run_fallback_worker<'scope, 'env>(
-    scope: &'scope thread::Scope<'scope, 'env>,
-    shared: &'scope FallbackSharedState,
-    cancelled: &'scope AtomicBool,
+fn run_fallback_worker(
+    shared: &FallbackSharedState,
+    index: usize,
+    cancelled: &AtomicBool,
     event_tx: EventBatchSender,
     pipeline_config: ScanPipelineConfig,
-    workers_started: &'scope AtomicUsize,
-    worker_limit: usize,
 ) {
-    let mut pipeline = ScanEventPipeline::with_sender(event_tx.clone(), pipeline_config);
+    let mut pipeline = ScanEventPipeline::with_sender(event_tx, pipeline_config);
     let mut totals = FallbackTotals::default();
-    let scheduler =
-        crate::scheduler::ScanScheduler::new(crate::scheduler::WorkerCount(worker_limit));
+    // Per-worker scratch for a directory's child tasks, reused across
+    // directories instead of a fresh Vec each.
+    let mut children = Vec::new();
 
-    loop {
-        let available = shared.queue.lock().unwrap().outstanding;
-        let desired = scheduler.worker_count_for_work(available).0;
-        let mut started = workers_started.load(Ordering::Relaxed);
-        while started < desired {
-            match workers_started.compare_exchange_weak(
-                started,
-                started + 1,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => {
-                    let sender = event_tx.clone();
-                    let priority = crate::scheduler::current_thread_priority();
-                    scope.spawn(move || {
-                        crate::scheduler::adopt_thread_priority(priority);
-                        run_fallback_worker(
-                            scope,
-                            shared,
-                            cancelled,
-                            sender,
-                            pipeline_config,
-                            workers_started,
-                            worker_limit,
-                        )
-                    });
-                    started += 1;
-                }
-                Err(actual) => started = actual,
-            }
+    while let Some(task) = shared.next_task(index) {
+        if !cancelled.load(Ordering::SeqCst) {
+            process_fallback_directory(
+                shared,
+                &mut pipeline,
+                task,
+                cancelled,
+                &mut totals,
+                &mut children,
+            );
         }
-        let task = {
-            let mut guard = shared.queue.lock().unwrap();
-            loop {
-                // Consume recent descendants first: a breadth-first queue can
-                // retain paths for an entire wide level before visiting leaves.
-                // Other workers still share all queued tasks, so narrow branches
-                // do not strand work on a particular worker.
-                if let Some(task) = guard.tasks.pop_back() {
-                    break Some(task);
-                }
-                if guard.outstanding == 0 {
-                    break None;
-                }
-                guard = shared.work_available.wait(guard).unwrap();
-            }
-        };
-
-        let Some(task) = task else {
-            break;
-        };
-
-        let new_tasks = if cancelled.load(Ordering::SeqCst) {
-            Vec::new()
-        } else {
-            process_fallback_directory(shared, &mut pipeline, &task, cancelled, &mut totals)
-        };
-
-        let new_work = !new_tasks.is_empty();
-        let mut guard = shared.queue.lock().unwrap();
-        guard.outstanding += new_tasks.len();
-        guard.tasks.extend(new_tasks);
-        guard.outstanding -= 1;
-        // Newly queued tasks must wake idle workers. Finishing a leaf adds
-        // no work; active workers already consume the queue without a wake.
-        // The final completion wakes every waiter so each can terminate.
-        if guard.outstanding == 0 || new_work {
-            shared.work_available.notify_all();
-        }
-        drop(guard);
+        shared.push_tasks(index, &mut children);
+        shared.finish_task();
     }
 
     pipeline.flush();
@@ -1079,25 +1268,37 @@ fn run_fallback_worker<'scope, 'env>(
 fn process_fallback_directory(
     shared: &FallbackSharedState,
     pipeline: &mut ScanEventPipeline,
-    task: &FallbackTask,
+    task: FallbackTask,
     cancelled: &AtomicBool,
     totals: &mut FallbackTotals,
-) -> Vec<FallbackTask> {
-    let entries = match winfind::read_dir_auto(&task.path, shared.fast_enumeration, task.volume) {
-        Ok(entries) => entries,
-        Err(error) => {
-            emit_deduplicated_issue_shared(
-                pipeline,
-                shared,
-                convert_io_error(&error, task.path.display().to_string()),
-            );
-            return Vec::new();
-        }
+    new_tasks: &mut Vec<FallbackTask>,
+) {
+    let FallbackTask {
+        text,
+        exact,
+        directory_id,
+        ancestors,
+        volume,
+        parent,
+    } = task;
+    let path: &Path = exact.as_deref().unwrap_or(Path::new(&text));
+    let relative = match (parent, volume, shared.fast_enumeration) {
+        (Some(parent), Some(volume), true) => open_relative(parent, path, volume),
+        _ => None,
+    };
+    let mut entries = match relative {
+        Some(entries) => entries,
+        None => match winfind::read_dir_auto(path, shared.fast_enumeration, volume) {
+            Ok(entries) => entries,
+            Err(error) => {
+                emit_deduplicated_issue_shared(pipeline, shared, convert_io_error(&error, text));
+                return;
+            }
+        },
     };
     let child_volume = entries.volume();
 
-    let mut new_tasks = Vec::new();
-    for entry_result in entries {
+    while let Some(entry_result) = entries.next() {
         if cancelled.load(Ordering::SeqCst) {
             break;
         }
@@ -1105,16 +1306,14 @@ fn process_fallback_directory(
         let entry = match entry_result {
             Ok(entry) => entry,
             Err(failure) => {
-                let path = failure
-                    .path
-                    .as_deref()
-                    .unwrap_or(&task.path)
-                    .display()
-                    .to_string();
+                let failed = match failure.path.as_deref() {
+                    Some(failed) => path_text(failed),
+                    None => text.clone(),
+                };
                 emit_deduplicated_issue_shared(
                     pipeline,
                     shared,
-                    convert_io_error(&failure.error, path),
+                    convert_io_error(&failure.error, failed),
                 );
                 continue;
             }
@@ -1123,7 +1322,7 @@ fn process_fallback_directory(
         if !shared.rules.is_empty()
             && !shared.rules.allows(
                 &shared.scan_root,
-                &task.path.join(&entry.name),
+                &path.join(&entry.name),
                 attributes.is_directory(),
             )
         {
@@ -1137,37 +1336,47 @@ fn process_fallback_directory(
         // Only directories materialize a path (joined with the exact
         // on-disk name): file records carry a parent id, not a path.
         if attributes.is_directory() {
-            flush_file_records_shared(pipeline, shared, task.directory_id, totals);
-            let entry_path = task.path.join(&entry.name);
+            flush_file_records_shared(pipeline, shared, directory_id, totals);
+            let entry_path = path.join(&entry.name);
+            let entry_text = child_path_text(&text, &entry.name);
             let decision = evaluate_reparse_descent(
-                &task.path,
+                path,
                 &entry_path,
                 &entry.name,
                 attributes,
                 shared.reparse_policy,
-                &task.ancestors,
+                &ancestors,
             );
             let entry_name = display_name(entry.name);
 
-            let directory_id = winblaze_core::DirectoryId(
+            let child_id = winblaze_core::DirectoryId(
                 shared.next_directory_id.fetch_add(1, Ordering::Relaxed),
             );
             emit_directory_record_shared(
                 pipeline,
                 shared,
+                child_id,
                 directory_id,
-                task.directory_id,
-                &entry_path,
+                entry_text.clone(),
                 entry_name,
             );
 
             match decision {
                 ReparseDecision::Follow(ancestors) => {
+                    let volume = inherited_volume(attributes, entry.cloud_folder, child_volume);
+                    // The child text is exact unless this path or the name
+                    // was already lossy.
+                    let exact =
+                        (exact.is_some() || entry_path.to_str().is_none()).then_some(entry_path);
                     new_tasks.push(FallbackTask {
-                        path: entry_path,
-                        directory_id,
+                        parent: volume
+                            .and(entries.directory_handle())
+                            .map(ParentHandle::new),
+                        text: entry_text,
+                        exact,
+                        directory_id: child_id,
                         ancestors,
-                        volume: inherited_volume(attributes, entry.cloud_folder, child_volume),
+                        volume,
                     });
                 }
                 ReparseDecision::SkippedCycle => {
@@ -1185,15 +1394,14 @@ fn process_fallback_directory(
             }
             totals.pending.push(entry);
             if totals.pending.len() == 64 {
-                flush_file_records_shared(pipeline, shared, task.directory_id, totals);
+                flush_file_records_shared(pipeline, shared, directory_id, totals);
             }
         }
     }
 
-    flush_file_records_shared(pipeline, shared, task.directory_id, totals);
+    flush_file_records_shared(pipeline, shared, directory_id, totals);
     totals.publish(shared);
     maybe_emit_progress_shared(shared, pipeline);
-    new_tasks
 }
 
 fn emit_directory_record_shared(
@@ -1201,19 +1409,15 @@ fn emit_directory_record_shared(
     shared: &FallbackSharedState,
     directory_id: winblaze_core::DirectoryId,
     parent_directory_id: winblaze_core::DirectoryId,
-    full_path: &std::path::Path,
+    full_path: String,
     name: String,
 ) {
     shared.directories_seen.fetch_add(1, Ordering::Relaxed);
     pipeline.emit_directory(winblaze_core::DirectoryRecord {
         id: directory_id,
         parent_directory_id: Some(parent_directory_id),
-        name,
-        full_path: path_text(full_path),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
+        name: name.into(),
+        full_path,
     });
 }
 
@@ -1437,6 +1641,45 @@ mod tests {
                 Some(parent)
             ),
             None
+        );
+    }
+
+    #[test]
+    fn child_path_text_matches_the_joined_path_display() {
+        use std::os::windows::ffi::OsStringExt;
+        let odd = std::ffi::OsString::from_wide(&[b'o' as u16, 0xD800, b'd' as u16]);
+        let names: Vec<EntryName> = vec![
+            EntryName::from(std::ffi::OsString::from("short.txt")),
+            EntryName::from(std::ffi::OsString::from(
+                "a-long-name-beyond-inline-capacity-\u{e9}\u{1f600}",
+            )),
+            EntryName::from(odd.clone()),
+        ];
+        for parent in [
+            r"C:\",
+            r"C:\Users\markm",
+            r"C:\Users\markm\",
+            "C:",
+            r"\\server\share",
+            r"\\?\C:\very\long",
+            r"relative\dir",
+            "",
+        ] {
+            for name in &names {
+                let joined = Path::new(parent).join(&**name);
+                assert_eq!(
+                    child_path_text(parent, name),
+                    path_text(&joined),
+                    "{parent:?} + {name:?}"
+                );
+            }
+        }
+        // A parent with an unpaired surrogate renders the same lossy text.
+        let parent = PathBuf::from(r"C:\x").join(&odd);
+        let text = path_text(&parent);
+        assert_eq!(
+            child_path_text(&text, &names[0]),
+            path_text(&parent.join("short.txt"))
         );
     }
 

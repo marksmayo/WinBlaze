@@ -48,10 +48,6 @@ pub fn combine_with(
         parent_directory_id: None,
         name: "Multiple roots".into(),
         full_path: ROOT_PATH.into(),
-        direct_bytes: 0,
-        total_bytes: 0,
-        direct_entries: 0,
-        total_entries: 0,
     });
     let (mut next_directory, mut next_file, mut next_volume) = (1u64, 1u64, 1u64);
     for scan in scans {
@@ -68,10 +64,10 @@ pub fn combine_with(
             volume.root_directory_id = *ids.get(&volume.root_directory_id).unwrap_or(&source_root);
             tx.insert_volume(volume);
         }
-        for directory in scan.directories() {
-            let mut directory = directory.clone();
+        for directory in scan.directories_with_paths() {
+            let mut directory = directory;
             if directory.parent_directory_id.is_none() {
-                directory.name = directory.full_path.clone();
+                directory.name = directory.full_path.clone().into();
             }
             directory.id = ids[&directory.id];
             directory.parent_directory_id = Some(

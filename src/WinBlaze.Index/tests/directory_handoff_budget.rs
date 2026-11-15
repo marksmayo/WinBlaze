@@ -12,7 +12,7 @@ fn publishing_unestimated_directories_does_not_retain_large_unused_capacity() {
     for id in 0..COUNT as u64 {
         transaction.insert_directory(DirectoryRecord {
             id: DirectoryId(id),
-            direct_bytes: id * 3,
+            full_path: (id * 3).to_string(),
             ..DirectoryRecord::default()
         });
     }
@@ -21,7 +21,7 @@ fn publishing_unestimated_directories_does_not_retain_large_unused_capacity() {
     assert_eq!(directories.len(), COUNT);
     for (id, directory) in directories.iter().enumerate() {
         assert_eq!(directory.id.0, id as u64);
-        assert_eq!(directory.direct_bytes, id as u64 * 3);
+        assert_eq!(directory.full_path, (id as u64 * 3).to_string());
     }
     assert!(
         directories.capacity() <= COUNT + COUNT / 8,
@@ -63,7 +63,7 @@ fn publishing_directory_records_transfers_storage_without_a_second_record_array(
     for id in (1..=DIRECTORY_COUNT as u64).rev() {
         transaction.insert_directory(DirectoryRecord {
             id: DirectoryId(id),
-            direct_bytes: id * 3,
+            full_path: (id * 3).to_string(),
             ..DirectoryRecord::default()
         });
     }
@@ -75,7 +75,7 @@ fn publishing_directory_records_transfers_storage_without_a_second_record_array(
     directories.sort_unstable_by_key(|directory| directory.id.0);
     for (index, directory) in directories.iter().enumerate() {
         assert_eq!(directory.id.0, index as u64 + 1);
-        assert_eq!(directory.direct_bytes, directory.id.0 * 3);
+        assert_eq!(directory.full_path, (directory.id.0 * 3).to_string());
     }
     assert_eq!(
         LARGE_RECORD_BYTES.with(Cell::get),
@@ -90,7 +90,6 @@ fn directory_replacement_preserves_sparse_ids_and_insertion_independent_equality
         .into_iter()
         .map(|id| DirectoryRecord {
             id: DirectoryId(id),
-            direct_bytes: 7,
             full_path: format!("C:\\fixture\\{id}"),
             ..DirectoryRecord::default()
         })
@@ -105,7 +104,7 @@ fn directory_replacement_preserves_sparse_ids_and_insertion_independent_equality
     }
     assert_eq!(transaction, reversed);
     let replacement = DirectoryRecord {
-        direct_bytes: 123,
+        name: "replacement".into(),
         ..records[2].clone()
     };
     transaction.insert_directory(replacement.clone());
@@ -120,5 +119,5 @@ fn directory_replacement_preserves_sparse_ids_and_insertion_independent_equality
     assert_eq!(directories.len(), 3);
     assert!(directories
         .iter()
-        .any(|record| record.id.0 == u64::MAX && record.direct_bytes == 123));
+        .any(|record| record.id.0 == u64::MAX && record.name == "replacement"));
 }

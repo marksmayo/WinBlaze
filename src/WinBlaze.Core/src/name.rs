@@ -64,9 +64,31 @@ impl Deref for FileName {
     }
 }
 
+impl FileName {
+    /// The name as a string slice (mirrors `String::as_str`).
+    pub fn as_str(&self) -> &str {
+        self
+    }
+}
+
 impl AsRef<str> for FileName {
     fn as_ref(&self) -> &str {
         self
+    }
+}
+
+impl From<FileName> for String {
+    fn from(name: FileName) -> Self {
+        match name.0 {
+            Storage::Heap(name) => name.into_string(),
+            Storage::Inline { .. } => name.to_string(),
+        }
+    }
+}
+
+impl PartialEq<String> for FileName {
+    fn eq(&self, other: &String) -> bool {
+        &**self == other.as_str()
     }
 }
 

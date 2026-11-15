@@ -18,13 +18,35 @@ const MAX_POOLED_BATCHES: usize = 4;
 const MAX_BATCH_BYTES: usize = 64 * 1024;
 
 /// Contains only empty arenas, never a producer sender or live records.
-/// Its maximum retained event storage is four times 64 KiB.
-#[derive(Debug, Default)]
-pub(crate) struct EventBatchPool(Mutex<Vec<Vec<ScanEvent>>>);
+/// Its maximum retained event storage is four times `max_batch_bytes`
+/// (64 KiB unless a larger batch size was requested).
+#[derive(Debug)]
+pub(crate) struct EventBatchPool {
+    batches: Mutex<Vec<Vec<ScanEvent>>>,
+    max_batch_bytes: usize,
+}
+
+impl Default for EventBatchPool {
+    fn default() -> Self {
+        Self::for_batch_size(0)
+    }
+}
 
 impl EventBatchPool {
+    /// A pool that recycles arenas of up to `batch_size` events (at least the
+    /// default 64 KiB bound).
+    fn for_batch_size(batch_size: usize) -> Self {
+        Self {
+            batches: Mutex::new(Vec::new()),
+            max_batch_bytes: MAX_BATCH_BYTES.max(batch_size.saturating_mul(size_of::<ScanEvent>())),
+        }
+    }
+
     pub(crate) fn take(&self, minimum: usize) -> Vec<ScanEvent> {
-        let mut pool = self.0.lock().unwrap_or_else(|error| error.into_inner());
+        let mut pool = self
+            .batches
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         pool.iter()
             .position(|batch| batch.capacity() >= minimum)
             .map(|index| pool.swap_remove(index))
@@ -33,10 +55,14 @@ impl EventBatchPool {
 
     fn recycle(&self, batch: Vec<ScanEvent>) {
         debug_assert!(batch.is_empty());
-        if batch.capacity() == 0 || batch.capacity() > MAX_BATCH_BYTES / size_of::<ScanEvent>() {
+        if batch.capacity() == 0 || batch.capacity() > self.max_batch_bytes / size_of::<ScanEvent>()
+        {
             return;
         }
-        let mut pool = self.0.lock().unwrap_or_else(|error| error.into_inner());
+        let mut pool = self
+            .batches
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if pool.len() < MAX_POOLED_BATCHES {
             pool.push(batch);
         } else if let Some((index, smallest)) = pool
@@ -55,8 +81,16 @@ impl EventBatchPool {
 
 impl ScanEventReceiver {
     pub(crate) fn channel(capacity: usize) -> (EventBatchSender, Self) {
+        Self::channel_for_batches(capacity, 0)
+    }
+
+    /// A channel whose pool recycles arenas sized for `batch_size` events.
+    pub(crate) fn channel_for_batches(
+        capacity: usize,
+        batch_size: usize,
+    ) -> (EventBatchSender, Self) {
         let (sender, receiver) = mpsc::sync_channel(capacity);
-        let pool = Arc::new(EventBatchPool::default());
+        let pool = Arc::new(EventBatchPool::for_batch_size(batch_size));
         (
             EventBatchSender::Recycling(sender, Arc::clone(&pool)),
             Self { receiver, pool },

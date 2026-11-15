@@ -6,6 +6,18 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 static NEXT: AtomicU64 = AtomicU64::new(0);
+
+/// Writer buffer for an export of `records` rows: a bounded scratch for small
+/// catalogs (a tiny export must not reserve a megabyte), the established
+/// 1 MiB for ordinary ones, and 4 MiB once a volume's millions of rows make
+/// each flush a large sequential write.
+pub(crate) fn export_buffer_capacity(records: usize) -> usize {
+    if records >= 1_000_000 {
+        4 << 20
+    } else {
+        records.saturating_mul(256).clamp(8 * 1024, 1 << 20)
+    }
+}
 pub fn atomic_write(
     path: &Path,
     writer: impl FnOnce(&mut BufWriter<std::fs::File>) -> io::Result<()>,
@@ -43,4 +55,17 @@ pub(crate) fn atomic_write_with_capacity(
         let _ = fs::remove_file(&temp);
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn export_buffers_grow_with_the_catalog_and_stay_small_for_small_ones() {
+        assert_eq!(super::export_buffer_capacity(0), 8 * 1024);
+        assert_eq!(super::export_buffer_capacity(72), 18_432);
+        assert_eq!(super::export_buffer_capacity(100_000), 1 << 20);
+        assert_eq!(super::export_buffer_capacity(999_999), 1 << 20);
+        assert_eq!(super::export_buffer_capacity(1_000_000), 4 << 20);
+        assert_eq!(super::export_buffer_capacity(5_000_000), 4 << 20);
+    }
 }

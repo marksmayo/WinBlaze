@@ -50,6 +50,64 @@ const DIRECTORY_BATCH_MAX_LATENCY: Duration = Duration::from_millis(250);
 /// Deepest live folder level the UI shows below the scan root; mirrors
 /// `kMaxLiveDepth` in MainWindow.cpp, which drops anything deeper.
 const LIVE_TREE_MAX_DEPTH: usize = 3;
+/// Event batches the unattended consumer may hold before producers wait, and
+/// the batch size those producers fill (see `ScanPipelineConfig::terminal`).
+const TERMINAL_CHANNEL_BATCHES: usize = 32;
+
+/// How often a live scan interrupts the UI thread. A whole volume takes tens
+/// of seconds and discovers hundreds of thousands of folders, so its
+/// progress, live folder batches and live depth are paced for the UI's
+/// responsiveness; a folder scan finishes in moments and keeps the quick
+/// cadence so its first rows appear at once.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LiveCadence {
+    progress_interval: Duration,
+    directory_batch_latency: Duration,
+    tree_depth: usize,
+}
+
+impl LiveCadence {
+    fn for_root(root: &str) -> Self {
+        if is_volume_root(root) {
+            Self {
+                progress_interval: Duration::from_millis(500),
+                directory_batch_latency: Duration::from_secs(1),
+                tree_depth: 2,
+            }
+        } else {
+            Self {
+                progress_interval: UI_PROGRESS_MIN_INTERVAL,
+                directory_batch_latency: DIRECTORY_BATCH_MAX_LATENCY,
+                tree_depth: LIVE_TREE_MAX_DEPTH,
+            }
+        }
+    }
+}
+
+/// `C:`, `C:\` or `C:/` (any drive letter): a scan of the whole volume.
+fn is_volume_root(root: &str) -> bool {
+    let bytes = root.trim_end_matches(['\\', '/']).as_bytes();
+    matches!(bytes, [letter, b':'] if letter.is_ascii_alphabetic())
+}
+
+/// Priority of the thread that indexes a scan's events and forwards them to
+/// the UI. For a live scan it runs below normal like the walkers, so the UI
+/// thread wins a core the moment a message arrives; an unattended scan has no
+/// UI thread to protect and keeps normal priority.
+fn consumer_thread_priority(delivery: ScanDelivery) -> i32 {
+    match delivery {
+        ScanDelivery::Live => -1,
+        ScanDelivery::Terminal => 0,
+    }
+}
+
+/// Channel depth and batching of an unattended scan.
+fn terminal_scan_delivery() -> (usize, winblaze_scanner::ScanPipelineConfig) {
+    (
+        TERMINAL_CHANNEL_BATCHES,
+        winblaze_scanner::ScanPipelineConfig::terminal(),
+    )
+}
 
 /// Levels between `root` and `path` (0 for the root itself), or `None` when
 /// the root is unknown or `path` is not under it (a followed reparse target).
@@ -97,6 +155,26 @@ static INDEX_MODEL: Mutex<Option<Arc<IndexModel>>> = Mutex::new(None);
 #[no_mangle]
 pub extern "C" fn wb_export_csv(path: WbCStringView) -> u32 {
     export_catalog(path, winblaze_index::export::write_csv)
+}
+
+/// `wb_export_csv` in an alternative layout: bit 0 lists files by name under
+/// their directory row, bit 1 omits directory rows other than the root,
+/// bit 2 quotes only fields that need it, bit 3 writes one file path per
+/// line and nothing else (bits 0 to 2 are then ignored). Same status codes.
+#[no_mangle]
+pub extern "C" fn wb_export_csv_layout(path: WbCStringView, layout: u32) -> u32 {
+    use winblaze_index::export::{write_csv_with_layout, write_paths, CsvLayout};
+    if layout & 8 != 0 {
+        return export_catalog(path, write_paths);
+    }
+    let layout = CsvLayout {
+        tree: layout & 1 != 0,
+        files_only: layout & 2 != 0,
+        minimal_quoting: layout & 4 != 0,
+    };
+    export_catalog(path, move |tree, output| {
+        write_csv_with_layout(tree, layout, output)
+    })
 }
 
 /// Tab-delimited complete catalog; same atomic status contract as CSV.
@@ -571,13 +649,13 @@ fn export_catalog(
         {
             return 1;
         }
-        let capacity = model
-            .tree
-            .files()
-            .len()
-            .saturating_add(model.tree.directories().len())
-            .saturating_mul(256)
-            .clamp(8 * 1024, 1 << 20);
+        let capacity = crate::output::export_buffer_capacity(
+            model
+                .tree
+                .files()
+                .len()
+                .saturating_add(model.tree.directories().len()),
+        );
         let result = crate::output::atomic_write_with_capacity(
             std::path::Path::new(path),
             capacity,
@@ -889,10 +967,11 @@ struct PendingLiveDirectory {
     id: u64,
     parent_id: u64,
     has_parent: bool,
-    // Built as a CString at push time rather than cloned into a String and
-    // re-allocated into a CString at flush: one allocation per directory
-    // instead of two, across the hundreds of thousands a full drive emits.
-    name: CString,
+    // The name's bytes live in `UiEventForwarder::pending_names`, one
+    // buffer for the whole batch instead of one allocation per directory
+    // across the hundreds of thousands a full drive emits.
+    name_start: u32,
+    name_len: u32,
 }
 
 struct UiEventForwarder {
@@ -911,10 +990,13 @@ struct UiEventForwarder {
     // full drive discovers hundreds of thousands, and one FFI crossing per
     // directory dominated scan wall-clock.
     pending_directories: Vec<PendingLiveDirectory>,
+    // NUL-terminated names of `pending_directories`, in order.
+    pending_names: Vec<u8>,
     last_directory_batch_at: Option<Instant>,
-    // Scan root; folders deeper than LIVE_TREE_MAX_DEPTH under it are not
+    // Scan root; folders deeper than the cadence's depth under it are not
     // forwarded. Empty forwards every folder.
     live_root: String,
+    cadence: LiveCadence,
 }
 
 impl UiEventForwarder {
@@ -932,13 +1014,16 @@ impl UiEventForwarder {
                 Default::default(),
             ),
             pending_directories: Vec::with_capacity(DIRECTORY_BATCH_SIZE),
+            pending_names: Vec::with_capacity(DIRECTORY_BATCH_SIZE * 16),
             last_directory_batch_at: None,
             live_root: String::new(),
+            cadence: LiveCadence::for_root(""),
         }
     }
 
     fn with_live_root(mut self, root: &str) -> Self {
         self.live_root = root.to_owned();
+        self.cadence = LiveCadence::for_root(root);
         self
     }
 
@@ -962,11 +1047,17 @@ impl UiEventForwarder {
             // The UI drops these anyway; a full drive has hundreds of
             // thousands, each a name copy here and a conversion on its thread.
             if live_folder_depth(&self.live_root, &directory.full_path)
-                .is_some_and(|depth| depth > LIVE_TREE_MAX_DEPTH)
+                .is_some_and(|depth| depth > self.cadence.tree_depth)
             {
                 return;
             }
 
+            let name_start = self.pending_names.len();
+            // A NUL inside a name cannot occur on disk; such a name is empty.
+            let name = directory.name.as_str();
+            let name = if name.contains('\0') { "" } else { name };
+            self.pending_names.extend_from_slice(name.as_bytes());
+            self.pending_names.push(0);
             self.pending_directories.push(PendingLiveDirectory {
                 id: directory.id.0,
                 parent_id: directory
@@ -974,12 +1065,13 @@ impl UiEventForwarder {
                     .map(|parent| parent.0)
                     .unwrap_or(0),
                 has_parent: directory.parent_directory_id.is_some(),
-                name: CString::new(directory.name.as_str()).unwrap_or_default(),
+                name_start: name_start as u32,
+                name_len: name.len() as u32,
             });
             let now = Instant::now();
-            let latency_due = self
-                .last_directory_batch_at
-                .is_none_or(|last| now.duration_since(last) >= DIRECTORY_BATCH_MAX_LATENCY);
+            let latency_due = self.last_directory_batch_at.is_none_or(|last| {
+                now.duration_since(last) >= self.cadence.directory_batch_latency
+            });
             if self.pending_directories.len() >= DIRECTORY_BATCH_SIZE || latency_due {
                 self.flush_directory_batch();
             }
@@ -1029,24 +1121,26 @@ impl UiEventForwarder {
         }
         let Some(cb) = self.callback else {
             self.pending_directories.clear();
+            self.pending_names.clear();
             return;
         };
 
-        let mut names: Vec<CString> = Vec::with_capacity(self.pending_directories.len());
-        let mut items: Vec<WbLiveDirectory> = Vec::with_capacity(self.pending_directories.len());
-        for directory in self.pending_directories.drain(..) {
-            let name = directory.name;
-            items.push(WbLiveDirectory {
+        let names = &self.pending_names;
+        let items: Vec<WbLiveDirectory> = self
+            .pending_directories
+            .iter()
+            .map(|directory| WbLiveDirectory {
                 id: directory.id,
                 parent_id: directory.parent_id,
                 has_parent: u8::from(directory.has_parent),
                 name: WbCStringView {
-                    ptr: name.as_ptr(),
-                    len: name.as_bytes().len(),
+                    // SAFETY-relevant: the view borrows `pending_names`, which
+                    // is not touched until after the callback returns.
+                    ptr: names[directory.name_start as usize..].as_ptr().cast(),
+                    len: directory.name_len as usize,
                 },
-            });
-            names.push(name);
-        }
+            })
+            .collect();
 
         let event = WbEvent {
             kind: WbEventKind::DirectoryBatch,
@@ -1060,6 +1154,9 @@ impl UiEventForwarder {
             &event as *const WbEvent,
             self.user_data as *mut core::ffi::c_void,
         );
+        drop(items);
+        self.pending_directories.clear();
+        self.pending_names.clear();
     }
 
     fn record_extension(&mut self, file: &FileRecord) {
@@ -1125,7 +1222,7 @@ impl UiEventForwarder {
             .saturating_sub(self.last_progress_items);
         let interval_elapsed = self
             .last_progress_at
-            .is_none_or(|last| now.duration_since(last) >= UI_PROGRESS_MIN_INTERVAL);
+            .is_none_or(|last| now.duration_since(last) >= self.cadence.progress_interval);
         let is_complete =
             progress.total_items > 0 && progress.completed_items >= progress.total_items;
 
@@ -1234,6 +1331,11 @@ impl NativeSession {
         };
         let cancelled = Arc::clone(&session.cancelled);
         let worker = thread::spawn(move || {
+            // Indexing a live scan's events is background work like the
+            // walk itself: the UI thread must win a core first.
+            winblaze_scanner::scheduler::enter_scan_thread_priority(
+                consumer_thread_priority(delivery) < 0,
+            );
             if refresh_first {
                 if refresh::try_fast_refresh(
                     &live_root,
@@ -1455,6 +1557,8 @@ fn forward_events(
         // forwarded - the UI only needs the in-memory model, and the disk
         // write was the last ~1.6s of perceived scan time.
         if !model_published && matches!(event, ScanEvent::Completed | ScanEvent::Cancelled) {
+            // The UI waits on this model: build it at normal priority.
+            winblaze_scanner::scheduler::leave_scan_thread_priority();
             match persistence_mode {
                 ScanPersistenceMode::ReplaceSnapshot => {
                     // Record the terminal session state before the parts are
@@ -1567,6 +1671,10 @@ fn forward_events(
             handle.cancel();
         }
     }
+    // The scan's events are drained. What follows (the snapshot write or
+    // merge) is waited on by the host's exit, so it no longer yields to the
+    // UI thread.
+    winblaze_scanner::scheduler::leave_scan_thread_priority();
 
     if let Some(deferred) = deferred_persist {
         let save_hint = directory_walk && scan_completed;
@@ -1578,7 +1686,12 @@ fn forward_events(
         let finish = move || {
             // Off the UI's path: a refresh patch and its row update then find
             // the child orders built.
+            let warm_started = Instant::now();
             deferred.0.tree.warm_child_orders();
+            log.append(&format!(
+                r#""event":"index.child_orders","ms":{}"#,
+                warm_started.elapsed().as_millis()
+            ));
             write_deferred_snapshot(
                 &mut repository,
                 &mut log,
@@ -1623,7 +1736,7 @@ fn forward_events(
         let merge = BufferedIndexTransaction::from_records(
             model.tree.volumes(),
             &sessions,
-            model.tree.directories(),
+            model.tree.directories_with_paths(),
             model.tree.files(),
             committed,
         );
@@ -1668,14 +1781,22 @@ fn write_deferred_snapshot(
     (model, sessions, lineages, changes): DeferredPersist,
     hint: Option<(&std::path::Path, &str, crate::capacity_hint::HintFile)>,
 ) {
+    let write_started = Instant::now();
+    let tree = &model.tree;
+    let mut cache = winblaze_index::tree::DirectoryPathCache::default();
     let result = repository.persist_sorted_records(
-        model.tree.volumes(),
+        tree.volumes(),
         &sessions,
-        model.tree.directories(),
-        model.tree.files(),
+        tree.directories(),
+        &mut |directory, out| tree.push_directory_path_cached(directory, &mut cache, out),
+        tree.files(),
         &lineages,
         &changes,
     );
+    log.append(&format!(
+        r#""event":"index.snapshot_write","ms":{}"#,
+        write_started.elapsed().as_millis()
+    ));
     log.append_flush("deferred", result.is_ok());
     if let (true, Some((hint_path, capacity_scope, hints))) = (result.is_ok(), hint) {
         // Optional advisory metadata must never make a successful scan or
@@ -1743,10 +1864,12 @@ pub fn run_terminal_scan_with(
     invalidate_index_model();
     let rules = winblaze_scanner::ScanRules::default();
     let capacity_scope = crate::capacity_hint::scope_key(root, &rules);
-    let (controller, rx) = ScanController::recycling_bounded_channel(16);
+    let (batches, pipeline) = terminal_scan_delivery();
+    let (controller, rx) = ScanController::recycling_bounded_channel_for(batches, pipeline);
     let config = ScanRuntimeConfig {
         root_path: root.into(),
         rules,
+        pipeline,
         ..Default::default()
     };
     let handle = controller.start_scan(ScanRequest {
@@ -2263,7 +2386,7 @@ fn convert_directory_event(directory: &DirectoryRecord) -> OwnedEvent {
             .unwrap_or(0),
         has_parent: u8::from(directory.parent_directory_id.is_some()),
         is_directory: 1,
-        total_entries: directory.total_entries,
+        total_entries: 0,
         ..WbCatalogEntry::default()
     };
     OwnedEvent {
@@ -2490,7 +2613,11 @@ fn emit_catalog_entries(
             if emitted >= SNAPSHOT_ENTRY_LIMIT {
                 return;
             }
-            let entry = catalog_entry_from_directory(directory);
+            let entry = catalog_entry_from_directory(
+                directory,
+                &tree.directory_path(directory),
+                tree.rollup_for(directory.id.0),
+            );
             cb(&entry.entry as *const WbCatalogEntry, user_data);
             emitted += 1;
         }
@@ -2541,18 +2668,22 @@ fn catalog_entry_from_volume(volume: &VolumeRecord) -> OwnedCatalogEntry {
     }
 }
 
-fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntry {
+fn catalog_entry_from_directory(
+    directory: &DirectoryRecord,
+    full_path: &str,
+    rollup: Option<winblaze_index::DirRollup>,
+) -> OwnedCatalogEntry {
     let mut strings = Vec::with_capacity(5); // name, path, kind, size_text, description
+    let (total_bytes, direct_entries, total_entries) = rollup.map_or((0, 0, 0), |rollup| {
+        (rollup.physical_bytes, rollup.file_count, rollup.item_count)
+    });
     let entry = WbCatalogEntry {
         name: c_view_str(&directory.name, &mut strings),
-        path: c_view_str(&directory.full_path, &mut strings),
+        path: c_view_str(full_path, &mut strings),
         kind: c_view_str("Directory", &mut strings),
-        size_text: c_view(format_size(directory.total_bytes), &mut strings),
+        size_text: c_view(format_size(total_bytes), &mut strings),
         description: c_view(
-            format!(
-                "{} direct entries, {} total entries",
-                directory.direct_entries, directory.total_entries
-            ),
+            format!("{direct_entries} direct entries, {total_entries} total entries"),
             &mut strings,
         ),
         id: directory.id.0,
@@ -2562,9 +2693,9 @@ fn catalog_entry_from_directory(directory: &DirectoryRecord) -> OwnedCatalogEntr
             .unwrap_or(0),
         has_parent: u8::from(directory.parent_directory_id.is_some()),
         is_directory: 1,
-        size_bytes: directory.total_bytes,
-        allocation_bytes: directory.total_bytes,
-        total_entries: directory.total_entries,
+        size_bytes: total_bytes,
+        allocation_bytes: total_bytes,
+        total_entries,
         modified_utc: 0,
         has_modified_utc: 0,
     };
@@ -2923,7 +3054,7 @@ pub extern "C" fn wb_tree_root(
     let node = WbTreeNode {
         id: record.id.0,
         is_directory: 1,
-        name: c_view_str(&record.full_path, &mut strings),
+        name: c_view_str(&model.tree.directory_path(record), &mut strings),
         logical_bytes: rollup.logical_bytes,
         physical_bytes: rollup.physical_bytes,
         file_count: rollup.file_count,
@@ -3433,9 +3564,8 @@ mod tests {
         ScanEvent::DirectoryFound(DirectoryRecord {
             id: DirectoryId(id),
             parent_directory_id: parent.map(DirectoryId),
-            name: path.rsplit('\\').next().unwrap_or_default().to_string(),
+            name: (path.rsplit('\\').next().unwrap_or_default().to_string()).into(),
             full_path: path.to_string(),
-            ..DirectoryRecord::default()
         })
     }
 
@@ -3486,6 +3616,106 @@ mod tests {
         }
         forwarder.forward(&ScanEvent::Completed);
         assert_eq!(ids, vec![1, 2, 3, 4, 7]);
+    }
+
+    extern "C" fn collect_live_directory_names(
+        event: *const WbEvent,
+        user_data: *mut core::ffi::c_void,
+    ) {
+        // SAFETY: the forwarder passes a live event; user_data is the test's Vec.
+        let (event, names) =
+            unsafe { (&*event, &mut *user_data.cast::<Vec<(u64, u64, String)>>()) };
+        if event.kind == WbEventKind::DirectoryBatch {
+            let batch = event.directory_batch;
+            // SAFETY: the batch's items and name bytes stay valid for the callback.
+            let items = unsafe { std::slice::from_raw_parts(batch.items, batch.count) };
+            for item in items {
+                let bytes = unsafe {
+                    std::slice::from_raw_parts(item.name.ptr.cast::<u8>(), item.name.len)
+                };
+                names.push((
+                    item.id,
+                    item.parent_id,
+                    String::from_utf8(bytes.to_vec()).unwrap(),
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn live_directory_batches_carry_every_name_from_one_shared_buffer() {
+        let mut names: Vec<(u64, u64, String)> = Vec::new();
+        let mut forwarder = UiEventForwarder::new(
+            Some(collect_live_directory_names),
+            (&mut names as *mut Vec<(u64, u64, String)>) as usize,
+        )
+        .with_live_root(r"C:\Data");
+        let events = [
+            live_directory(1, None, r"C:\Data"),
+            live_directory(2, Some(1), r"C:\Data\alpha"),
+            live_directory(3, Some(1), "C:\\Data\\\u{e9}t\u{e9} \u{1f600}"),
+            live_directory(
+                4,
+                Some(2),
+                r"C:\Data\alpha\a-much-longer-folder-name-than-usual",
+            ),
+        ];
+        for event in &events {
+            forwarder.forward(event);
+        }
+        forwarder.forward(&ScanEvent::Completed);
+        assert_eq!(
+            names,
+            vec![
+                (1, 0, "Data".to_owned()),
+                (2, 1, "alpha".to_owned()),
+                (3, 1, "\u{e9}t\u{e9} \u{1f600}".to_owned()),
+                (4, 2, "a-much-longer-folder-name-than-usual".to_owned()),
+            ]
+        );
+        // Names are packed into one buffer, not one allocation each.
+        assert!(forwarder.pending_names.capacity() > 0);
+        assert!(forwarder.pending_names.is_empty());
+    }
+
+    #[test]
+    fn volume_roots_update_the_live_view_less_often_than_folder_scans() {
+        let drive = LiveCadence::for_root(r"C:\");
+        let folder = LiveCadence::for_root(r"C:\Data");
+        assert_eq!(drive.progress_interval, Duration::from_millis(500));
+        assert_eq!(drive.directory_batch_latency, Duration::from_secs(1));
+        assert_eq!(drive.tree_depth, 2);
+        assert_eq!(folder.progress_interval, Duration::from_millis(150));
+        assert_eq!(folder.directory_batch_latency, Duration::from_millis(250));
+        assert_eq!(folder.tree_depth, 3);
+        assert_eq!(LiveCadence::for_root(r"D:").tree_depth, 2);
+        assert_eq!(LiveCadence::for_root(r"\\server\share").tree_depth, 3);
+        // The deeper live rows a drive scan would show are dropped.
+        let mut ids: Vec<u64> = Vec::new();
+        let mut forwarder = UiEventForwarder::new(
+            Some(collect_live_directory_ids),
+            (&mut ids as *mut Vec<u64>) as usize,
+        )
+        .with_live_root(r"C:\");
+        for event in [
+            live_directory(1, None, r"C:\"),
+            live_directory(2, Some(1), r"C:\Users"),
+            live_directory(3, Some(2), r"C:\Users\me"),
+            live_directory(4, Some(3), r"C:\Users\me\AppData"),
+        ] {
+            forwarder.forward(&event);
+        }
+        forwarder.forward(&ScanEvent::Completed);
+        assert_eq!(ids, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn the_live_consumer_runs_below_the_ui_thread_and_terminal_scans_batch_large() {
+        assert_eq!(consumer_thread_priority(ScanDelivery::Live), -1);
+        assert_eq!(consumer_thread_priority(ScanDelivery::Terminal), 0);
+        let (batches, pipeline) = terminal_scan_delivery();
+        assert_eq!(batches, 32);
+        assert_eq!(pipeline, winblaze_scanner::ScanPipelineConfig::terminal());
     }
 
     #[test]

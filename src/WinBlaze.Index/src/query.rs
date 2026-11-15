@@ -1,6 +1,6 @@
 use winblaze_core::{
-    aggregate_directory_records, DirectoryRecord, FileRecord, MatchMode, SearchQuery,
-    SortDirection, SortField, VolumeRecord,
+    aggregate_directory_records, DirectoryAggregation, DirectoryRecord, FileRecord, MatchMode,
+    SearchQuery, SortDirection, SortField, VolumeRecord,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,7 +25,8 @@ pub struct IndexCatalog {
     pub volumes: Vec<VolumeRecord>,
     pub directories: Vec<DirectoryRecord>,
     pub files: Vec<FileRecord>,
-    pub aggregated_directories: Vec<DirectoryRecord>,
+    /// Rollup totals, index-aligned with `directories`.
+    pub directory_totals: Vec<DirectoryAggregation>,
 }
 
 impl IndexCatalog {
@@ -34,13 +35,13 @@ impl IndexCatalog {
         // Path-materialized: search matches patterns against full paths, and
         // scanners no longer store one per file.
         let files = transaction.snapshot_files_with_paths();
-        let aggregated_directories = aggregate_directory_records(&directories, &files);
+        let directory_totals = aggregate_directory_records(&directories, &files);
 
         Self {
             volumes: transaction.snapshot_volumes(),
             directories,
             files,
-            aggregated_directories,
+            directory_totals,
         }
     }
 
@@ -52,13 +53,13 @@ impl IndexCatalog {
     ) -> winblaze_core::FileChangeSet {
         let change_set = transaction.apply_incremental_files(previous, current);
         self.files = transaction.snapshot_files();
-        self.aggregated_directories = aggregate_directory_records(&self.directories, &self.files);
+        self.directory_totals = aggregate_directory_records(&self.directories, &self.files);
         change_set
     }
 
     pub fn search(&self, query: &SearchQuery) -> Vec<IndexSearchHit> {
         let candidate_count = usize::from(query.include_files) * self.files.len()
-            + usize::from(query.include_directories) * self.aggregated_directories.len();
+            + usize::from(query.include_directories) * self.directories.len();
         if query.limit == Some(0)
             || candidate_count == 0
             || query
@@ -98,20 +99,25 @@ impl IndexCatalog {
         }
 
         if query.include_directories {
-            hits.extend(self.aggregated_directories.iter().filter_map(|directory| {
-                let file_params = FileMatchParams {
-                    name: &directory.name,
-                    full_path: &directory.full_path,
-                    size_bytes: directory.total_bytes,
-                    allocation_bytes: directory.total_bytes,
-                    modified_utc: None,
-                };
-                if matches_query(query, pattern, extensions.as_slice(), &file_params) {
-                    Some(CandidateHit::Directory(directory))
-                } else {
-                    None
-                }
-            }));
+            hits.extend(
+                self.directories
+                    .iter()
+                    .zip(&self.directory_totals)
+                    .filter_map(|(directory, totals)| {
+                        let file_params = FileMatchParams {
+                            name: &directory.name,
+                            full_path: &directory.full_path,
+                            size_bytes: totals.total_bytes,
+                            allocation_bytes: totals.total_bytes,
+                            modified_utc: None,
+                        };
+                        if matches_query(query, pattern, extensions.as_slice(), &file_params) {
+                            Some(CandidateHit::Directory(directory, totals))
+                        } else {
+                            None
+                        }
+                    }),
+            );
         }
 
         if let Some(limit) = query.limit.filter(|&limit| limit < hits.len()) {
@@ -303,7 +309,7 @@ impl<'a> PreparedExtensions<'a> {
 #[derive(Clone, Copy)]
 enum CandidateHit<'a> {
     File(&'a FileRecord),
-    Directory(&'a DirectoryRecord),
+    Directory(&'a DirectoryRecord, &'a DirectoryAggregation),
 }
 
 impl CandidateHit<'_> {
@@ -316,11 +322,11 @@ impl CandidateHit<'_> {
                 allocation_bytes: file.allocation_bytes,
                 modified_utc: file.modified_utc(),
             },
-            Self::Directory(directory) => FileMatchParams {
+            Self::Directory(directory, totals) => FileMatchParams {
                 name: &directory.name,
                 full_path: &directory.full_path,
-                size_bytes: directory.total_bytes,
-                allocation_bytes: directory.total_bytes,
+                size_bytes: totals.total_bytes,
+                allocation_bytes: totals.total_bytes,
                 modified_utc: None,
             },
         }
@@ -331,7 +337,7 @@ impl CandidateHit<'_> {
         IndexSearchHit {
             kind: match self {
                 Self::File(_) => IndexRecordKind::File,
-                Self::Directory(_) => IndexRecordKind::Directory,
+                Self::Directory(..) => IndexRecordKind::Directory,
             },
             name: params.name.to_owned(),
             full_path: params.full_path.to_owned(),
@@ -385,12 +391,8 @@ mod tests {
         transaction.upsert_directory(&DirectoryRecord {
             id: DirectoryId(10),
             parent_directory_id: None,
-            name: String::from("root"),
+            name: "root".into(),
             full_path: String::from("C:\\root"),
-            direct_bytes: 100,
-            total_bytes: 200,
-            direct_entries: 2,
-            total_entries: 4,
         });
         transaction.upsert_file(&FileRecord {
             id: FileId(1),
@@ -466,12 +468,8 @@ mod tests {
         transaction.upsert_directory(&DirectoryRecord {
             id: DirectoryId(10),
             parent_directory_id: None,
-            name: String::from("root"),
+            name: "root".into(),
             full_path: String::from("C:\\root"),
-            direct_bytes: 100,
-            total_bytes: 200,
-            direct_entries: 3,
-            total_entries: 3,
         });
         for (id, name, path, size, alloc, modified) in [
             (

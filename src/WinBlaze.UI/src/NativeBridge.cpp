@@ -1,5 +1,6 @@
 ﻿#include "pch.h"
 #include "NativeBridge.h"
+#include "CommandLine.h"
 #include "StartupTrace.h"
 
 #include <atomic>
@@ -282,16 +283,14 @@ namespace WinBlaze::UI::NativeBridge
     {
         // Same rule as MainWindow: a single argument that is not an option
         // and names an existing file is a saved scan to open.
-        int count = 0;
-        auto arguments = CommandLineToArgvW(GetCommandLineW(), &count);
-        if (!arguments) { return; }
-        if (count == 2 && std::wstring_view(arguments[1]).rfind(L"--", 0) != 0) {
-            const DWORD attributes = GetFileAttributesW(arguments[1]);
+        // Parsed locally so SHELL32 stays unloaded at startup.
+        const auto arguments = ::WinBlaze::UI::SplitCommandLine(GetCommandLineW());
+        if (arguments.size() == 2 && std::wstring_view(arguments[1]).rfind(L"--", 0) != 0) {
+            const DWORD attributes = GetFileAttributesW(arguments[1].c_str());
             if (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
-                PrestartImportCsv(arguments[1], false);
+                PrestartImportCsv(arguments[1].c_str(), false);
             }
         }
-        LocalFree(arguments);
     }
 
     bool WaitForPrestartedImport(std::chrono::milliseconds limit)
