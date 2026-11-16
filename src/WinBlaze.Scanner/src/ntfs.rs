@@ -146,7 +146,7 @@ fn stream_ntfs_entries(
     // Parser thread: owns the carry, applies fixups + parses each block across
     // the worker fan-out, recycles the buffer, and forwards parsed entries (in
     // MFT order) to the emit loop below.
-    type ParsedBatch = (Vec<ParsedNtfsEntry>, Vec<ExtensionSizes>, u64);
+    type ParsedBatch = (Vec<ParsedChunk>, u64);
     let (parsed_tx, parsed_rx) = mpsc::sync_channel::<Result<ParsedBatch, NtfsEnumerationError>>(2);
     let parser = thread::spawn(move || {
         let mut carry: Vec<u8> = Vec::new();
@@ -188,12 +188,9 @@ fn stream_ntfs_entries(
             let _ = pool_tx.send(owned_block);
 
             match result {
-                Ok((parsed, extensions)) => {
+                Ok(chunks) => {
                     processed_records = processed_records.saturating_add(full_records as u64);
-                    if parsed_tx
-                        .send(Ok((parsed, extensions, processed_records)))
-                        .is_err()
-                    {
+                    if parsed_tx.send(Ok((chunks, processed_records))).is_err() {
                         return;
                     }
                 }
@@ -223,14 +220,20 @@ fn stream_ntfs_entries(
                 parsed_rx.recv()
             };
             let Ok(message) = message else { break };
-            let (parsed, extensions, processed_records) = message?;
+            let (mut chunks, processed_records) = message?;
 
             let emit_started = profile.then(std::time::Instant::now);
-            for entry in parsed {
-                state.ingest_entry(entry, on_event);
+            // Same order as one merged batch: every entry in MFT order, then
+            // every extension in MFT order.
+            for (entries, _) in &mut chunks {
+                for entry in entries.drain(..) {
+                    state.ingest_entry(entry, on_event);
+                }
             }
-            for extension in extensions {
-                state.ingest_extension(extension, on_event);
+            for (_, extensions) in chunks {
+                for extension in extensions {
+                    state.ingest_extension(extension, on_event);
+                }
             }
             if let Some(started) = emit_started {
                 emit_ns += started.elapsed().as_nanos();
@@ -453,12 +456,13 @@ impl NtfsStreamState {
                     .unwrap_or(self.root_text.as_str());
                 join_path(parent_path, &entry.name)
             };
-            let name = String::from(&*entry.name);
             self.directories_seen = self.directories_seen.saturating_add(1);
             on_event(ScanEvent::DirectoryFound(DirectoryRecord {
                 id: DirectoryId(file_id),
                 parent_directory_id: entry.parent_directory_id.map(DirectoryId),
-                name: name.into(),
+                // The entry is consumed here: move its name rather than
+                // round-tripping it through a String.
+                name: entry.name,
                 full_path: full_path.clone(),
             }));
             self.resolved_paths.insert(file_id, full_path);
@@ -574,15 +578,19 @@ fn parse_batch(
 /// removes the serial full-batch fixup pass that used to run on the read thread
 /// before the workers started. `batch.len()` must be `record_count *
 /// NTFS_RECORD_SIZE` (the streaming reader guarantees this).
+///
+/// Returns each worker's (entries, extensions) in MFT order rather than
+/// concatenating them: the consumer walks the chunks in order, so merging
+/// would only copy every parsed entry once more on the parser thread.
 fn fixup_and_parse_batch(
     batch: &mut [u8],
     record_count: usize,
     workers: usize,
     bytes_per_sector: usize,
-) -> Result<(Vec<ParsedNtfsEntry>, Vec<ExtensionSizes>), NtfsEnumerationError> {
+) -> Result<Vec<ParsedChunk>, NtfsEnumerationError> {
     if workers <= 1 || record_count < 2048 {
         apply_mft_fixups(batch, bytes_per_sector);
-        return parse_record_range(batch, 0, record_count);
+        return Ok(vec![parse_record_range(batch, 0, record_count)?]);
     }
 
     let chunk_size = record_count.div_ceil(workers);
@@ -606,14 +614,10 @@ fn fixup_and_parse_batch(
             }));
         }
 
-        let mut parsed = Vec::with_capacity(record_count);
-        let mut extensions = Vec::new();
+        let mut chunks = Vec::with_capacity(handles.len());
         for handle in handles {
             match handle.join() {
-                Ok(Ok((chunk_entries, chunk_extensions))) => {
-                    parsed.extend(chunk_entries);
-                    extensions.extend(chunk_extensions);
-                }
+                Ok(Ok(chunk)) => chunks.push(chunk),
                 Ok(Err(error)) => return Err(error),
                 Err(_) => {
                     return Err(NtfsEnumerationError::InvalidRecord(String::from(
@@ -622,9 +626,12 @@ fn fixup_and_parse_batch(
                 }
             }
         }
-        Ok((parsed, extensions))
+        Ok(chunks)
     })
 }
+
+/// One parse worker's output: its entries and extension sizes, in MFT order.
+type ParsedChunk = (Vec<ParsedNtfsEntry>, Vec<ExtensionSizes>);
 
 // ---------------------------------------------------------------------------
 // Raw-volume MFT access.
@@ -2375,6 +2382,9 @@ fn utf16_units(bytes: &[u8]) -> impl Iterator<Item = u16> + '_ {
 /// the stack (255 UTF-16 units encode to at most 765 bytes), so a short name
 /// lands inline in the FileName and a long one costs one exact allocation.
 fn decode_file_name(bytes: &[u8]) -> FileName {
+    if let Some(name) = ascii_file_name(bytes) {
+        return name;
+    }
     let mut buffer = [0u8; 3 * 255];
     let mut length = 0;
     for unit in char::decode_utf16(utf16_units(bytes)) {
@@ -2386,6 +2396,30 @@ fn decode_file_name(bytes: &[u8]) -> FileName {
     }
     // Only whole chars were encoded above, so the prefix is valid UTF-8.
     FileName::from(std::str::from_utf8(&buffer[..length]).unwrap_or_default())
+}
+
+/// Nearly every MFT name is ASCII: each UTF-16LE unit is one byte below
+/// 0x80 followed by a zero byte, and maps to that same single UTF-8 byte.
+/// Copying those bytes skips the per-char decode/encode. Returns `None` for
+/// anything else (or a name too long for the general path's buffer), so the
+/// general decoder handles it unchanged. A trailing odd byte is ignored, as
+/// `chunks_exact` ignores it there.
+fn ascii_file_name(bytes: &[u8]) -> Option<FileName> {
+    const CAPACITY: usize = 3 * 255;
+    let units = bytes.len() / 2;
+    if units > CAPACITY {
+        return None;
+    }
+    let mut buffer = [0u8; CAPACITY];
+    for (slot, pair) in buffer.iter_mut().zip(bytes.chunks_exact(2)) {
+        if pair[1] != 0 || pair[0] >= 0x80 {
+            return None;
+        }
+        *slot = pair[0];
+    }
+    std::str::from_utf8(&buffer[..units])
+        .ok()
+        .map(FileName::from)
 }
 
 fn resolve_entry_path(
@@ -2933,6 +2967,146 @@ mod tests {
         record[0x1C..0x20].copy_from_slice(&(NTFS_RECORD_SIZE as u32).to_le_bytes());
         record[0x2C..0x30].copy_from_slice(&(index as u32).to_le_bytes());
         record
+    }
+
+    /// A batch of `count` records with valid 1024-byte-sector fixups: files,
+    /// directories, extension records, unused slots and torn records (bad
+    /// check bytes) mixed so every worker chunk sees each kind.
+    fn build_fixup_batch(count: usize) -> Vec<u8> {
+        let mut batch = Vec::with_capacity(count * NTFS_RECORD_SIZE);
+        for index in 0..count as u64 {
+            let mut record = match index % 7 {
+                0 => build_record(index, true, 5, &format!("dir{index}"), 0),
+                1 => build_sparse_record(index, 5, &format!("sparse{index}.bin"), 9000, 12288),
+                2 => vec![0u8; NTFS_RECORD_SIZE],
+                3 => {
+                    // Extension record: base reference points back at a file.
+                    let mut ext = build_sparse_record(index, 5, "", 50_000, 65_536);
+                    ext[0x20..0x28].copy_from_slice(&(index - 2).to_le_bytes());
+                    ext
+                }
+                _ => build_record(index, false, 5, &format!("é-file{index}.txt"), index % 300),
+            };
+            if record[0..4] == *FILE_RECORD_SIGNATURE {
+                record[4..6].copy_from_slice(&0x28u16.to_le_bytes());
+                record[6..8].copy_from_slice(&2u16.to_le_bytes());
+                record[0x28..0x2A].copy_from_slice(&[0x11, 0x22]);
+                let tail = [record[1022], record[1023]];
+                record[0x2A..0x2C].copy_from_slice(&tail);
+                // Every 11th record is torn: its check bytes don't match.
+                let check = if index % 11 == 0 {
+                    [0x33, 0x44]
+                } else {
+                    [0x11, 0x22]
+                };
+                record[1022..1024].copy_from_slice(&check);
+            }
+            batch.extend_from_slice(&record);
+        }
+        batch
+    }
+
+    #[test]
+    fn fixup_and_parse_batch_hands_back_worker_chunks_in_mft_order() {
+        let count = 4096;
+        for workers in [1usize, 2, 3, 4, 7, 16] {
+            let mut expected_batch = build_fixup_batch(count);
+            apply_mft_fixups(&mut expected_batch, 1024);
+            let (expected_entries, expected_extensions) =
+                parse_record_range(&expected_batch, 0, count).expect("reference parse");
+            assert!(expected_extensions.len() > 100 && expected_entries.len() > 2000);
+
+            let mut batch = build_fixup_batch(count);
+            let chunks =
+                fixup_and_parse_batch(&mut batch, count, workers, 1024).expect("parallel parse");
+            assert_eq!(
+                chunks.len(),
+                workers.max(1),
+                "one chunk per worker, no concatenation"
+            );
+            assert_eq!(batch, expected_batch, "fixups applied in place");
+            let entries: Vec<_> = chunks
+                .iter()
+                .flat_map(|(entries, _)| entries)
+                .map(|entry| format!("{entry:?}"))
+                .collect();
+            let extensions: Vec<_> = chunks
+                .iter()
+                .flat_map(|(_, extensions)| extensions)
+                .map(|extension| format!("{extension:?}"))
+                .collect();
+            let expected_entries: Vec<_> = expected_entries
+                .iter()
+                .map(|entry| format!("{entry:?}"))
+                .collect();
+            let expected_extensions: Vec<_> = expected_extensions
+                .iter()
+                .map(|extension| format!("{extension:?}"))
+                .collect();
+            assert_eq!(entries, expected_entries, "workers={workers}");
+            assert_eq!(extensions, expected_extensions, "workers={workers}");
+        }
+    }
+
+    #[test]
+    fn streamed_directories_keep_exact_long_and_unicode_names_and_paths() {
+        let long = "a directory name well beyond the inline capacity";
+        let unicode = "日本語のフォルダ名はとても長いです";
+        let mut state = NtfsStreamState::new(r"C:\".to_string());
+        let mut events = Vec::new();
+        let mut collect = |event: ScanEvent| {
+            if let ScanEvent::DirectoryFound(directory) = event {
+                events.push((
+                    directory.id.0,
+                    directory.name.to_string(),
+                    directory.full_path,
+                ));
+            }
+        };
+        state.emit_root(&mut collect);
+        // Children before parents, so names travel through the orphan
+        // buckets and the cascade as well as the direct path.
+        state.ingest_entry(parsed_entry(40, 30, "short", true, 0), &mut collect);
+        state.ingest_entry(parsed_entry(30, 20, unicode, true, 0), &mut collect);
+        state.ingest_entry(parsed_entry(20, 5, long, true, 0), &mut collect);
+        state.ingest_entry(parsed_entry(21, 5, "", true, 0), &mut collect);
+        state.ingest_entry(
+            parsed_entry(60, 59, "orphan with a long missing parent", true, 0),
+            &mut collect,
+        );
+        state.finish(&mut collect);
+        events.sort();
+        assert_eq!(
+            events,
+            vec![
+                (5, r"C:\".to_string(), r"C:\".to_string()),
+                (20, long.to_string(), format!(r"C:\{long}")),
+                (21, String::new(), r"C:\".to_string()),
+                (30, unicode.to_string(), format!(r"C:\{long}\{unicode}")),
+                (
+                    40,
+                    "short".to_string(),
+                    format!(r"C:\{long}\{unicode}\short")
+                ),
+                (
+                    60,
+                    "orphan with a long missing parent".to_string(),
+                    r"C:\orphan with a long missing parent".to_string()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn small_batches_parse_as_one_chunk() {
+        let mut batch = build_fixup_batch(100);
+        let chunks = fixup_and_parse_batch(&mut batch, 100, 8, 1024).expect("parse");
+        assert_eq!(chunks.len(), 1);
+        let mut empty: Vec<u8> = Vec::new();
+        let chunks = fixup_and_parse_batch(&mut empty, 0, 8, 1024).expect("empty parse");
+        assert!(chunks
+            .iter()
+            .all(|(entries, extensions)| entries.is_empty() && extensions.is_empty()));
     }
 
     #[test]
@@ -3504,6 +3678,125 @@ mod fuzz_tests {
             }
             state.finish(&mut sink);
             let _ = state.into_summary();
+        }
+    }
+}
+
+/// The ASCII fast path in [`decode_file_name`] must produce exactly what the
+/// general UTF-16 decoder produces, for every input.
+#[cfg(test)]
+mod name_decode_tests {
+    use super::*;
+
+    /// The decoder as it was before the ASCII fast path, kept as the oracle.
+    fn reference_decode(bytes: &[u8]) -> FileName {
+        let mut buffer = [0u8; 3 * 255];
+        let mut length = 0;
+        for unit in char::decode_utf16(utf16_units(bytes)) {
+            let ch = unit.unwrap_or(char::REPLACEMENT_CHARACTER);
+            if length + ch.len_utf8() > buffer.len() {
+                break;
+            }
+            length += ch.encode_utf8(&mut buffer[length..]).len();
+        }
+        FileName::from(std::str::from_utf8(&buffer[..length]).unwrap_or_default())
+    }
+
+    fn utf16(units: &[u16]) -> Vec<u8> {
+        units.iter().flat_map(|unit| unit.to_le_bytes()).collect()
+    }
+
+    fn text(value: &str) -> Vec<u8> {
+        utf16(&value.encode_utf16().collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn ascii_fast_path_accepts_only_pure_ascii_utf16() {
+        assert_eq!(
+            ascii_file_name(&text("report.txt")).as_deref(),
+            Some("report.txt")
+        );
+        assert_eq!(ascii_file_name(&[]).as_deref(), Some(""));
+        assert_eq!(ascii_file_name(&utf16(&[0x7F])).as_deref(), Some("\u{7f}"));
+        assert_eq!(ascii_file_name(&utf16(&[0])).as_deref(), Some("\0"));
+        for rejected in [
+            utf16(&[0x80]),
+            utf16(&[0x41, 0x0100]),
+            utf16(&[0x41, 0x0141]),
+            utf16(&[0xD83D, 0xDE00]),
+            utf16(&[0xDC00]),
+            text("émile"),
+            text("日本"),
+        ] {
+            assert!(ascii_file_name(&rejected).is_none(), "{rejected:?}");
+        }
+    }
+
+    #[test]
+    fn decode_matches_the_reference_decoder_on_edge_cases() {
+        let mut cases: Vec<Vec<u8>> = vec![
+            Vec::new(),
+            text("a"),
+            text("report.TXT"),
+            text(&"a".repeat(22)),
+            text(&"a".repeat(23)),
+            text(&"a".repeat(255)),
+            text(&"é".repeat(255)),
+            text(&"日".repeat(255)),
+            text(&"😀".repeat(127)),
+            text("émile.doc"),
+            text("a😀b"),
+            utf16(&[0xD800]),
+            utf16(&[0xDC00, 0x41]),
+            utf16(&[0x41, 0xD83D]),
+            utf16(&[0xD83D, 0x41, 0xDE00]),
+            utf16(&[0, 0x7F, 0x80, 0xFFFF]),
+        ];
+        // Odd trailing byte: chunks_exact ignores it on both paths.
+        let mut odd = text("abc");
+        odd.push(0x44);
+        cases.push(odd);
+        let mut odd_high = text("abc");
+        odd_high.push(0xFF);
+        cases.push(odd_high);
+        for bytes in cases {
+            assert_eq!(
+                decode_file_name(&bytes),
+                reference_decode(&bytes),
+                "{bytes:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn decode_matches_the_reference_decoder_on_random_utf16() {
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for _ in 0..20_000 {
+            let length = (next() % 300) as usize;
+            let ascii_only = next() % 2 == 0;
+            let units: Vec<u16> = (0..length)
+                .map(|_| {
+                    let roll = next();
+                    match (ascii_only, roll % 10) {
+                        (true, _) | (false, 0..=6) => (roll >> 8) as u16 & 0x7F,
+                        (false, 7) => 0x80 + ((roll >> 8) as u16 % 0x780),
+                        (false, 8) => 0xD800 + ((roll >> 8) as u16 % 0x800),
+                        _ => (roll >> 8) as u16,
+                    }
+                })
+                .collect();
+            let bytes = utf16(&units);
+            assert_eq!(
+                decode_file_name(&bytes),
+                reference_decode(&bytes),
+                "{units:?}"
+            );
         }
     }
 }

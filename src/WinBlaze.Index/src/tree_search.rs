@@ -83,6 +83,11 @@ fn path(tree: &TreeIndex, entry: TreeEntry<'_>) -> String {
         TreeEntry::File(file) => tree.file_display_path(file),
     }
 }
+#[cfg(test)]
+thread_local! {
+    /// Derived file paths built for matching, so tests can pin the cost.
+    static DERIVED_FILE_PATHS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 /// `path` for matching: stored paths are borrowed and derived file paths are
 /// built in `scratch`, so filtering allocates nothing per candidate.
 fn path_text<'s>(tree: &'s TreeIndex, entry: TreeEntry<'s>, scratch: &'s mut String) -> &'s str {
@@ -95,6 +100,8 @@ fn path_text<'s>(tree: &'s TreeIndex, entry: TreeEntry<'s>, scratch: &'s mut Str
         }
         TreeEntry::File(file) if !file.full_path.is_empty() => &file.full_path,
         TreeEntry::File(file) => {
+            #[cfg(test)]
+            DERIVED_FILE_PATHS.with(|count| count.set(count.get() + 1));
             scratch.clear();
             // Same join as TreeIndex::file_display_path, into the reused buffer.
             match tree.directory_full_path(file.parent_directory_id.0) {
@@ -194,6 +201,16 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
         .map(|index| (true, index))
         .chain((0..tree.files().len()).map(|index| (false, index)));
     let mut scratch = String::new();
+    // A derived file path is `parent + '\' + name` (no separator when the
+    // parent is empty or already ends in one). A Contains pattern without `\`
+    // cannot match across that separator, nor can lowercasing create one, so
+    // the path matches exactly when the name or the parent's path does. Each
+    // directory's answer is computed once instead of rebuilding and rescanning
+    // the parent prefix for every file under it.
+    let per_parent =
+        regex.is_none() && options.mode == TextMode::Contains && !pattern.contains('\\');
+    // 0 = not computed yet, 1 = no match, 2 = match.
+    let mut parent_matches: Vec<u8> = Vec::new();
     let mut matches_filters = |key: (bool, usize)| {
         if (key.0 && !options.include_directories) || (!key.0 && !options.include_files) {
             return false;
@@ -232,9 +249,26 @@ pub fn search<'a>(tree: &'a TreeIndex, options: &SearchOptions) -> io::Result<Se
         {
             return false;
         }
-        pattern.is_empty()
-            || matches_text(name(item))
-            || matches_text(path_text(tree, item, &mut scratch))
+        if pattern.is_empty() || matches_text(name(item)) {
+            return true;
+        }
+        match item {
+            TreeEntry::File(file) if per_parent && file.full_path.is_empty() => {
+                // Unresolved parent: the display path is the bare name.
+                let Some(index) = tree.directory_index(file.parent_directory_id.0) else {
+                    return false;
+                };
+                if parent_matches.is_empty() {
+                    parent_matches = vec![0; tree.directories().len()];
+                }
+                if parent_matches[index] == 0 {
+                    let parent = tree.directory_path(&tree.directories()[index]);
+                    parent_matches[index] = if matches_text(&parent) { 2 } else { 1 };
+                }
+                parent_matches[index] == 2
+            }
+            _ => matches_text(path_text(tree, item, &mut scratch)),
+        }
     };
     let key_name = |key: (bool, usize)| -> &str {
         if key.0 {
@@ -357,6 +391,256 @@ fn cmp_lowercase(left: &str, right: &str) -> std::cmp::Ordering {
 
 #[cfg(test)]
 mod tests {
+    use super::{search, SearchOptions, TextMode};
+    use crate::{BufferedIndexTransaction, TreeEntry, TreeIndex};
+    use winblaze_core::{DirectoryId, DirectoryRecord, FileId, FileRecord};
+
+    fn directory(id: u64, parent: Option<u64>, name: &str, full_path: &str) -> DirectoryRecord {
+        DirectoryRecord {
+            id: DirectoryId(id),
+            parent_directory_id: parent.map(DirectoryId),
+            name: name.into(),
+            full_path: full_path.into(),
+        }
+    }
+
+    fn file(id: u64, parent: u64, name: &str, full_path: &str) -> FileRecord {
+        FileRecord {
+            id: FileId(id),
+            parent_directory_id: DirectoryId(parent),
+            name: name.into(),
+            full_path: full_path.into(),
+            size_bytes: id,
+            allocation_bytes: id * 4096,
+            ..Default::default()
+        }
+    }
+
+    /// A tree that exercises every path shape the search can see: a root
+    /// ending in `\`, stored and derived directory paths, a parent with no
+    /// trailing separator, files with stored paths, files whose parent is
+    /// missing, and Unicode names whose lowercase form changes length or
+    /// depends on context (final sigma, dotted capital I, Kelvin sign).
+    fn tricky_tree() -> TreeIndex {
+        let mut tx = BufferedIndexTransaction::default();
+        tx.insert_directory(directory(5, None, r"C:\", r"C:\"));
+        tx.insert_directory(directory(10, Some(5), "Users", ""));
+        tx.insert_directory(directory(11, Some(10), "ΟΔΟΣ", ""));
+        tx.insert_directory(directory(12, Some(11), "İstanbul", ""));
+        tx.insert_directory(directory(13, Some(10), "\u{212A}elvin Docs", ""));
+        tx.insert_directory(directory(14, Some(5), "Stored", r"C:\Stored"));
+        tx.insert_directory(directory(15, Some(14), "deep.folder", ""));
+        tx.insert_directory(directory(16, None, "Z:", "Z:"));
+        tx.insert_directory(directory(17, Some(16), "net", ""));
+        let names = [
+            "report.TXT",
+            "Σ.dat",
+            "aΣ",
+            "ΣΑΣ.bin",
+            "kelvin.log",
+            "users-notes.md",
+            "istanbul.jpg",
+            "İ.png",
+            "docs",
+            "C.txt",
+            "plain",
+            "émile.doc",
+            "folder.txt",
+            "a filename longer than the inline capacity.bin",
+        ];
+        let parents = [5, 10, 11, 12, 13, 14, 15, 16, 17];
+        let mut id = 100;
+        for parent in parents {
+            for name in names {
+                tx.insert_file(file(id, parent, name, ""));
+                id += 1;
+            }
+        }
+        // Stored paths (older snapshots) and a parent that never resolved.
+        tx.insert_file(file(id, 14, "kept.txt", r"C:\Stored\elsewhere\kept.txt"));
+        tx.insert_file(file(id + 1, 999, "orphan Users.txt", ""));
+        tx.insert_file(file(id + 2, 999, "orphan.txt", ""));
+        TreeIndex::build(tx)
+    }
+
+    /// The original matcher: lowercase name or full display path contains
+    /// the lowercase pattern. The search must agree with it exactly.
+    fn reference_contains(tree: &TreeIndex, pattern: &str) -> Vec<String> {
+        let pattern = pattern.to_lowercase();
+        let mut hits = Vec::new();
+        let mut consider = |entry: TreeEntry<'_>| {
+            let path = super::path(tree, entry);
+            if pattern.is_empty()
+                || super::name(entry).to_lowercase().contains(&pattern)
+                || path.to_lowercase().contains(&pattern)
+            {
+                hits.push(path);
+            }
+        };
+        for index in 0..tree.directories().len() {
+            consider(super::entry(tree, (true, index)));
+        }
+        for index in 0..tree.files().len() {
+            consider(super::entry(tree, (false, index)));
+        }
+        hits.sort();
+        hits
+    }
+
+    fn search_paths(tree: &TreeIndex, pattern: &str, mode: TextMode) -> (usize, Vec<String>) {
+        let page = search(
+            tree,
+            &SearchOptions {
+                pattern: pattern.into(),
+                mode,
+                limit: usize::MAX,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut paths: Vec<_> = page.hits.into_iter().map(|hit| hit.path).collect();
+        paths.sort();
+        (page.total, paths)
+    }
+
+    const PATTERNS: &[&str] = &[
+        "",
+        "c",
+        "C:",
+        "users",
+        "USERS",
+        "ers",
+        "s\\",
+        "\\",
+        "c:\\",
+        "users\\όδ",
+        "όδος",
+        "οδος",
+        "οδοσ",
+        "ς",
+        "σ",
+        "σ.dat",
+        "aς",
+        "ς\\",
+        "i̇stanbul",
+        "istanbul",
+        "kelvin",
+        "\u{212A}",
+        "k",
+        "docs",
+        "deep",
+        ".folder",
+        "folder",
+        "stored",
+        "elsewhere",
+        "z:",
+        "net",
+        "orphan",
+        "é",
+        "inline capacity",
+        "txt",
+        "missing",
+        "Users\\ΟΔΟΣ\\İstanbul",
+    ];
+
+    #[test]
+    fn contains_search_matches_the_full_path_reference_for_every_shape() {
+        let tree = tricky_tree();
+        for pattern in PATTERNS {
+            let expected = reference_contains(&tree, pattern);
+            let (total, got) = search_paths(&tree, pattern, TextMode::Contains);
+            assert_eq!(got, expected, "pattern {pattern:?}");
+            assert_eq!(total, expected.len(), "pattern {pattern:?}");
+        }
+    }
+
+    #[test]
+    fn contains_search_matches_the_reference_on_seeded_random_trees() {
+        // Pieces chosen for case folding and separator edge cases.
+        const PIECES: &[&str] = &[
+            "a", "A", "Σ", "σ", "ς", "İ", "i", "\u{307}", "K", "\u{212A}", "k", ".", " ", "é", "É",
+            "ß", "x", "\\", ":",
+        ];
+        struct Rng(u64);
+        impl Rng {
+            fn below(&mut self, bound: usize) -> usize {
+                self.0 ^= self.0 << 13;
+                self.0 ^= self.0 >> 7;
+                self.0 ^= self.0 << 17;
+                (self.0 % bound as u64) as usize
+            }
+            fn text(&mut self, max: usize) -> String {
+                let length = 1 + self.below(max);
+                (0..length)
+                    .map(|_| PIECES[self.below(PIECES.len())])
+                    .collect()
+            }
+        }
+        let mut rng = Rng(0x2545_F491_4F6C_DD1D);
+        for _round in 0..40 {
+            let mut tx = BufferedIndexTransaction::default();
+            tx.insert_directory(directory(5, None, r"C:\", r"C:\"));
+            let mut directory_ids = vec![5u64];
+            for id in 10..30u64 {
+                let parent = directory_ids[rng.below(directory_ids.len())];
+                let name = rng.text(4).replace('\\', "_");
+                tx.insert_directory(directory(id, Some(parent), &name, ""));
+                directory_ids.push(id);
+            }
+            for id in 100..300u64 {
+                let parent = if rng.below(20) == 0 {
+                    9999
+                } else {
+                    directory_ids[rng.below(directory_ids.len())]
+                };
+                let name = rng.text(5);
+                tx.insert_file(file(id, parent, &name, ""));
+            }
+            let tree = TreeIndex::build(tx);
+            for _ in 0..25 {
+                let pattern = rng.text(3).replace('\\', "");
+                let expected = reference_contains(&tree, &pattern);
+                let (total, got) = search_paths(&tree, &pattern, TextMode::Contains);
+                assert_eq!(got, expected, "pattern {pattern:?}");
+                assert_eq!(total, expected.len());
+            }
+        }
+    }
+
+    #[test]
+    fn exact_prefix_and_regex_modes_still_check_the_full_path() {
+        let tree = tricky_tree();
+        let (_, exact) = search_paths(&tree, r"c:\users\docs", TextMode::Exact);
+        assert_eq!(exact, vec![r"C:\Users\docs".to_string()]);
+        let (_, prefix) = search_paths(&tree, r"c:\stored\deep", TextMode::Prefix);
+        assert_eq!(prefix.len(), 1 + 14, "{prefix:?}");
+        let (_, regex) = search_paths(&tree, r"users\\ΟΔΟΣ\\[^\\]+\.dat$", TextMode::Regex);
+        assert_eq!(regex, vec![r"C:\Users\ΟΔΟΣ\Σ.dat".to_string()]);
+        let (_, prefix_name) = search_paths(&tree, "report", TextMode::Prefix);
+        assert_eq!(prefix_name.len(), 9);
+    }
+
+    #[test]
+    fn contains_search_checks_each_parent_path_once_instead_of_per_file() {
+        let mut tx = BufferedIndexTransaction::default();
+        tx.insert_directory(directory(5, None, r"C:\", r"C:\"));
+        tx.insert_directory(directory(10, Some(5), "data", ""));
+        for id in 0..2000 {
+            tx.insert_file(file(100 + id, 10, &format!("item{id:04}.bin"), ""));
+        }
+        let tree = TreeIndex::build(tx);
+        super::DERIVED_FILE_PATHS.with(|count| count.set(0));
+        let (total, _) = search_paths(&tree, "nothing-matches", TextMode::Contains);
+        assert_eq!(total, 0);
+        let built = super::DERIVED_FILE_PATHS.with(|count| count.get());
+        assert_eq!(built, 0, "file paths were materialized per candidate");
+        let (total, _) = search_paths(&tree, "DATA", TextMode::Contains);
+        assert_eq!(total, 2001);
+        // A pattern spanning a separator still needs the full path.
+        let (total, _) = search_paths(&tree, r"data\item0001", TextMode::Contains);
+        assert_eq!(total, 1);
+    }
+
     #[test]
     fn ascii_fast_path_orders_like_unicode_lowercase() {
         let names = [

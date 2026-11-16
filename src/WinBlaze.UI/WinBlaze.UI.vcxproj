@@ -73,6 +73,7 @@
     <ClInclude Include="src\NativeBridge.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\ShellTheme.h" />
+    <ClInclude Include="src\TreePath.h" />
     <ClInclude Include="src\ByteFormat.h" />
     <ClInclude Include="src\CommandLine.h" />
     <ClInclude Include="src\XamlMetaDataProvider.h" />

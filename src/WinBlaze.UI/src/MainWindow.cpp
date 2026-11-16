@@ -5,6 +5,7 @@
 #include "CommandLine.h"
 #include "NativeBridge.h"
 #include "TreemapGeometry.h"
+#include "TreePath.h"
 #include "ShellContext.h"
 #include "PortableDevices.h"
 #include "VirtualDisks.h"
@@ -4968,12 +4969,15 @@ namespace winrt::WinBlaze::UI::implementation
                 m_treemap_render_status = L"Treemap probe frame D2D brush failed: " + HresultText(result);
                 return;
             }
+            // Fetched once per frame, not once per sunburst segment.
+            winrt::com_ptr<ID2D1Factory> factory;
             for (auto const& tile : tiles) {
                 tile_brush->SetColor(tile.color);
                 const auto rect = D2D1::RectF(tile.left, tile.top, tile.right, tile.bottom);
                 if(tile.shape.radial) {
-                    winrt::com_ptr<ID2D1Factory> factory;
-                    d2d_context->GetFactory(factory.put());
+                    if (!factory) {
+                        d2d_context->GetFactory(factory.put());
+                    }
                     winrt::com_ptr<ID2D1PathGeometry> geometry;
                     winrt::check_hresult(factory->CreatePathGeometry(geometry.put()));
                     winrt::com_ptr<ID2D1GeometrySink> sink;
@@ -7730,26 +7734,9 @@ namespace winrt::WinBlaze::UI::implementation
 
     std::wstring MainWindow::TreeNodePath(size_t node_index) const
     {
-        std::vector<size_t> chain;
-        size_t current = node_index;
-        while (current != SIZE_MAX && current < m_tree_nodes.size()) {
-            chain.push_back(current);
-            current = m_tree_nodes[current].parent;
-        }
-
-        std::wstring path;
-        for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
-            auto const& segment = m_tree_nodes[*it].name;
-            if (path.empty() || std::filesystem::path(segment).is_absolute()) {
-                path = segment;
-            } else {
-                if (!path.empty() && path.back() != L'\\') {
-                    path += L'\\';
-                }
-                path += segment;
-            }
-        }
-        return path;
+        // Runs once per treemap tile per frame: TreePath::Build skips the
+        // per-segment std::filesystem::path construction (tests/native/tree-path).
+        return ::WinBlaze::UI::TreePath::Build(m_tree_nodes, node_index);
     }
 
     void MainWindow::RefreshTreeListView()

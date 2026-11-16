@@ -72,7 +72,7 @@ Invoke-Step "WinUI build" {
 }
 
 Invoke-Step "Native file actions and monitoring" {
-    foreach ($name in @('file-actions','directory-watcher','color-resources','permission-view','byte-format','command-line')) {
+    foreach ($name in @('file-actions','directory-watcher','color-resources','permission-view','byte-format','command-line','tree-path')) {
         & $MsBuildPath (Join-Path $repoRoot "tests/native/$name.vcxproj") /p:Configuration=Release /p:Platform=x64 /m /nologo /v:minimal
         if ($LASTEXITCODE -ne 0) {throw "Native parity build failed: $name"}
         $fixture=Join-Path $repoRoot ('artifacts/parity-check-'+[Guid]::NewGuid().ToString('N'))
