@@ -217,6 +217,39 @@ mod tests {
     }
 
     #[test]
+    fn inline_boundary_names_round_trip_through_every_constructor() {
+        let cases = [
+            "a".repeat(21),
+            "a".repeat(22),
+            "a".repeat(23),
+            format!("{}é", "a".repeat(20)),  // 22 bytes: inline
+            format!("{}é", "a".repeat(21)),  // 23 bytes: heap
+            format!("{}😀", "a".repeat(18)), // 22 bytes: inline, 4-byte char last
+            format!("{}😀", "a".repeat(19)), // 23 bytes: heap
+            "日本語の名前.txt".to_string(),
+            "\u{307}\u{212A}ΣİΣ".to_string(),
+            "\0nul".to_string(),
+        ];
+        for text in &cases {
+            for name in [
+                FileName::from(text.as_str()),
+                FileName::from(text.clone()),
+                FileName::from(Box::<str>::from(text.as_str())),
+            ] {
+                assert_eq!(&*name, text.as_str());
+                assert_eq!(name.as_str().len(), text.len());
+                assert_eq!(name.as_str().chars().count(), text.chars().count());
+                assert_eq!(String::from(name.clone()), *text);
+                assert_eq!(format!("{name}"), *text);
+                assert!(name == *text);
+                let mut set = std::collections::HashSet::new();
+                set.insert(name);
+                assert!(set.contains(text.as_str()));
+            }
+        }
+    }
+
+    #[test]
     fn names_support_borrowed_hash_lookup_and_standard_string_views() {
         let mut names = std::collections::HashMap::new();
         for text in ["short.txt", "a filename exceeding inline capacity.txt"] {

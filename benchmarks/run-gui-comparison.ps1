@@ -46,7 +46,8 @@ public static class GuiProbe {
 }
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $executables = @{
-    WinBlaze = [IO.Path]::GetFullPath((Join-Path $repo 'src/WinBlaze.UI/bin/x64/Release/WinBlaze.UI.exe'))
+    # WINBLAZE_BENCH_WINBLAZE points at another build for interleaved A/B runs.
+    WinBlaze = if ($env:WINBLAZE_BENCH_WINBLAZE) { [IO.Path]::GetFullPath($env:WINBLAZE_BENCH_WINBLAZE) } else { [IO.Path]::GetFullPath((Join-Path $repo 'src/WinBlaze.UI/bin/x64/Release/WinBlaze.UI.exe')) }
     WinDirStat = if ($env:WINBLAZE_BENCH_WINDIRSTAT) { $env:WINBLAZE_BENCH_WINDIRSTAT } else { 'C:\Program Files\WinDirStat\WinDirStat.exe' }
     WizTree = if ($env:WINBLAZE_BENCH_WIZTREE) { $env:WINBLAZE_BENCH_WIZTREE } else { 'C:\Program Files\WizTree\WizTree64.exe' }
 }
